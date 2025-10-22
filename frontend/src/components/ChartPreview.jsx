@@ -419,15 +419,15 @@ function prepareChartData(chartType, config) {
       return { datasets: [] }
 
     case 'matrix':
-      if (config.datasets && Array.isArray(config.datasets)) {
-        return {
-          datasets: config.datasets.map(ds => ({
-            ...ds,
-            borderWidth: 2
-          }))
-        }
+      return {
+        datasets: [{
+          label: config.labels?.[0] || 'Dataset 1',
+          data: config.values || [],
+          backgroundColor: (config.colors?.[0] || '#3B82F6') + '80',
+          borderColor: config.colors?.[0] || '#3B82F6',
+          borderWidth: 2
+        }]
       }
-      return { datasets: [] }
 
     // Neue spezielle Diagramme
     case 'funnel':

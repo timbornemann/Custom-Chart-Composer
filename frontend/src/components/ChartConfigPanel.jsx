@@ -3,6 +3,8 @@ import DatasetEditor from './DatasetEditor'
 import PointEditor from './PointEditor'
 import SimpleDataEditor from './SimpleDataEditor'
 import ColorListEditor from './ColorListEditor'
+import RangeBarEditor from './RangeBarEditor'
+import HeatmapEditor from './HeatmapEditor'
 
 export default function ChartConfigPanel({ chartType, config, onConfigChange }) {
   const [activeTab, setActiveTab] = useState('data')
@@ -63,8 +65,13 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange }) 
 
 function DataTab({ config, onConfigChange, chartType }) {
   // Bestimme welcher Input-Typ benötigt wird
-  const needsScatterBubbleInput = ['scatter', 'bubble'].includes(chartType?.id)
-  const needsDatasetInput = ['stackedBar', 'multiLine', 'mixed', 'groupedBar', 'percentageBar'].includes(chartType?.id)
+  const needsScatterBubbleInput = ['scatter', 'bubble', 'matrix'].includes(chartType?.id)
+  const needsRangeBarInput = chartType?.id === 'rangeBar'
+  const needsHeatmapInput = chartType?.id === 'heatmap'
+  const needsDatasetInput = [
+    'stackedBar', 'multiLine', 'mixed', 'groupedBar', 'percentageBar',
+    'segmentedBar', 'nestedDonut', 'smoothLine', 'dashedLine', 'curvedArea'
+  ].includes(chartType?.id)
 
   return (
     <>
@@ -81,7 +88,19 @@ function DataTab({ config, onConfigChange, chartType }) {
         />
       </div>
 
-      {needsDatasetInput ? (
+      {needsRangeBarInput ? (
+        <RangeBarEditor
+          labels={config.labels || []}
+          datasets={config.datasets || []}
+          onLabelsChange={(labels) => onConfigChange({ labels })}
+          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+        />
+      ) : needsHeatmapInput ? (
+        <HeatmapEditor
+          datasets={config.datasets || []}
+          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+        />
+      ) : needsDatasetInput ? (
         <DatasetEditor
           datasets={config.datasets || []}
           labels={config.labels || []}
@@ -105,7 +124,7 @@ function DataTab({ config, onConfigChange, chartType }) {
           <PointEditor
             points={config.values || []}
             onPointsChange={(values) => onConfigChange({ values })}
-            isBubble={chartType?.id === 'bubble'}
+            isBubble={['bubble', 'matrix'].includes(chartType?.id)}
           />
         </>
       ) : (
@@ -305,7 +324,18 @@ function formatLabel(key) {
     horizontal: 'Horizontal',
     showPercentage: 'Prozente anzeigen',
     cutout: 'Donut-Größe (%)',
-    stacked: 'Gestapelt'
+    stacked: 'Gestapelt',
+    smoothing: 'Glättung',
+    rotation: 'Rotation (Grad)',
+    circumference: 'Umfang (Grad)',
+    showNeedle: 'Nadel anzeigen',
+    showLabels: 'Labels anzeigen',
+    showValues: 'Werte anzeigen',
+    showPercentages: 'Prozente anzeigen',
+    showConnectors: 'Verbindungen anzeigen',
+    pointSize: 'Punktgröße',
+    xAxisLabel: 'X-Achsen-Label',
+    yAxisLabel: 'Y-Achsen-Label'
   }
   return labels[key] || key
 }

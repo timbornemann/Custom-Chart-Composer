@@ -5,23 +5,21 @@ export default {
   configSchema: {
     labels: { 
       type: "array", 
-      default: ["Produkt A", "Produkt B", "Produkt C", "Produkt D", "Produkt E"] 
+      default: ["Preis vs. Qualität"] 
     },
-    datasets: {
+    values: {
       type: "array",
       default: [
-        {
-          label: "Preis vs. Qualität",
-          data: [
-            { x: 25, y: 80, r: 15 },
-            { x: 45, y: 60, r: 20 },
-            { x: 70, y: 90, r: 25 },
-            { x: 35, y: 45, r: 10 },
-            { x: 85, y: 75, r: 30 }
-          ],
-          backgroundColor: "#3B82F6"
-        }
+        { x: 25, y: 80, r: 15 },
+        { x: 45, y: 60, r: 20 },
+        { x: 70, y: 90, r: 25 },
+        { x: 35, y: 45, r: 10 },
+        { x: 85, y: 75, r: 30 }
       ]
+    },
+    colors: {
+      type: "array",
+      default: ["#3B82F6"]
     },
     backgroundColor: {
       type: "string",

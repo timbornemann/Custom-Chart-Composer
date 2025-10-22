@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import DatasetEditor from './DatasetEditor'
 import PointEditor from './PointEditor'
+import SimpleDataEditor from './SimpleDataEditor'
+import ColorListEditor from './ColorListEditor'
 
 export default function ChartConfigPanel({ chartType, config, onConfigChange }) {
   const [activeTab, setActiveTab] = useState('data')
@@ -60,52 +62,6 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange }) 
 }
 
 function DataTab({ config, onConfigChange, chartType }) {
-  const handleArrayChange = (field, value) => {
-    if (!value || value.trim() === '') {
-      onConfigChange({ [field]: [] })
-      return
-    }
-    
-    const array = value.split(',').map(item => {
-      const trimmed = item.trim()
-      // Nur zu Zahl konvertieren wenn es wirklich eine Zahl ist
-      const num = Number(trimmed)
-      return (trimmed !== '' && !isNaN(num)) ? num : trimmed
-    }).filter(item => item !== '') // Leere Einträge entfernen
-    
-    onConfigChange({ [field]: array })
-  }
-
-  const handleScatterBubbleData = (value) => {
-    try {
-      if (!value || value.trim() === '') {
-        onConfigChange({ values: [] })
-        return
-      }
-      
-      // Parse JSON format: [{x: 10, y: 20}, {x: 15, y: 25}] oder mit r für Bubble
-      const parsed = JSON.parse(value)
-      onConfigChange({ values: parsed })
-    } catch (e) {
-      // Wenn JSON ungültig, nichts tun oder Fehler anzeigen
-      console.warn('Ungültiges Format:', e)
-    }
-  }
-
-  const handleDatasetChange = (value) => {
-    try {
-      if (!value || value.trim() === '') {
-        onConfigChange({ datasets: [] })
-        return
-      }
-      
-      const parsed = JSON.parse(value)
-      onConfigChange({ datasets: parsed })
-    } catch (e) {
-      console.warn('Ungültiges Format:', e)
-    }
-  }
-
   // Bestimme welcher Input-Typ benötigt wird
   const needsScatterBubbleInput = ['scatter', 'bubble'].includes(chartType?.id)
   const needsDatasetInput = ['stackedBar', 'multiLine', 'mixed', 'groupedBar', 'percentageBar'].includes(chartType?.id)
@@ -154,34 +110,12 @@ function DataTab({ config, onConfigChange, chartType }) {
         </>
       ) : (
         <>
-          <div>
-            <label className="block text-sm font-medium text-dark-textLight mb-2">
-              Beschriftungen (kommagetrennt)
-            </label>
-            <input
-              type="text"
-              value={config.labels?.join(', ') || ''}
-              onChange={(e) => handleArrayChange('labels', e.target.value)}
-              placeholder="z.B. Januar, Februar, März"
-              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-dark-textLight mb-2">
-              Werte (kommagetrennt)
-            </label>
-            <input
-              type="text"
-              value={Array.isArray(config.values) ? config.values.join(', ') : ''}
-              onChange={(e) => handleArrayChange('values', e.target.value)}
-              placeholder="z.B. 10, 20, 30"
-              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-            />
-            <p className="text-xs text-dark-textGray mt-1">
-              💡 Nur Zahlen eingeben, mit Komma trennen
-            </p>
-          </div>
+          <SimpleDataEditor
+            labels={config.labels || []}
+            values={config.values || []}
+            onLabelsChange={(labels) => onConfigChange({ labels })}
+            onValuesChange={(values) => onConfigChange({ values })}
+          />
 
           <div>
             <label className="block text-sm font-medium text-dark-textLight mb-2">
@@ -217,15 +151,6 @@ function StylingTab({ config, onConfigChange }) {
     { name: 'Transparent', value: 'transparent' }
   ]
 
-  const handleColorChange = (value) => {
-    if (!value || value.trim() === '') {
-      onConfigChange({ colors: [] })
-      return
-    }
-    const colors = value.split(',').map(c => c.trim()).filter(c => c !== '')
-    onConfigChange({ colors })
-  }
-
   return (
     <>
       <div>
@@ -247,21 +172,10 @@ function StylingTab({ config, onConfigChange }) {
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-dark-textLight mb-2">
-          Benutzerdefinierte Farben (kommagetrennt)
-        </label>
-        <input
-          type="text"
-          value={config.colors?.join(', ') || ''}
-          onChange={(e) => handleColorChange(e.target.value)}
-          placeholder="z.B. #FF0000, #00FF00, #0000FF"
-          className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all font-mono text-sm"
-        />
-        <p className="text-xs text-dark-textGray mt-1">
-          💡 Hex-Farben mit # verwenden
-        </p>
-      </div>
+      <ColorListEditor
+        colors={config.colors}
+        onColorsChange={(colors) => onConfigChange({ colors })}
+      />
 
       <div>
         <label className="block text-sm font-medium text-dark-textLight mb-3">

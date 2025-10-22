@@ -1,26 +1,108 @@
+import { useState } from 'react'
+
 export default function Sidebar({ chartTypes, selectedChartType, onSelectChartType }) {
+  // Kategorien-Definitionen
+  const categories = {
+    bar: {
+      name: 'Balkendiagramme',
+      icon: '📊',
+      types: ['bar', 'horizontalBar', 'stackedBar', 'groupedBar', 'percentageBar']
+    },
+    line: {
+      name: 'Liniendiagramme',
+      icon: '📈',
+      types: ['line', 'multiLine', 'steppedLine', 'verticalLine', 'area']
+    },
+    pie: {
+      name: 'Kreisdiagramme',
+      icon: '🥧',
+      types: ['pie', 'donut', 'polarArea']
+    },
+    scatter: {
+      name: 'Streudiagramme',
+      icon: '⚫',
+      types: ['scatter', 'bubble']
+    },
+    special: {
+      name: 'Spezielle Diagramme',
+      icon: '✨',
+      types: ['radar', 'mixed']
+    }
+  }
+
+  // State für aufgeklappte Kategorien (alle standardmäßig geöffnet)
+  const [expandedCategories, setExpandedCategories] = useState(
+    Object.keys(categories).reduce((acc, key) => ({ ...acc, [key]: true }), {})
+  )
+
+  // Toggle-Funktion für Kategorien
+  const toggleCategory = (categoryKey) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [categoryKey]: !prev[categoryKey]
+    }))
+  }
+
+  // Gruppiere Diagrammtypen nach Kategorien
+  const groupedCharts = Object.entries(categories).map(([key, category]) => ({
+    key,
+    ...category,
+    charts: chartTypes.filter(chart => category.types.includes(chart.id))
+  }))
+
   return (
     <aside className="w-64 bg-dark-secondary border-r border-gray-700 h-screen sticky top-0 flex flex-col">
       <div className="p-4 border-b border-gray-700">
         <h2 className="text-lg font-semibold text-dark-textLight mb-2">Diagrammtypen</h2>
         <p className="text-sm text-dark-textGray">Wähle einen Typ aus</p>
       </div>
-      <nav className="flex-1 overflow-y-auto p-4 space-y-2">
-        {chartTypes.map((chartType) => (
-          <button
-            key={chartType.id}
-            onClick={() => onSelectChartType(chartType)}
-            className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 ${
-              selectedChartType?.id === chartType.id
-                ? 'bg-gradient-to-r from-dark-accent1 to-dark-accent2 text-white shadow-lg'
-                : 'bg-dark-bg text-dark-textGray hover:bg-gray-800 hover:text-dark-textLight'
-            }`}
-          >
-            <div className="flex items-center space-x-3">
-              <ChartIcon type={chartType.id} />
-              <span className="font-medium text-sm">{chartType.name}</span>
-            </div>
-          </button>
+      <nav className="flex-1 overflow-y-auto p-4 space-y-3">
+        {groupedCharts.map((category) => (
+          <div key={category.key} className="space-y-1">
+            {/* Kategorie Header */}
+            <button
+              onClick={() => toggleCategory(category.key)}
+              className="w-full flex items-center justify-between px-3 py-2 text-dark-textLight hover:bg-gray-800 rounded-lg transition-colors duration-150"
+            >
+              <div className="flex items-center space-x-2">
+                <span className="text-lg">{category.icon}</span>
+                <span className="font-semibold text-sm">{category.name}</span>
+                <span className="text-xs text-dark-textGray">({category.charts.length})</span>
+              </div>
+              <svg
+                className={`w-4 h-4 text-dark-textGray transition-transform duration-200 ${
+                  expandedCategories[category.key] ? 'rotate-180' : ''
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Kategorie Inhalte */}
+            {expandedCategories[category.key] && (
+              <div className="space-y-1 pl-2">
+                {category.charts.map((chartType) => (
+                  <button
+                    key={chartType.id}
+                    onClick={() => onSelectChartType(chartType)}
+                    className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                      selectedChartType?.id === chartType.id
+                        ? 'bg-gradient-to-r from-dark-accent1 to-dark-accent2 text-white shadow-lg'
+                        : 'bg-dark-bg text-dark-textGray hover:bg-gray-800 hover:text-dark-textLight'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <ChartIcon type={chartType.id} />
+                      <span className="font-medium text-xs">{chartType.name}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
       </nav>
     </aside>

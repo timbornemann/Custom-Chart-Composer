@@ -153,7 +153,26 @@ function getChartComponent(type) {
     groupedBar: Bar,
     steppedLine: Line,
     verticalLine: Line,
-    percentageBar: Bar
+    percentageBar: Bar,
+    // Neue Balkendiagramme
+    segmentedBar: Bar,
+    waterfall: Bar,
+    rangeBar: Bar,
+    // Neue Liniendiagramme
+    smoothLine: Line,
+    dashedLine: Line,
+    curvedArea: Line,
+    // Neue Kreisdiagramme
+    semiCircle: Doughnut,
+    nestedDonut: Doughnut,
+    sunburst: Doughnut,
+    // Neue Streudiagramme
+    heatmap: Scatter,
+    matrix: Bubble,
+    // Neue spezielle Diagramme
+    gauge: Doughnut,
+    funnel: Bar,
+    treemap: Bar
   }
   return components[type] || Bar
 }
@@ -287,6 +306,8 @@ function prepareChartData(chartType, config) {
     case 'mixed':
     case 'groupedBar':
     case 'percentageBar':
+    case 'segmentedBar':
+    case 'nestedDonut':
       // Multi-dataset charts
       if (config.datasets && Array.isArray(config.datasets)) {
         return {
@@ -302,6 +323,126 @@ function prepareChartData(chartType, config) {
         }
       }
       return { labels: [], datasets: [] }
+
+    // Neue Liniendiagramme
+    case 'smoothLine':
+    case 'curvedArea':
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          labels: config.labels || [],
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            borderWidth: 3,
+            tension: ds.tension || 0.4,
+            fill: chartType.id === 'curvedArea' ? (ds.fill !== undefined ? ds.fill : true) : false,
+            pointRadius: 5,
+            pointBackgroundColor: ds.borderColor,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+          }))
+        }
+      }
+      return { labels: [], datasets: [] }
+
+    case 'dashedLine':
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          labels: config.labels || [],
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            borderWidth: ds.borderWidth || 2,
+            borderDash: ds.borderDash || [],
+            tension: 0,
+            fill: false,
+            pointRadius: config.options?.showPoints !== false ? 5 : 0,
+            pointBackgroundColor: ds.borderColor,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+          }))
+        }
+      }
+      return { labels: [], datasets: [] }
+
+    // Neue Balkendiagramme
+    case 'waterfall':
+      return {
+        labels: config.labels || [],
+        datasets: [{
+          label: config.datasetLabel || 'Wert',
+          data: config.values || [],
+          backgroundColor: config.colors || [],
+          borderColor: config.colors || [],
+          borderWidth: 2,
+          borderRadius: 8
+        }]
+      }
+
+    case 'rangeBar':
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          labels: config.labels || [],
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            borderWidth: 2,
+            borderRadius: 8
+          }))
+        }
+      }
+      return { labels: [], datasets: [] }
+
+    // Neue Kreisdiagramme
+    case 'semiCircle':
+    case 'sunburst':
+    case 'gauge':
+      return {
+        labels: config.labels || [],
+        datasets: [{
+          data: config.values || [],
+          backgroundColor: config.colors || [],
+          borderColor: '#1E293B',
+          borderWidth: 3,
+          hoverOffset: 10
+        }]
+      }
+
+    // Neue Streudiagramme
+    case 'heatmap':
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            pointRadius: 20,
+            pointStyle: 'rect'
+          }))
+        }
+      }
+      return { datasets: [] }
+
+    case 'matrix':
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            borderWidth: 2
+          }))
+        }
+      }
+      return { datasets: [] }
+
+    // Neue spezielle Diagramme
+    case 'funnel':
+    case 'treemap':
+      return {
+        labels: config.labels || [],
+        datasets: [{
+          label: config.datasetLabel || 'Wert',
+          data: config.values || [],
+          backgroundColor: config.colors || [],
+          borderColor: config.colors || [],
+          borderWidth: 2,
+          borderRadius: 8
+        }]
+      }
     
     default:
       return { labels: [], datasets: [] }
@@ -332,11 +473,11 @@ function prepareChartOptions(chartType, config) {
   }
 
   // Bar charts
-  if (['bar', 'stackedBar', 'groupedBar', 'percentageBar'].includes(chartType.id)) {
+  if (['bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         beginAtZero: true,
-        stacked: chartType.id === 'stackedBar' || (chartType.id === 'percentageBar' && config.options?.stacked),
+        stacked: ['stackedBar', 'segmentedBar'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked),
         grid: {
           display: config.options?.showGrid !== false,
           color: '#334155'
@@ -347,7 +488,34 @@ function prepareChartOptions(chartType, config) {
         }
       },
       x: {
-        stacked: chartType.id === 'stackedBar' || (chartType.id === 'percentageBar' && config.options?.stacked),
+        stacked: ['stackedBar', 'segmentedBar'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked),
+        grid: {
+          display: false
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      }
+    }
+  }
+
+  // Range Bar (horizontal with special config)
+  if (chartType.id === 'rangeBar') {
+    baseOptions.indexAxis = config.options?.horizontal ? 'y' : 'x'
+    baseOptions.scales = {
+      x: {
+        beginAtZero: true,
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: '#334155'
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      },
+      y: {
         grid: {
           display: false
         },
@@ -387,7 +555,7 @@ function prepareChartOptions(chartType, config) {
   }
 
   // Line charts
-  if (['line', 'area', 'multiLine', 'steppedLine', 'verticalLine'].includes(chartType.id)) {
+  if (['line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         beginAtZero: true,
@@ -414,7 +582,7 @@ function prepareChartOptions(chartType, config) {
   }
 
   // Scatter & Bubble
-  if (['scatter', 'bubble'].includes(chartType.id)) {
+  if (['scatter', 'bubble', 'heatmap', 'matrix'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         beginAtZero: true,
@@ -508,6 +676,31 @@ function prepareChartOptions(chartType, config) {
   // Donut
   if (chartType.id === 'donut') {
     baseOptions.cutout = `${config.options?.cutout || 65}%`
+  }
+
+  // Nested Donut
+  if (chartType.id === 'nestedDonut') {
+    baseOptions.cutout = `${config.options?.cutout || 50}%`
+  }
+
+  // Semi Circle
+  if (chartType.id === 'semiCircle') {
+    baseOptions.rotation = config.options?.rotation || -90
+    baseOptions.circumference = config.options?.circumference || 180
+    baseOptions.cutout = config.options?.cutout || '0%'
+  }
+
+  // Gauge
+  if (chartType.id === 'gauge') {
+    baseOptions.rotation = config.options?.rotation || -90
+    baseOptions.circumference = config.options?.circumference || 180
+    baseOptions.cutout = config.options?.cutout || '75%'
+  }
+
+  // Sunburst
+  if (chartType.id === 'sunburst') {
+    baseOptions.cutout = config.options?.cutout || '30%'
+    baseOptions.rotation = config.options?.rotation || 0
   }
 
   return baseOptions

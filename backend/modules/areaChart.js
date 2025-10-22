@@ -1,19 +1,19 @@
 export default {
-  id: "donut",
-  name: "Donutdiagramm",
+  id: "area",
+  name: "Flächendiagramm",
   library: "chartjs",
   configSchema: {
     labels: { 
       type: "array", 
-      default: ["Desktop", "Mobile", "Tablet", "Andere"] 
+      default: ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul"] 
     },
     values: { 
       type: "array", 
-      default: [450, 320, 150, 80] 
+      default: [30, 45, 35, 50, 45, 60, 55] 
     },
     colors: { 
       type: "array", 
-      default: ["#22D3EE", "#3B82F6", "#A78BFA", "#F472B6"] 
+      default: ["#06B6D4"] 
     },
     backgroundColor: {
       type: "string",
@@ -28,9 +28,10 @@ export default {
       default: 600
     },
     options: {
+      smooth: { type: "boolean", default: true },
+      showPoints: { type: "boolean", default: true },
       showLegend: { type: "boolean", default: true },
-      showPercentage: { type: "boolean", default: true },
-      cutout: { type: "number", default: 65 }
+      showGrid: { type: "boolean", default: true }
     }
   }
 };

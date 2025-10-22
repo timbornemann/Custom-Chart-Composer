@@ -1,19 +1,19 @@
 export default {
-  id: "donut",
-  name: "Donutdiagramm",
+  id: "horizontalBar",
+  name: "Horizontales Balkendiagramm",
   library: "chartjs",
   configSchema: {
     labels: { 
       type: "array", 
-      default: ["Desktop", "Mobile", "Tablet", "Andere"] 
+      default: ["Produkt A", "Produkt B", "Produkt C", "Produkt D"] 
     },
     values: { 
       type: "array", 
-      default: [450, 320, 150, 80] 
+      default: [85, 92, 78, 95] 
     },
     colors: { 
       type: "array", 
-      default: ["#22D3EE", "#3B82F6", "#A78BFA", "#F472B6"] 
+      default: ["#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B"] 
     },
     backgroundColor: {
       type: "string",
@@ -29,8 +29,7 @@ export default {
     },
     options: {
       showLegend: { type: "boolean", default: true },
-      showPercentage: { type: "boolean", default: true },
-      cutout: { type: "number", default: 65 }
+      showGrid: { type: "boolean", default: true }
     }
   }
 };

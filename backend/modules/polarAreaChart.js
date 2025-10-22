@@ -1,19 +1,19 @@
 export default {
-  id: "donut",
-  name: "Donutdiagramm",
+  id: "polarArea",
+  name: "Polar-Flächendiagramm",
   library: "chartjs",
   configSchema: {
     labels: { 
       type: "array", 
-      default: ["Desktop", "Mobile", "Tablet", "Andere"] 
+      default: ["Rot", "Grün", "Gelb", "Grau", "Blau"] 
     },
     values: { 
       type: "array", 
-      default: [450, 320, 150, 80] 
+      default: [11, 16, 7, 3, 14] 
     },
     colors: { 
       type: "array", 
-      default: ["#22D3EE", "#3B82F6", "#A78BFA", "#F472B6"] 
+      default: ["#EF4444", "#10B981", "#FBBF24", "#6B7280", "#3B82F6"] 
     },
     backgroundColor: {
       type: "string",
@@ -28,9 +28,7 @@ export default {
       default: 600
     },
     options: {
-      showLegend: { type: "boolean", default: true },
-      showPercentage: { type: "boolean", default: true },
-      cutout: { type: "number", default: 65 }
+      showLegend: { type: "boolean", default: true }
     }
   }
 };

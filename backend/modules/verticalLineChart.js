@@ -1,19 +1,19 @@
 export default {
-  id: "donut",
-  name: "Donutdiagramm",
+  id: "verticalLine",
+  name: "Vertikales Liniendiagramm",
   library: "chartjs",
   configSchema: {
     labels: { 
       type: "array", 
-      default: ["Desktop", "Mobile", "Tablet", "Andere"] 
+      default: ["0°", "45°", "90°", "135°", "180°", "225°", "270°", "315°"] 
     },
     values: { 
       type: "array", 
-      default: [450, 320, 150, 80] 
+      default: [0, 70, 100, 70, 0, -70, -100, -70] 
     },
     colors: { 
       type: "array", 
-      default: ["#22D3EE", "#3B82F6", "#A78BFA", "#F472B6"] 
+      default: ["#06B6D4"] 
     },
     backgroundColor: {
       type: "string",
@@ -28,9 +28,11 @@ export default {
       default: 600
     },
     options: {
+      smooth: { type: "boolean", default: true },
+      fill: { type: "boolean", default: false },
+      showPoints: { type: "boolean", default: true },
       showLegend: { type: "boolean", default: true },
-      showPercentage: { type: "boolean", default: true },
-      cutout: { type: "number", default: 65 }
+      showGrid: { type: "boolean", default: true }
     }
   }
 };

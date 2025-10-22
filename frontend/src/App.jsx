@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Header from './components/Layout/Header'
 import Sidebar from './components/Layout/Sidebar'
 import ChartPreview from './components/ChartPreview'
@@ -12,6 +12,7 @@ function App() {
   const [selectedChartType, setSelectedChartType] = useState(null)
   const { config, updateConfig, resetConfig } = useChartConfig()
   const [loading, setLoading] = useState(true)
+  const chartRef = useRef(null)
 
   useEffect(() => {
     loadChartTypes()
@@ -46,20 +47,21 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-dark-bg">
+    <div className="min-h-screen bg-dark-bg flex flex-col">
       <Header />
-      <div className="flex">
+      <div className="flex flex-1 overflow-hidden">
         <Sidebar
           chartTypes={chartTypes}
           selectedChartType={selectedChartType}
           onSelectChartType={handleChartTypeChange}
         />
-        <main className="flex-1 p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <main className="flex-1 p-6 overflow-y-auto">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-[1800px] mx-auto">
             <div>
               <ChartPreview
                 chartType={selectedChartType}
                 config={config}
+                chartRef={chartRef}
               />
             </div>
             <div className="space-y-6">
@@ -71,6 +73,7 @@ function App() {
               <ExportPanel
                 chartType={selectedChartType}
                 config={config}
+                chartRef={chartRef}
               />
             </div>
           </div>

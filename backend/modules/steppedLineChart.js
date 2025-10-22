@@ -1,19 +1,19 @@
 export default {
-  id: "donut",
-  name: "Donutdiagramm",
+  id: "steppedLine",
+  name: "Treppenstufen-Liniendiagramm",
   library: "chartjs",
   configSchema: {
     labels: { 
       type: "array", 
-      default: ["Desktop", "Mobile", "Tablet", "Andere"] 
+      default: ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"] 
     },
     values: { 
       type: "array", 
-      default: [450, 320, 150, 80] 
+      default: [20, 20, 35, 35, 50] 
     },
     colors: { 
       type: "array", 
-      default: ["#22D3EE", "#3B82F6", "#A78BFA", "#F472B6"] 
+      default: ["#8B5CF6"] 
     },
     backgroundColor: {
       type: "string",
@@ -28,9 +28,10 @@ export default {
       default: 600
     },
     options: {
+      fill: { type: "boolean", default: true },
+      showPoints: { type: "boolean", default: true },
       showLegend: { type: "boolean", default: true },
-      showPercentage: { type: "boolean", default: true },
-      cutout: { type: "number", default: 65 }
+      showGrid: { type: "boolean", default: true }
     }
   }
 };

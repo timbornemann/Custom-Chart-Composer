@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useExport } from '../hooks/useExport'
 
-export default function ExportPanel({ chartType, config }) {
+export default function ExportPanel({ chartType, config, chartRef }) {
   const [format, setFormat] = useState('png')
   const [transparent, setTransparent] = useState(false)
   const { handleExport, exporting, error } = useExport()
@@ -14,7 +14,7 @@ export default function ExportPanel({ chartType, config }) {
   ]
 
   const onExport = () => {
-    handleExport(chartType, config, format, transparent)
+    handleExport(chartType, config, format, transparent, chartRef)
   }
 
   return (

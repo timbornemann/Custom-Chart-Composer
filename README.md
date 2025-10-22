@@ -7,7 +7,7 @@ Ein modernes, webbasiertes Tool zur einfachen Erstellung ästhetisch ansprechend
 
 ## ✨ Features
 
-- 🎨 **5 Diagrammtypen**: Balken, Linie, Kreis, Donut, Radar
+- 🎨 **17 Diagrammtypen**: Balken, Horizontal, Linie, Fläche, Kreis, Donut, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Vertikal, Prozent
 - 🎯 **Modulares Plugin-System**: Neue Diagrammtypen einfach hinzufügen
 - 🖌️ **Umfangreiche Anpassungen**: Farben, Beschriftungen, Optionen
 - 📦 **Multiple Export-Formate**: PNG, JPEG, SVG, HTML
@@ -93,10 +93,22 @@ Custom-Chart-Composer/
 │   ├── services/            # Business Logic
 │   ├── modules/             # Chart-Module (Plugins)
 │   │   ├── barChart.js
+│   │   ├── horizontalBarChart.js
 │   │   ├── lineChart.js
+│   │   ├── areaChart.js
 │   │   ├── pieChart.js
 │   │   ├── donutChart.js
-│   │   └── radarChart.js
+│   │   ├── radarChart.js
+│   │   ├── scatterChart.js
+│   │   ├── bubbleChart.js
+│   │   ├── polarAreaChart.js
+│   │   ├── stackedBarChart.js
+│   │   ├── multiLineChart.js
+│   │   ├── mixedChart.js
+│   │   ├── groupedBarChart.js
+│   │   ├── steppedLineChart.js
+│   │   ├── verticalLineChart.js
+│   │   └── percentageBarChart.js
 │   ├── package.json
 │   └── server.js
 │
@@ -125,11 +137,31 @@ Custom-Chart-Composer/
 ### 1. Diagrammtyp auswählen
 
 Wählen Sie in der Sidebar den gewünschten Diagrammtyp:
-- **Balkendiagramm**: Wertevergleiche
+
+**Balkendiagramme:**
+- **Balkendiagramm**: Klassische Wertevergleiche
+- **Horizontales Balkendiagramm**: Balken von links nach rechts
+- **Gestapeltes Balkendiagramm**: Mehrere Datensätze übereinander
+- **Gruppiertes Balkendiagramm**: Mehrere Datensätze nebeneinander
+- **Prozent-Balkendiagramm**: Prozentuale Verteilung
+
+**Liniendiagramme:**
 - **Liniendiagramm**: Trends und Zeitreihen
+- **Flächendiagramm**: Gefüllte Linie für Volumen
+- **Multi-Liniendiagramm**: Mehrere Linien vergleichen
+- **Treppenstufen-Liniendiagramm**: Gestufte Verläufe
+- **Vertikales Liniendiagramm**: Spezielle Darstellung
+
+**Kreisdiagramme:**
 - **Kreisdiagramm**: Anteile und Verhältnisse
-- **Donutdiagramm**: Alternative zum Kreisdiagramm
+- **Donutdiagramm**: Modern mit Loch in der Mitte
+- **Polar-Flächendiagramm**: Kreisförmige Flächendarstellung
+
+**Spezialdiagramme:**
 - **Radar-Chart**: Mehrere Eigenschaften vergleichen
+- **Streudiagramm**: Korrelationen zeigen
+- **Blasendiagramm**: 3-dimensionale Daten
+- **Kombiniertes Diagramm**: Balken + Linie kombiniert
 
 ### 2. Daten konfigurieren
 

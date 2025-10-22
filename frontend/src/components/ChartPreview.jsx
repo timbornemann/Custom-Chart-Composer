@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,7 +13,7 @@ import {
   Legend,
   Filler
 } from 'chart.js'
-import { Bar, Line, Pie, Doughnut, Radar } from 'react-chartjs-2'
+import { Bar, Line, Pie, Doughnut, Radar, PolarArea, Scatter, Bubble } from 'react-chartjs-2'
 
 ChartJS.register(
   CategoryScale,
@@ -29,8 +29,7 @@ ChartJS.register(
   Filler
 )
 
-export default function ChartPreview({ chartType, config }) {
-  const chartRef = useRef(null)
+export default function ChartPreview({ chartType, config, chartRef }) {
   const [chartData, setChartData] = useState(null)
   const [chartOptions, setChartOptions] = useState(null)
 
@@ -55,12 +54,12 @@ export default function ChartPreview({ chartType, config }) {
   const ChartComponent = getChartComponent(chartType.id)
 
   return (
-    <div className="bg-dark-secondary rounded-2xl shadow-lg p-6">
+    <div className="bg-dark-secondary rounded-2xl shadow-lg p-6 h-full flex flex-col">
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-dark-textLight">Vorschau</h2>
         <p className="text-sm text-dark-textGray">{chartType.name}</p>
       </div>
-      <div className="bg-dark-bg rounded-xl p-6 flex items-center justify-center" style={{ minHeight: '500px' }}>
+      <div className="bg-dark-bg rounded-xl p-6 flex items-center justify-center flex-1 overflow-auto" style={{ minHeight: '500px' }}>
         <div style={{ width: '100%', maxWidth: '700px', height: '450px' }}>
           <ChartComponent ref={chartRef} data={chartData} options={chartOptions} />
         </div>
@@ -72,10 +71,22 @@ export default function ChartPreview({ chartType, config }) {
 function getChartComponent(type) {
   const components = {
     bar: Bar,
+    horizontalBar: Bar,
     line: Line,
+    area: Line,
     pie: Pie,
     donut: Doughnut,
-    radar: Radar
+    radar: Radar,
+    scatter: Scatter,
+    bubble: Bubble,
+    polarArea: PolarArea,
+    stackedBar: Bar,
+    multiLine: Line,
+    mixed: Bar,
+    groupedBar: Bar,
+    steppedLine: Line,
+    verticalLine: Line,
+    percentageBar: Bar
   }
   return components[type] || Bar
 }
@@ -83,7 +94,7 @@ function getChartComponent(type) {
 function prepareChartData(chartType, config) {
   switch (chartType.id) {
     case 'bar':
-    case 'line':
+    case 'horizontalBar':
       return {
         labels: config.labels || [],
         datasets: [{
@@ -92,7 +103,20 @@ function prepareChartData(chartType, config) {
           backgroundColor: config.colors || [],
           borderColor: config.colors || [],
           borderWidth: 2,
-          borderRadius: chartType.id === 'bar' ? 8 : 0,
+          borderRadius: 8
+        }]
+      }
+
+    case 'line':
+    case 'verticalLine':
+      return {
+        labels: config.labels || [],
+        datasets: [{
+          label: config.datasetLabel || 'Datensatz',
+          data: config.values || [],
+          backgroundColor: config.colors || [],
+          borderColor: config.colors?.[0] || '#3B82F6',
+          borderWidth: 3,
           tension: config.options?.smooth ? 0.4 : 0,
           fill: config.options?.fill || false,
           pointRadius: config.options?.showPoints !== false ? 5 : 0,
@@ -101,9 +125,69 @@ function prepareChartData(chartType, config) {
           pointBorderWidth: 2
         }]
       }
+
+    case 'area':
+      return {
+        labels: config.labels || [],
+        datasets: [{
+          label: config.datasetLabel || 'Datensatz',
+          data: config.values || [],
+          backgroundColor: (config.colors?.[0] || '#06B6D4') + '60',
+          borderColor: config.colors?.[0] || '#06B6D4',
+          borderWidth: 3,
+          tension: config.options?.smooth ? 0.4 : 0,
+          fill: true,
+          pointRadius: config.options?.showPoints !== false ? 5 : 0,
+          pointBackgroundColor: config.colors?.[0] || '#06B6D4',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2
+        }]
+      }
+
+    case 'steppedLine':
+      return {
+        labels: config.labels || [],
+        datasets: [{
+          label: config.datasetLabel || 'Datensatz',
+          data: config.values || [],
+          backgroundColor: config.options?.fill ? (config.colors?.[0] || '#8B5CF6') + '40' : 'transparent',
+          borderColor: config.colors?.[0] || '#8B5CF6',
+          borderWidth: 3,
+          stepped: true,
+          fill: config.options?.fill || false,
+          pointRadius: config.options?.showPoints !== false ? 5 : 0,
+          pointBackgroundColor: config.colors?.[0] || '#8B5CF6',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2
+        }]
+      }
+
+    case 'scatter':
+      return {
+        datasets: [{
+          label: config.labels?.[0] || 'Datenpunkt',
+          data: config.values || [],
+          backgroundColor: config.colors?.[0] || '#8B5CF6',
+          borderColor: config.colors?.[0] || '#8B5CF6',
+          pointRadius: config.options?.pointSize || 8,
+          pointHoverRadius: (config.options?.pointSize || 8) + 2
+        }]
+      }
+
+    case 'bubble':
+      return {
+        datasets: [{
+          label: config.labels?.[0] || 'Dataset 1',
+          data: config.values || [],
+          backgroundColor: (config.colors?.[0] || '#EC4899') + '80',
+          borderColor: config.colors?.[0] || '#EC4899',
+          borderWidth: 2
+        }]
+      }
     
     case 'pie':
     case 'donut':
+    case 'polarArea':
       return {
         labels: config.labels || [],
         datasets: [{
@@ -130,6 +214,27 @@ function prepareChartData(chartType, config) {
           pointBorderWidth: 2
         }]
       }
+
+    case 'stackedBar':
+    case 'multiLine':
+    case 'mixed':
+    case 'groupedBar':
+    case 'percentageBar':
+      // Multi-dataset charts
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          labels: config.labels || [],
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            borderWidth: ds.borderWidth || (chartType.id.includes('Line') || chartType.id === 'mixed' ? 3 : 2),
+            borderRadius: chartType.id.includes('Bar') ? 8 : 0,
+            tension: config.options?.smooth ? 0.4 : 0,
+            fill: ds.type === 'line' ? (config.options?.fill || false) : true,
+            pointRadius: config.options?.showPoints !== false ? 5 : 0
+          }))
+        }
+      }
+      return { labels: [], datasets: [] }
     
     default:
       return { labels: [], datasets: [] }
@@ -157,7 +262,63 @@ function prepareChartOptions(chartType, config) {
     }
   }
 
-  if (chartType.id === 'bar' || chartType.id === 'line') {
+  // Bar charts
+  if (['bar', 'stackedBar', 'groupedBar', 'percentageBar'].includes(chartType.id)) {
+    baseOptions.scales = {
+      y: {
+        beginAtZero: true,
+        stacked: chartType.id === 'stackedBar' || (chartType.id === 'percentageBar' && config.options?.stacked),
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: '#334155'
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      },
+      x: {
+        stacked: chartType.id === 'stackedBar' || (chartType.id === 'percentageBar' && config.options?.stacked),
+        grid: {
+          display: false
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      }
+    }
+  }
+
+  // Horizontal bar
+  if (chartType.id === 'horizontalBar') {
+    baseOptions.indexAxis = 'y'
+    baseOptions.scales = {
+      x: {
+        beginAtZero: true,
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: '#334155'
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      },
+      y: {
+        grid: {
+          display: false
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      }
+    }
+  }
+
+  // Line charts
+  if (['line', 'area', 'multiLine', 'steppedLine', 'verticalLine'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         beginAtZero: true,
@@ -172,7 +333,7 @@ function prepareChartOptions(chartType, config) {
       },
       x: {
         grid: {
-          display: chartType.id === 'line' && config.options?.showGrid !== false,
+          display: config.options?.showGrid !== false,
           color: '#334155'
         },
         ticks: {
@@ -183,6 +344,61 @@ function prepareChartOptions(chartType, config) {
     }
   }
 
+  // Scatter & Bubble
+  if (['scatter', 'bubble'].includes(chartType.id)) {
+    baseOptions.scales = {
+      y: {
+        beginAtZero: true,
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: '#334155'
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      },
+      x: {
+        beginAtZero: true,
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: '#334155'
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      }
+    }
+  }
+
+  // Mixed chart
+  if (chartType.id === 'mixed') {
+    baseOptions.scales = {
+      y: {
+        beginAtZero: true,
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: '#334155'
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      },
+      x: {
+        grid: {
+          display: false
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      }
+    }
+  }
+
+  // Radar
   if (chartType.id === 'radar') {
     baseOptions.scales = {
       r: {
@@ -205,6 +421,22 @@ function prepareChartOptions(chartType, config) {
     }
   }
 
+  // Polar Area
+  if (chartType.id === 'polarArea') {
+    baseOptions.scales = {
+      r: {
+        ticks: {
+          backdropColor: 'transparent',
+          color: '#CBD5E1'
+        },
+        grid: {
+          color: '#334155'
+        }
+      }
+    }
+  }
+
+  // Donut
   if (chartType.id === 'donut') {
     baseOptions.cutout = `${config.options?.cutout || 65}%`
   }

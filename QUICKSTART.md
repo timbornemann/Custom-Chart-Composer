@@ -82,15 +82,27 @@ Im **Optionen**-Tab:
 - Klick auf "Diagramm exportieren"
 - Fertig! 🎉
 
-## 📊 Alle verfügbaren Chart-Typen
+## 📊 Alle verfügbaren Chart-Typen (17 Typen!)
 
 | Chart | Verwendung | Beispiel |
 |-------|-----------|----------|
 | **Balken** | Wertevergleiche | Monatliche Verkäufe |
+| **Horizontal** | Horizontale Balken | Produkt-Ranking |
 | **Linie** | Trends | Temperatur über Zeit |
+| **Fläche** | Volumen-Trends | Umsatz-Entwicklung |
 | **Kreis** | Anteile | Marktanteile |
 | **Donut** | Anteile (modern) | Budget-Verteilung |
 | **Radar** | Multi-Dimension | Produkt-Vergleich |
+| **Streu** | Korrelationen | Preis vs. Qualität |
+| **Blasen** | 3D-Daten | Größe + Position |
+| **Polar-Fläche** | Kreisförmig | Verkaufsregionen |
+| **Gestapelt** | Summierte Werte | Zeitreihen mehrerer Produkte |
+| **Multi-Line** | Mehrere Linien | Vergleich mehrerer Trends |
+| **Kombiniert** | Bar + Line | Umsatz + Wachstum |
+| **Gruppiert** | Nebeneinander | Jahresvergleiche |
+| **Treppenstufen** | Gestufte Werte | Preisstufen |
+| **Vertikal** | Spezielle Linie | Phasendarstellung |
+| **Prozent** | % Verteilung | Projekt-Status |
 
 ## 🎯 Häufige Anwendungsfälle
 

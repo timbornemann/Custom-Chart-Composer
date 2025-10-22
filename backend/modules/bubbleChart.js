@@ -1,19 +1,26 @@
 export default {
-  id: "donut",
-  name: "Donutdiagramm",
+  id: "bubble",
+  name: "Blasendiagramm",
   library: "chartjs",
   configSchema: {
     labels: { 
       type: "array", 
-      default: ["Desktop", "Mobile", "Tablet", "Andere"] 
+      default: ["Dataset 1"] 
     },
     values: { 
       type: "array", 
-      default: [450, 320, 150, 80] 
+      default: [
+        { x: 20, y: 30, r: 15 },
+        { x: 40, y: 10, r: 10 },
+        { x: 30, y: 40, r: 20 },
+        { x: 50, y: 25, r: 12 },
+        { x: 15, y: 45, r: 18 },
+        { x: 45, y: 35, r: 8 }
+      ]
     },
     colors: { 
       type: "array", 
-      default: ["#22D3EE", "#3B82F6", "#A78BFA", "#F472B6"] 
+      default: ["#EC4899"] 
     },
     backgroundColor: {
       type: "string",
@@ -29,8 +36,7 @@ export default {
     },
     options: {
       showLegend: { type: "boolean", default: true },
-      showPercentage: { type: "boolean", default: true },
-      cutout: { type: "number", default: 65 }
+      showGrid: { type: "boolean", default: true }
     }
   }
 };

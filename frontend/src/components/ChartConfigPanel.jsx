@@ -48,8 +48,8 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange }) 
         </button>
       </div>
 
-      <div className="space-y-4">
-        {activeTab === 'data' && <DataTab config={config} onConfigChange={onConfigChange} />}
+      <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
+        {activeTab === 'data' && <DataTab chartType={chartType} config={config} onConfigChange={onConfigChange} />}
         {activeTab === 'styling' && <StylingTab config={config} onConfigChange={onConfigChange} />}
         {activeTab === 'options' && <OptionsTab chartType={chartType} config={config} onConfigChange={onConfigChange} />}
       </div>
@@ -57,15 +57,56 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange }) 
   )
 }
 
-function DataTab({ config, onConfigChange }) {
+function DataTab({ config, onConfigChange, chartType }) {
   const handleArrayChange = (field, value) => {
+    if (!value || value.trim() === '') {
+      onConfigChange({ [field]: [] })
+      return
+    }
+    
     const array = value.split(',').map(item => {
       const trimmed = item.trim()
+      // Nur zu Zahl konvertieren wenn es wirklich eine Zahl ist
       const num = Number(trimmed)
-      return isNaN(num) ? trimmed : num
-    })
+      return (trimmed !== '' && !isNaN(num)) ? num : trimmed
+    }).filter(item => item !== '') // Leere Einträge entfernen
+    
     onConfigChange({ [field]: array })
   }
+
+  const handleScatterBubbleData = (value) => {
+    try {
+      if (!value || value.trim() === '') {
+        onConfigChange({ values: [] })
+        return
+      }
+      
+      // Parse JSON format: [{x: 10, y: 20}, {x: 15, y: 25}] oder mit r für Bubble
+      const parsed = JSON.parse(value)
+      onConfigChange({ values: parsed })
+    } catch (e) {
+      // Wenn JSON ungültig, nichts tun oder Fehler anzeigen
+      console.warn('Ungültiges Format:', e)
+    }
+  }
+
+  const handleDatasetChange = (value) => {
+    try {
+      if (!value || value.trim() === '') {
+        onConfigChange({ datasets: [] })
+        return
+      }
+      
+      const parsed = JSON.parse(value)
+      onConfigChange({ datasets: parsed })
+    } catch (e) {
+      console.warn('Ungültiges Format:', e)
+    }
+  }
+
+  // Bestimme welcher Input-Typ benötigt wird
+  const needsScatterBubbleInput = ['scatter', 'bubble'].includes(chartType?.id)
+  const needsDatasetInput = ['stackedBar', 'multiLine', 'mixed', 'groupedBar', 'percentageBar'].includes(chartType?.id)
 
   return (
     <>
@@ -82,44 +123,155 @@ function DataTab({ config, onConfigChange }) {
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-dark-textLight mb-2">
-          Beschriftungen (kommagetrennt)
-        </label>
-        <input
-          type="text"
-          value={config.labels?.join(', ') || ''}
-          onChange={(e) => handleArrayChange('labels', e.target.value)}
-          placeholder="z.B. Januar, Februar, März"
-          className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-        />
-      </div>
+      {needsDatasetInput ? (
+        <>
+          <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-3 mb-4">
+            <div className="flex items-start space-x-2">
+              <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-sm text-blue-200">
+                <strong>Mehrere Datensätze erforderlich.</strong> Verwenden Sie JSON-Format mit Array von Objekten.
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-dark-textLight mb-2">
+              Beschriftungen (kommagetrennt)
+            </label>
+            <input
+              type="text"
+              value={config.labels?.join(', ') || ''}
+              onChange={(e) => handleArrayChange('labels', e.target.value)}
+              placeholder="z.B. Januar, Februar, März"
+              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-dark-textLight">
+                Datensätze (JSON-Format)
+              </label>
+              <button
+                onClick={() => {
+                  const example = chartType?.configSchema?.datasets?.default || []
+                  onConfigChange({ datasets: example })
+                }}
+                className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-all"
+              >
+                Beispiel laden
+              </button>
+            </div>
+            <textarea
+              value={JSON.stringify(config.datasets || [], null, 2)}
+              onChange={(e) => handleDatasetChange(e.target.value)}
+              placeholder='[{"label":"Serie 1","data":[10,20,30],"backgroundColor":"#3B82F6"}]'
+              rows={8}
+              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all font-mono text-sm"
+            />
+            <p className="text-xs text-dark-textGray mt-1">
+              💡 Format: Array von Objekten mit label, data, backgroundColor
+            </p>
+          </div>
+        </>
+      ) : needsScatterBubbleInput ? (
+        <>
+          <div className="bg-purple-500/10 border border-purple-500/50 rounded-lg p-3 mb-4">
+            <div className="flex items-start space-x-2">
+              <svg className="w-5 h-5 text-purple-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-sm text-purple-200">
+                <strong>Koordinaten erforderlich.</strong> {chartType?.id === 'bubble' ? 'Jeder Punkt benötigt x, y und r (Radius).' : 'Jeder Punkt benötigt x und y Koordinaten.'}
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-dark-textLight mb-2">
+              Label
+            </label>
+            <input
+              type="text"
+              value={config.labels?.[0] || ''}
+              onChange={(e) => onConfigChange({ labels: [e.target.value] })}
+              placeholder="z.B. Datenpunkte"
+              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-dark-textLight">
+                Datenpunkte (JSON-Format)
+              </label>
+              <button
+                onClick={() => {
+                  const example = chartType?.configSchema?.values?.default || []
+                  onConfigChange({ values: example })
+                }}
+                className="text-xs px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded transition-all"
+              >
+                Beispiel laden
+              </button>
+            </div>
+            <textarea
+              value={JSON.stringify(config.values || [], null, 2)}
+              onChange={(e) => handleScatterBubbleData(e.target.value)}
+              placeholder={chartType?.id === 'bubble' 
+                ? '[{"x":20,"y":30,"r":15},{"x":40,"y":10,"r":10}]'
+                : '[{"x":10,"y":20},{"x":15,"y":35},{"x":20,"y":30}]'}
+              rows={8}
+              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all font-mono text-sm"
+            />
+            <p className="text-xs text-dark-textGray mt-1">
+              💡 {chartType?.id === 'bubble' ? 'Format: x, y, r (Radius)' : 'Format: x, y Koordinaten'}
+            </p>
+          </div>
+        </>
+      ) : (
+        <>
+          <div>
+            <label className="block text-sm font-medium text-dark-textLight mb-2">
+              Beschriftungen (kommagetrennt)
+            </label>
+            <input
+              type="text"
+              value={config.labels?.join(', ') || ''}
+              onChange={(e) => handleArrayChange('labels', e.target.value)}
+              placeholder="z.B. Januar, Februar, März"
+              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+            />
+          </div>
 
-      <div>
-        <label className="block text-sm font-medium text-dark-textLight mb-2">
-          Werte (kommagetrennt)
-        </label>
-        <input
-          type="text"
-          value={config.values?.join(', ') || ''}
-          onChange={(e) => handleArrayChange('values', e.target.value)}
-          placeholder="z.B. 10, 20, 30"
-          className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-        />
-      </div>
+          <div>
+            <label className="block text-sm font-medium text-dark-textLight mb-2">
+              Werte (kommagetrennt)
+            </label>
+            <input
+              type="text"
+              value={Array.isArray(config.values) ? config.values.join(', ') : ''}
+              onChange={(e) => handleArrayChange('values', e.target.value)}
+              placeholder="z.B. 10, 20, 30"
+              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+            />
+            <p className="text-xs text-dark-textGray mt-1">
+              💡 Nur Zahlen eingeben, mit Komma trennen
+            </p>
+          </div>
 
-      <div>
-        <label className="block text-sm font-medium text-dark-textLight mb-2">
-          Datensatz-Label
-        </label>
-        <input
-          type="text"
-          value={config.datasetLabel || ''}
-          onChange={(e) => onConfigChange({ datasetLabel: e.target.value })}
-          placeholder="z.B. Verkaufszahlen"
-          className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-        />
-      </div>
+          <div>
+            <label className="block text-sm font-medium text-dark-textLight mb-2">
+              Datensatz-Label
+            </label>
+            <input
+              type="text"
+              value={config.datasetLabel || ''}
+              onChange={(e) => onConfigChange({ datasetLabel: e.target.value })}
+              placeholder="z.B. Verkaufszahlen"
+              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+            />
+          </div>
+        </>
+      )}
     </>
   )
 }
@@ -139,6 +291,15 @@ function StylingTab({ config, onConfigChange }) {
     { name: 'Weiß', value: '#FFFFFF' },
     { name: 'Transparent', value: 'transparent' }
   ]
+
+  const handleColorChange = (value) => {
+    if (!value || value.trim() === '') {
+      onConfigChange({ colors: [] })
+      return
+    }
+    const colors = value.split(',').map(c => c.trim()).filter(c => c !== '')
+    onConfigChange({ colors })
+  }
 
   return (
     <>
@@ -168,13 +329,13 @@ function StylingTab({ config, onConfigChange }) {
         <input
           type="text"
           value={config.colors?.join(', ') || ''}
-          onChange={(e) => {
-            const colors = e.target.value.split(',').map(c => c.trim())
-            onConfigChange({ colors })
-          }}
+          onChange={(e) => handleColorChange(e.target.value)}
           placeholder="z.B. #FF0000, #00FF00, #0000FF"
           className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all font-mono text-sm"
         />
+        <p className="text-xs text-dark-textGray mt-1">
+          💡 Hex-Farben mit # verwenden
+        </p>
       </div>
 
       <div>

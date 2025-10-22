@@ -1,19 +1,27 @@
 export default {
-  id: "donut",
-  name: "Donutdiagramm",
+  id: "scatter",
+  name: "Streudiagramm",
   library: "chartjs",
   configSchema: {
     labels: { 
       type: "array", 
-      default: ["Desktop", "Mobile", "Tablet", "Andere"] 
+      default: ["Datenpunkt"] 
     },
     values: { 
       type: "array", 
-      default: [450, 320, 150, 80] 
+      default: [
+        { x: 10, y: 20 },
+        { x: 15, y: 35 },
+        { x: 20, y: 30 },
+        { x: 25, y: 45 },
+        { x: 30, y: 40 },
+        { x: 35, y: 55 },
+        { x: 40, y: 50 }
+      ]
     },
     colors: { 
       type: "array", 
-      default: ["#22D3EE", "#3B82F6", "#A78BFA", "#F472B6"] 
+      default: ["#8B5CF6"] 
     },
     backgroundColor: {
       type: "string",
@@ -29,8 +37,8 @@ export default {
     },
     options: {
       showLegend: { type: "boolean", default: true },
-      showPercentage: { type: "boolean", default: true },
-      cutout: { type: "number", default: 65 }
+      showGrid: { type: "boolean", default: true },
+      pointSize: { type: "number", default: 8 }
     }
   }
 };

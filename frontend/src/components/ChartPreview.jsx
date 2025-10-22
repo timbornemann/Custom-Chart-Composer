@@ -32,9 +32,13 @@ ChartJS.register(
 export default function ChartPreview({ chartType, config, chartRef }) {
   const [chartData, setChartData] = useState(null)
   const [chartOptions, setChartOptions] = useState(null)
+  const [key, setKey] = useState(0)
 
   useEffect(() => {
     if (!chartType || !config) return
+
+    // Force re-render when chart type changes to avoid Canvas reuse errors
+    setKey(prev => prev + 1)
 
     const data = prepareChartData(chartType, config)
     const options = prepareChartOptions(chartType, config)
@@ -43,9 +47,22 @@ export default function ChartPreview({ chartType, config, chartRef }) {
     setChartOptions(options)
   }, [chartType, config])
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (chartRef?.current) {
+        try {
+          chartRef.current.destroy?.()
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+    }
+  }, [chartRef])
+
   if (!chartType || !config || !chartData) {
     return (
-      <div className="bg-dark-secondary rounded-2xl shadow-lg p-8 flex items-center justify-center min-h-[500px]">
+      <div className="bg-dark-secondary rounded-2xl shadow-lg p-6 flex items-center justify-center h-[600px]">
         <div className="text-dark-textGray">Wähle einen Diagrammtyp aus...</div>
       </div>
     )
@@ -54,14 +71,19 @@ export default function ChartPreview({ chartType, config, chartRef }) {
   const ChartComponent = getChartComponent(chartType.id)
 
   return (
-    <div className="bg-dark-secondary rounded-2xl shadow-lg p-6 h-full flex flex-col">
-      <div className="mb-4">
+    <div className="bg-dark-secondary rounded-2xl shadow-lg p-6 flex flex-col h-[600px]">
+      <div className="mb-4 flex-shrink-0">
         <h2 className="text-xl font-semibold text-dark-textLight">Vorschau</h2>
         <p className="text-sm text-dark-textGray">{chartType.name}</p>
       </div>
-      <div className="bg-dark-bg rounded-xl p-6 flex items-center justify-center flex-1 overflow-auto" style={{ minHeight: '500px' }}>
-        <div style={{ width: '100%', maxWidth: '700px', height: '450px' }}>
-          <ChartComponent ref={chartRef} data={chartData} options={chartOptions} />
+      <div className="bg-dark-bg rounded-xl p-6 flex items-center justify-center flex-1">
+        <div className="w-full h-full max-w-[600px] max-h-[450px] flex items-center justify-center">
+          <ChartComponent 
+            key={`${chartType.id}-${key}`} 
+            ref={chartRef} 
+            data={chartData} 
+            options={chartOptions} 
+          />
         </div>
       </div>
     </div>

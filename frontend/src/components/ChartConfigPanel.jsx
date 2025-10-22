@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import DatasetEditor from './DatasetEditor'
+import PointEditor from './PointEditor'
 
 export default function ChartConfigPanel({ chartType, config, onConfigChange }) {
   const [activeTab, setActiveTab] = useState('data')
@@ -124,68 +126,14 @@ function DataTab({ config, onConfigChange, chartType }) {
       </div>
 
       {needsDatasetInput ? (
-        <>
-          <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-3 mb-4">
-            <div className="flex items-start space-x-2">
-              <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="text-sm text-blue-200">
-                <strong>Mehrere Datensätze erforderlich.</strong> Verwenden Sie JSON-Format mit Array von Objekten.
-              </div>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-dark-textLight mb-2">
-              Beschriftungen (kommagetrennt)
-            </label>
-            <input
-              type="text"
-              value={config.labels?.join(', ') || ''}
-              onChange={(e) => handleArrayChange('labels', e.target.value)}
-              placeholder="z.B. Januar, Februar, März"
-              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-            />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-dark-textLight">
-                Datensätze (JSON-Format)
-              </label>
-              <button
-                onClick={() => {
-                  const example = chartType?.configSchema?.datasets?.default || []
-                  onConfigChange({ datasets: example })
-                }}
-                className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-all"
-              >
-                Beispiel laden
-              </button>
-            </div>
-            <textarea
-              value={JSON.stringify(config.datasets || [], null, 2)}
-              onChange={(e) => handleDatasetChange(e.target.value)}
-              placeholder='[{"label":"Serie 1","data":[10,20,30],"backgroundColor":"#3B82F6"}]'
-              rows={8}
-              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all font-mono text-sm"
-            />
-            <p className="text-xs text-dark-textGray mt-1">
-              💡 Format: Array von Objekten mit label, data, backgroundColor
-            </p>
-          </div>
-        </>
+        <DatasetEditor
+          datasets={config.datasets || []}
+          labels={config.labels || []}
+          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+          onLabelsChange={(labels) => onConfigChange({ labels })}
+        />
       ) : needsScatterBubbleInput ? (
         <>
-          <div className="bg-purple-500/10 border border-purple-500/50 rounded-lg p-3 mb-4">
-            <div className="flex items-start space-x-2">
-              <svg className="w-5 h-5 text-purple-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="text-sm text-purple-200">
-                <strong>Koordinaten erforderlich.</strong> {chartType?.id === 'bubble' ? 'Jeder Punkt benötigt x, y und r (Radius).' : 'Jeder Punkt benötigt x und y Koordinaten.'}
-              </div>
-            </div>
-          </div>
           <div>
             <label className="block text-sm font-medium text-dark-textLight mb-2">
               Label
@@ -198,34 +146,11 @@ function DataTab({ config, onConfigChange, chartType }) {
               className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
             />
           </div>
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-dark-textLight">
-                Datenpunkte (JSON-Format)
-              </label>
-              <button
-                onClick={() => {
-                  const example = chartType?.configSchema?.values?.default || []
-                  onConfigChange({ values: example })
-                }}
-                className="text-xs px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded transition-all"
-              >
-                Beispiel laden
-              </button>
-            </div>
-            <textarea
-              value={JSON.stringify(config.values || [], null, 2)}
-              onChange={(e) => handleScatterBubbleData(e.target.value)}
-              placeholder={chartType?.id === 'bubble' 
-                ? '[{"x":20,"y":30,"r":15},{"x":40,"y":10,"r":10}]'
-                : '[{"x":10,"y":20},{"x":15,"y":35},{"x":20,"y":30}]'}
-              rows={8}
-              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all font-mono text-sm"
-            />
-            <p className="text-xs text-dark-textGray mt-1">
-              💡 {chartType?.id === 'bubble' ? 'Format: x, y, r (Radius)' : 'Format: x, y Koordinaten'}
-            </p>
-          </div>
+          <PointEditor
+            points={config.values || []}
+            onPointsChange={(values) => onConfigChange({ values })}
+            isBubble={chartType?.id === 'bubble'}
+          />
         </>
       ) : (
         <>

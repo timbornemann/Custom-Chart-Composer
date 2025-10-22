@@ -1,0 +1,26 @@
+{
+  "name": "custom-chart-composer-backend",
+  "version": "1.0.0",
+  "description": "Backend für Custom Chart Composer",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["charts", "visualization"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "chart.js": "^4.4.0",
+    "canvas": "^2.11.2",
+    "puppeteer": "^21.5.2",
+    "body-parser": "^1.20.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
+

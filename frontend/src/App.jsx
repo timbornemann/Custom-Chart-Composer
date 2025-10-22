@@ -37,6 +37,23 @@ function App() {
     resetConfig(chartType)
   }
 
+  const handleResetData = () => {
+    if (selectedChartType) {
+      resetConfig(selectedChartType)
+    }
+  }
+
+  const handleClearData = () => {
+    // Clear all data (empty arrays)
+    updateConfig({
+      title: '',
+      labels: [],
+      values: [],
+      datasets: [],
+      datasetLabel: ''
+    })
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-dark-bg flex items-center justify-center">
@@ -68,6 +85,8 @@ function App() {
                 chartType={selectedChartType}
                 config={config}
                 onConfigChange={updateConfig}
+                onResetData={handleResetData}
+                onClearData={handleClearData}
                 chartRef={chartRef}
               />
             </div>

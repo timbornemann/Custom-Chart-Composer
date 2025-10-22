@@ -7,7 +7,7 @@ import RangeBarEditor from './RangeBarEditor'
 import HeatmapEditor from './HeatmapEditor'
 import { useExport } from '../hooks/useExport'
 
-export default function ChartConfigPanel({ chartType, config, onConfigChange, chartRef }) {
+export default function ChartConfigPanel({ chartType, config, onConfigChange, chartRef, onResetData, onClearData }) {
   const [activeTab, setActiveTab] = useState('data')
 
   if (!chartType) {
@@ -66,16 +66,16 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange, ch
       </div>
 
       <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
-        {activeTab === 'data' && <DataTab chartType={chartType} config={config} onConfigChange={onConfigChange} />}
+        {activeTab === 'data' && <DataTab chartType={chartType} config={config} onConfigChange={onConfigChange} onResetData={onResetData} onClearData={onClearData} />}
         {activeTab === 'styling' && <StylingTab config={config} onConfigChange={onConfigChange} />}
         {activeTab === 'options' && <OptionsTab chartType={chartType} config={config} onConfigChange={onConfigChange} />}
-        {activeTab === 'export' && <ExportTab chartType={chartType} config={config} chartRef={chartRef} />}
+        {activeTab === 'export' && <ExportTab chartType={chartType} config={config} chartRef={chartRef} onConfigChange={onConfigChange} />}
       </div>
     </div>
   )
 }
 
-function DataTab({ config, onConfigChange, chartType }) {
+function DataTab({ config, onConfigChange, chartType, onResetData, onClearData }) {
   // Bestimme welcher Input-Typ benötigt wird
   const needsScatterBubbleInput = ['scatter', 'bubble', 'matrix'].includes(chartType?.id)
   const needsRangeBarInput = chartType?.id === 'rangeBar'
@@ -84,6 +84,12 @@ function DataTab({ config, onConfigChange, chartType }) {
     'stackedBar', 'multiLine', 'mixed', 'groupedBar', 'percentageBar',
     'segmentedBar', 'nestedDonut', 'smoothLine', 'dashedLine', 'curvedArea'
   ].includes(chartType?.id)
+
+  const handleClearAllData = () => {
+    if (window.confirm('Möchten Sie wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+      onClearData()
+    }
+  }
 
   return (
     <>
@@ -101,24 +107,108 @@ function DataTab({ config, onConfigChange, chartType }) {
       </div>
 
       {needsRangeBarInput ? (
-        <RangeBarEditor
-          labels={config.labels || []}
-          datasets={config.datasets || []}
-          onLabelsChange={(labels) => onConfigChange({ labels })}
-          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
-        />
+        <>
+          <RangeBarEditor
+            labels={config.labels || []}
+            datasets={config.datasets || []}
+            onLabelsChange={(labels) => onConfigChange({ labels })}
+            onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+          />
+          
+          {/* Daten-Management Buttons */}
+          <div className="pt-4 mt-4 border-t border-gray-700">
+            <div className="flex items-center justify-end space-x-2">
+              <button
+                onClick={onResetData}
+                className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
+                title="Beispieldaten laden"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Beispieldaten</span>
+              </button>
+              <button
+                onClick={handleClearAllData}
+                className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
+                title="Alle Daten löschen"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>Alle löschen</span>
+              </button>
+            </div>
+          </div>
+        </>
       ) : needsHeatmapInput ? (
-        <HeatmapEditor
-          datasets={config.datasets || []}
-          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
-        />
+        <>
+          <HeatmapEditor
+            datasets={config.datasets || []}
+            onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+          />
+          
+          {/* Daten-Management Buttons */}
+          <div className="pt-4 mt-4 border-t border-gray-700">
+            <div className="flex items-center justify-end space-x-2">
+              <button
+                onClick={onResetData}
+                className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
+                title="Beispieldaten laden"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Beispieldaten</span>
+              </button>
+              <button
+                onClick={handleClearAllData}
+                className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
+                title="Alle Daten löschen"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>Alle löschen</span>
+              </button>
+            </div>
+          </div>
+        </>
       ) : needsDatasetInput ? (
-        <DatasetEditor
-          datasets={config.datasets || []}
-          labels={config.labels || []}
-          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
-          onLabelsChange={(labels) => onConfigChange({ labels })}
-        />
+        <>
+          <DatasetEditor
+            datasets={config.datasets || []}
+            labels={config.labels || []}
+            onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+            onLabelsChange={(labels) => onConfigChange({ labels })}
+          />
+          
+          {/* Daten-Management Buttons */}
+          <div className="pt-4 mt-4 border-t border-gray-700">
+            <div className="flex items-center justify-end space-x-2">
+              <button
+                onClick={onResetData}
+                className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
+                title="Beispieldaten laden"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Beispieldaten</span>
+              </button>
+              <button
+                onClick={handleClearAllData}
+                className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
+                title="Alle Daten löschen"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>Alle löschen</span>
+              </button>
+            </div>
+          </div>
+        </>
       ) : needsScatterBubbleInput ? (
         <>
           <div>
@@ -138,6 +228,32 @@ function DataTab({ config, onConfigChange, chartType }) {
             onPointsChange={(values) => onConfigChange({ values })}
             isBubble={['bubble', 'matrix'].includes(chartType?.id)}
           />
+          
+          {/* Daten-Management Buttons */}
+          <div className="pt-4 mt-4 border-t border-gray-700">
+            <div className="flex items-center justify-end space-x-2">
+              <button
+                onClick={onResetData}
+                className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
+                title="Beispieldaten laden"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Beispieldaten</span>
+              </button>
+              <button
+                onClick={handleClearAllData}
+                className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
+                title="Alle Daten löschen"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>Alle löschen</span>
+              </button>
+            </div>
+          </div>
         </>
       ) : (
         <>
@@ -162,6 +278,32 @@ function DataTab({ config, onConfigChange, chartType }) {
           </div>
         </>
       )}
+
+      {/* Daten-Management Buttons */}
+      <div className="pt-4 mt-4 border-t border-gray-700">
+        <div className="flex items-center justify-end space-x-2">
+          <button
+            onClick={onResetData}
+            className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
+            title="Beispieldaten laden"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Beispieldaten</span>
+          </button>
+          <button
+            onClick={handleClearAllData}
+            className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
+            title="Alle Daten löschen"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>Alle löschen</span>
+          </button>
+        </div>
+      </div>
     </>
   )
 }
@@ -302,11 +444,12 @@ function OptionsTab({ chartType, config, onConfigChange }) {
   )
 }
 
-function ExportTab({ chartType, config, chartRef }) {
+function ExportTab({ chartType, config, chartRef, onConfigChange }) {
   const [format, setFormat] = useState('png')
   const [transparent, setTransparent] = useState(false)
   const [exportWidth, setExportWidth] = useState(1920)
   const [exportHeight, setExportHeight] = useState(1080)
+  const [importError, setImportError] = useState(null)
   const { handleExport, exporting, error } = useExport()
 
   const formats = [
@@ -324,6 +467,69 @@ function ExportTab({ chartType, config, chartRef }) {
     handleExport(chartType, config, format, transparent, chartRef, exportWidth, exportHeight)
   }
 
+  const handleExportConfig = () => {
+    const configData = {
+      chartType: chartType.id,
+      config: config,
+      exportedAt: new Date().toISOString(),
+      appVersion: '1.0.0'
+    }
+    
+    const dataStr = JSON.stringify(configData, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `chart-config-${chartType.id}-${Date.now()}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImportConfig = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setImportError(null)
+    
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target.result)
+        
+        // Validate structure
+        if (!importedData.config) {
+          throw new Error('Ungültiges Konfigurationsformat: "config" fehlt')
+        }
+
+        // Optional: Check if chart type matches
+        if (importedData.chartType && importedData.chartType !== chartType.id) {
+          const confirmImport = window.confirm(
+            `Diese Konfiguration wurde für "${importedData.chartType}" erstellt, aber Sie bearbeiten "${chartType.id}". Trotzdem importieren?`
+          )
+          if (!confirmImport) return
+        }
+
+        // Apply the imported config
+        Object.keys(importedData.config).forEach(key => {
+          onConfigChange({ [key]: importedData.config[key] })
+        })
+        
+        alert('Konfiguration erfolgreich importiert!')
+      } catch (err) {
+        setImportError(`Fehler beim Importieren: ${err.message}`)
+      }
+    }
+    reader.onerror = () => {
+      setImportError('Fehler beim Lesen der Datei')
+    }
+    reader.readAsText(file)
+    
+    // Reset input so same file can be imported again
+    event.target.value = ''
+  }
+
   const presetResolutions = [
     { name: 'HD', width: 1280, height: 720 },
     { name: 'Full HD', width: 1920, height: 1080 },
@@ -334,7 +540,62 @@ function ExportTab({ chartType, config, chartRef }) {
   const isChartReady = chartRef && chartRef.current
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <div className="bg-dark-bg rounded-xl p-4 border border-gray-700">
+        <h3 className="text-lg font-semibold text-dark-textLight mb-4 flex items-center">
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+          </svg>
+          Konfiguration als JSON
+        </h3>
+        
+        <div className="space-y-3">
+          <p className="text-sm text-dark-textGray mb-4">
+            Exportieren Sie Ihre Diagramm-Konfiguration als JSON-Datei, um sie zu sichern oder mit anderen zu teilen.
+          </p>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={handleExportConfig}
+              className="px-4 py-3 bg-dark-accent1 hover:bg-opacity-90 text-white font-medium rounded-lg transition-all flex items-center justify-center space-x-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>JSON exportieren</span>
+            </button>
+            
+            <label className="px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-all flex items-center justify-center space-x-2 cursor-pointer">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              <span>JSON importieren</span>
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImportConfig}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          {importError && (
+            <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm">
+              {importError}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-gray-700 pt-6">
+        <h3 className="text-lg font-semibold text-dark-textLight mb-4 flex items-center">
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Diagramm als Bild
+        </h3>
+      </div>
+
       {!isChartReady && (
         <div className="p-4 bg-yellow-500/10 border border-yellow-500/50 rounded-lg text-yellow-400 text-sm">
           ℹ️ Warten Sie, bis das Diagramm vollständig geladen ist, bevor Sie exportieren.

@@ -56,14 +56,14 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
+      <div className="h-screen bg-dark-bg flex items-center justify-center">
         <div className="text-dark-textLight text-xl">Lade Diagrammtypen...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-dark-bg flex flex-col">
+    <div className="h-screen bg-dark-bg flex flex-col overflow-hidden">
       <Header />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar

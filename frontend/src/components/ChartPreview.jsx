@@ -47,7 +47,7 @@ export default function ChartPreview({ chartType, config, chartRef }) {
     if (localChartRef.current && chartRef) {
       chartRef.current = localChartRef.current
     }
-  }, [localChartRef.current, chartRef])
+  }, [chartRef, chartData])
 
   useEffect(() => {
     if (!chartType || !config) return
@@ -316,9 +316,12 @@ function prepareChartData(chartType, config) {
             ...ds,
             borderWidth: ds.borderWidth || (chartType.id.includes('Line') || chartType.id === 'mixed' ? 3 : 2),
             borderRadius: chartType.id.includes('Bar') ? 8 : 0,
-            tension: config.options?.smooth ? 0.4 : 0,
+            tension: ds.tension !== undefined ? ds.tension : (config.options?.smooth ? 0.4 : 0),
             fill: ds.type === 'line' ? (config.options?.fill || false) : true,
-            pointRadius: config.options?.showPoints !== false ? 5 : 0
+            pointRadius: config.options?.showPoints !== false ? 5 : 0,
+            pointBackgroundColor: ds.borderColor || ds.backgroundColor,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
           }))
         }
       }
@@ -332,11 +335,11 @@ function prepareChartData(chartType, config) {
           labels: config.labels || [],
           datasets: config.datasets.map(ds => ({
             ...ds,
-            borderWidth: 3,
-            tension: ds.tension || 0.4,
+            borderWidth: ds.borderWidth || 3,
+            tension: ds.tension !== undefined ? ds.tension : 0.4,
             fill: chartType.id === 'curvedArea' ? (ds.fill !== undefined ? ds.fill : true) : false,
             pointRadius: 5,
-            pointBackgroundColor: ds.borderColor,
+            pointBackgroundColor: ds.borderColor || ds.backgroundColor,
             pointBorderColor: '#fff',
             pointBorderWidth: 2
           }))
@@ -352,10 +355,10 @@ function prepareChartData(chartType, config) {
             ...ds,
             borderWidth: ds.borderWidth || 2,
             borderDash: ds.borderDash || [],
-            tension: 0,
+            tension: ds.tension || 0,
             fill: false,
             pointRadius: config.options?.showPoints !== false ? 5 : 0,
-            pointBackgroundColor: ds.borderColor,
+            pointBackgroundColor: ds.borderColor || ds.backgroundColor,
             pointBorderColor: '#fff',
             pointBorderWidth: 2
           }))

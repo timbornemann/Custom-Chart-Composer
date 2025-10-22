@@ -14,14 +14,18 @@ export default {
           label: "Verkäufe 2024",
           data: [30, 45, 60, 55, 70, 85, 90, 95, 80, 75, 85, 100],
           borderColor: "#3B82F6",
-          backgroundColor: "rgba(59, 130, 246, 0.1)",
+          backgroundColor: "#3B82F6",
+          borderDash: [],
+          borderWidth: 3,
           tension: 0.4
         },
         {
           label: "Verkäufe 2023",
           data: [25, 35, 50, 45, 60, 70, 75, 80, 70, 65, 75, 85],
           borderColor: "#10B981",
-          backgroundColor: "rgba(16, 185, 129, 0.1)",
+          backgroundColor: "#10B981",
+          borderDash: [],
+          borderWidth: 3,
           tension: 0.4
         }
       ]

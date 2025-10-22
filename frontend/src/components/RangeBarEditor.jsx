@@ -38,8 +38,31 @@ export default function RangeBarEditor({ labels, datasets, onLabelsChange, onDat
 
   const dataset = datasets[0] || { label: 'Bereich', data: [], backgroundColor: '#3B82F6' }
 
+  const updateDatasetColor = (color) => {
+    const updated = [{
+      ...dataset,
+      backgroundColor: color,
+      borderColor: color
+    }]
+    onDatasetsChange(updated)
+  }
+
   return (
     <div className="space-y-4">
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-dark-textLight">
+            Farbe
+          </label>
+          <input
+            type="color"
+            value={dataset.backgroundColor || '#3B82F6'}
+            onChange={(e) => updateDatasetColor(e.target.value)}
+            className="w-16 h-8 rounded border border-gray-700 cursor-pointer"
+          />
+        </div>
+      </div>
+
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-sm font-medium text-dark-textLight">

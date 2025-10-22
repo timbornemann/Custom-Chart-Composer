@@ -113,27 +113,87 @@ export default function DatasetEditor({ datasets, labels, onDatasetsChange, onLa
         <div className="space-y-3">
           {datasets.map((dataset, dsIdx) => (
             <div key={dsIdx} className="bg-dark-bg rounded-lg p-3 border border-gray-700">
-              <div className="flex items-center justify-between mb-3">
-                <input
-                  type="text"
-                  value={dataset.label}
-                  onChange={(e) => updateDataset(dsIdx, 'label', e.target.value)}
-                  placeholder="Datensatz-Name"
-                  className="flex-1 px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-medium"
-                />
-                <div className="flex items-center space-x-2 ml-3">
+              <div className="space-y-3 mb-3">
+                <div className="flex items-center justify-between">
                   <input
-                    type="color"
-                    value={dataset.backgroundColor}
-                    onChange={(e) => updateDataset(dsIdx, 'backgroundColor', e.target.value)}
-                    className="w-10 h-10 rounded border border-gray-700 cursor-pointer"
+                    type="text"
+                    value={dataset.label}
+                    onChange={(e) => updateDataset(dsIdx, 'label', e.target.value)}
+                    placeholder="Datensatz-Name"
+                    className="flex-1 px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-medium"
                   />
                   <button
                     onClick={() => removeDataset(dsIdx)}
-                    className="px-3 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded transition-all"
+                    className="px-3 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded transition-all ml-2"
                   >
                     ✕
                   </button>
+                </div>
+                
+                {/* Styling Controls */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-dark-textGray mb-1 block">Füllfarbe</label>
+                    <input
+                      type="color"
+                      value={dataset.backgroundColor || '#3B82F6'}
+                      onChange={(e) => updateDataset(dsIdx, 'backgroundColor', e.target.value)}
+                      className="w-full h-10 rounded border border-gray-700 cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-dark-textGray mb-1 block">Randfarbe</label>
+                    <input
+                      type="color"
+                      value={dataset.borderColor || dataset.backgroundColor || '#3B82F6'}
+                      onChange={(e) => updateDataset(dsIdx, 'borderColor', e.target.value)}
+                      className="w-full h-10 rounded border border-gray-700 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Line Style Controls */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-xs text-dark-textGray mb-1 block">Linienstil</label>
+                    <select
+                      value={Array.isArray(dataset.borderDash) && dataset.borderDash.length > 0 ? 'dashed' : 'solid'}
+                      onChange={(e) => {
+                        if (e.target.value === 'dashed') {
+                          updateDataset(dsIdx, 'borderDash', [5, 5])
+                        } else {
+                          updateDataset(dsIdx, 'borderDash', [])
+                        }
+                      }}
+                      className="w-full px-2 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-xs"
+                    >
+                      <option value="solid">Durchgezogen</option>
+                      <option value="dashed">Gestrichelt</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-dark-textGray mb-1 block">Linienbreite</label>
+                    <input
+                      type="number"
+                      value={dataset.borderWidth || 2}
+                      onChange={(e) => updateDataset(dsIdx, 'borderWidth', Number(e.target.value))}
+                      min="1"
+                      max="10"
+                      className="w-full px-2 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-dark-textGray mb-1 block">Glättung</label>
+                    <input
+                      type="number"
+                      value={dataset.tension !== undefined ? dataset.tension : 0}
+                      onChange={(e) => updateDataset(dsIdx, 'tension', Number(e.target.value))}
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      className="w-full px-2 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-xs"
+                    />
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">

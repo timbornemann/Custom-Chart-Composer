@@ -14,7 +14,9 @@ export default {
           label: "Server Last",
           data: [30, 25, 45, 70, 85, 60, 35],
           borderColor: "#8B5CF6",
-          backgroundColor: "rgba(139, 92, 246, 0.3)",
+          backgroundColor: "#8B5CF6",
+          borderDash: [],
+          borderWidth: 3,
           fill: true,
           tension: 0.5
         }

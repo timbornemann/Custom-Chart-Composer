@@ -5,8 +5,9 @@ import SimpleDataEditor from './SimpleDataEditor'
 import ColorListEditor from './ColorListEditor'
 import RangeBarEditor from './RangeBarEditor'
 import HeatmapEditor from './HeatmapEditor'
+import { useExport } from '../hooks/useExport'
 
-export default function ChartConfigPanel({ chartType, config, onConfigChange }) {
+export default function ChartConfigPanel({ chartType, config, onConfigChange, chartRef }) {
   const [activeTab, setActiveTab] = useState('data')
 
   if (!chartType) {
@@ -52,12 +53,23 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange }) 
         >
           Optionen
         </button>
+        <button
+          onClick={() => setActiveTab('export')}
+          className={`px-4 py-2 font-medium transition-all ${
+            activeTab === 'export'
+              ? 'text-dark-accent1 border-b-2 border-dark-accent1'
+              : 'text-dark-textGray hover:text-dark-textLight'
+          }`}
+        >
+          Export
+        </button>
       </div>
 
       <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
         {activeTab === 'data' && <DataTab chartType={chartType} config={config} onConfigChange={onConfigChange} />}
         {activeTab === 'styling' && <StylingTab config={config} onConfigChange={onConfigChange} />}
         {activeTab === 'options' && <OptionsTab chartType={chartType} config={config} onConfigChange={onConfigChange} />}
+        {activeTab === 'export' && <ExportTab chartType={chartType} config={config} chartRef={chartRef} />}
       </div>
     </div>
   )
@@ -286,29 +298,170 @@ function OptionsTab({ chartType, config, onConfigChange }) {
 
         return null
       })}
+    </div>
+  )
+}
 
+function ExportTab({ chartType, config, chartRef }) {
+  const [format, setFormat] = useState('png')
+  const [transparent, setTransparent] = useState(false)
+  const [exportWidth, setExportWidth] = useState(1920)
+  const [exportHeight, setExportHeight] = useState(1080)
+  const { handleExport, exporting, error } = useExport()
+
+  const formats = [
+    { value: 'png', label: 'PNG', icon: '🖼️' },
+    { value: 'jpeg', label: 'JPEG', icon: '📷' },
+    { value: 'svg', label: 'SVG', icon: '✨' },
+    { value: 'html', label: 'HTML', icon: '🌐' }
+  ]
+
+  const onExport = () => {
+    if (!chartRef || !chartRef.current) {
+      // Show a more helpful error
+      return
+    }
+    handleExport(chartType, config, format, transparent, chartRef, exportWidth, exportHeight)
+  }
+
+  const presetResolutions = [
+    { name: 'HD', width: 1280, height: 720 },
+    { name: 'Full HD', width: 1920, height: 1080 },
+    { name: '4K', width: 3840, height: 2160 },
+    { name: 'Quadrat', width: 1080, height: 1080 }
+  ]
+
+  const isChartReady = chartRef && chartRef.current
+
+  return (
+    <div className="space-y-4">
+      {!isChartReady && (
+        <div className="p-4 bg-yellow-500/10 border border-yellow-500/50 rounded-lg text-yellow-400 text-sm">
+          ℹ️ Warten Sie, bis das Diagramm vollständig geladen ist, bevor Sie exportieren.
+        </div>
+      )}
+      
       <div>
-        <label className="block text-sm font-medium text-dark-textLight mb-2">
-          Breite (px)
+        <label className="block text-sm font-medium text-dark-textLight mb-3">
+          Format wählen
         </label>
-        <input
-          type="number"
-          value={config.width || 800}
-          onChange={(e) => onConfigChange({ width: Number(e.target.value) })}
-          className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-        />
+        <div className="grid grid-cols-4 gap-2">
+          {formats.map((fmt) => (
+            <button
+              key={fmt.value}
+              onClick={() => setFormat(fmt.value)}
+              className={`px-4 py-3 rounded-xl transition-all ${
+                format === fmt.value
+                  ? 'bg-gradient-to-r from-dark-accent1 to-dark-accent2 text-white shadow-lg'
+                  : 'bg-dark-bg text-dark-textGray hover:bg-gray-800 hover:text-dark-textLight'
+              }`}
+            >
+              <div className="text-2xl mb-1">{fmt.icon}</div>
+              <div className="text-xs font-medium">{fmt.label}</div>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-dark-textLight mb-2">
-          Höhe (px)
+        <label className="block text-sm font-medium text-dark-textLight mb-3">
+          Export-Auflösung
         </label>
-        <input
-          type="number"
-          value={config.height || 600}
-          onChange={(e) => onConfigChange({ height: Number(e.target.value) })}
-          className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-        />
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          {presetResolutions.map((preset) => (
+            <button
+              key={preset.name}
+              onClick={() => {
+                setExportWidth(preset.width)
+                setExportHeight(preset.height)
+              }}
+              className={`px-3 py-2 rounded-lg transition-all text-xs font-medium ${
+                exportWidth === preset.width && exportHeight === preset.height
+                  ? 'bg-dark-accent1 text-white'
+                  : 'bg-dark-bg text-dark-textGray hover:bg-gray-800 hover:text-dark-textLight'
+              }`}
+            >
+              {preset.name}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-dark-textGray mb-1 block">Breite (px)</label>
+            <input
+              type="number"
+              value={exportWidth}
+              onChange={(e) => setExportWidth(Number(e.target.value))}
+              min="100"
+              max="7680"
+              className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-dark-textGray mb-1 block">Höhe (px)</label>
+            <input
+              type="number"
+              value={exportHeight}
+              onChange={(e) => setExportHeight(Number(e.target.value))}
+              min="100"
+              max="7680"
+              className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      {(format === 'png' || format === 'svg') && (
+        <div className="flex items-center justify-between p-4 bg-dark-bg rounded-lg">
+          <label className="text-sm font-medium text-dark-textLight">
+            Transparenter Hintergrund
+          </label>
+          <button
+            onClick={() => setTransparent(!transparent)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              transparent ? 'bg-dark-accent1' : 'bg-gray-700'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                transparent ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+
+      <button
+        onClick={onExport}
+        disabled={exporting || !chartType || !isChartReady}
+        className="w-full px-6 py-4 bg-gradient-to-r from-dark-accent1 to-dark-accent2 text-white font-semibold rounded-xl hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+      >
+        {exporting ? (
+          <>
+            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Exportiere...</span>
+          </>
+        ) : (
+          <>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>Diagramm exportieren</span>
+          </>
+        )}
+      </button>
+
+      <div className="text-xs text-dark-textGray text-center">
+        Das Diagramm wird als {format.toUpperCase()} mit {exportWidth}×{exportHeight}px exportiert
       </div>
     </div>
   )

@@ -3,7 +3,6 @@ import Header from './components/Layout/Header'
 import Sidebar from './components/Layout/Sidebar'
 import ChartPreview from './components/ChartPreview'
 import ChartConfigPanel from './components/ChartConfigPanel'
-import ExportPanel from './components/ExportPanel'
 import { useChartConfig } from './hooks/useChartConfig'
 import { getChartTypes } from './services/api'
 
@@ -64,15 +63,11 @@ function App() {
                 chartRef={chartRef}
               />
             </div>
-            <div className="space-y-6">
+            <div>
               <ChartConfigPanel
                 chartType={selectedChartType}
                 config={config}
                 onConfigChange={updateConfig}
-              />
-              <ExportPanel
-                chartType={selectedChartType}
-                config={config}
                 chartRef={chartRef}
               />
             </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -14,6 +14,7 @@ import {
   Filler
 } from 'chart.js'
 import { Bar, Line, Pie, Doughnut, Radar, PolarArea, Scatter, Bubble } from 'react-chartjs-2'
+import ChartErrorBoundary from './ChartErrorBoundary'
 
 ChartJS.register(
   CategoryScale,
@@ -29,36 +30,77 @@ ChartJS.register(
   Filler
 )
 
+// Wrapper component to force complete remount
+function ChartWrapper({ chartType, data, options, chartRef }) {
+  const ChartComponent = getChartComponent(chartType.id)
+  return <ChartComponent ref={chartRef} data={data} options={options} />
+}
+
 export default function ChartPreview({ chartType, config, chartRef }) {
   const [chartData, setChartData] = useState(null)
   const [chartOptions, setChartOptions] = useState(null)
-  const [key, setKey] = useState(0)
+  const [mountKey, setMountKey] = useState(0)
+  const localChartRef = useRef(null)
+
+  // Sync local ref with parent ref
+  useEffect(() => {
+    if (localChartRef.current && chartRef) {
+      chartRef.current = localChartRef.current
+    }
+  }, [localChartRef.current, chartRef])
 
   useEffect(() => {
     if (!chartType || !config) return
 
-    // Force re-render when chart type changes to avoid Canvas reuse errors
-    setKey(prev => prev + 1)
-
-    const data = prepareChartData(chartType, config)
-    const options = prepareChartOptions(chartType, config)
-    
-    setChartData(data)
-    setChartOptions(options)
-  }, [chartType, config])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (chartRef?.current) {
-        try {
-          chartRef.current.destroy?.()
-        } catch (e) {
-          // Ignore cleanup errors
-        }
+    // Destroy any existing chart on the ref
+    if (chartRef?.current) {
+      try {
+        chartRef.current.destroy()
+      } catch (e) {
+        console.warn('Error destroying chart:', e)
       }
+      chartRef.current = null
     }
-  }, [chartRef])
+
+    // Also destroy any chart instances that might be lingering
+    if (localChartRef.current) {
+      try {
+        localChartRef.current.destroy()
+      } catch (e) {
+        console.warn('Error destroying local chart:', e)
+      }
+      localChartRef.current = null
+    }
+
+    // Clear all Chart.js instances
+    try {
+      ChartJS.instances.forEach(instance => {
+        try {
+          instance.destroy()
+        } catch (e) {
+          // Ignore
+        }
+      })
+    } catch (e) {
+      // Ignore if instances array doesn't exist
+    }
+
+    // Clear current data
+    setChartData(null)
+    setChartOptions(null)
+
+    // Increment mount key to force complete unmount/remount
+    const timeoutId = setTimeout(() => {
+      setMountKey(prev => prev + 1)
+      const data = prepareChartData(chartType, config)
+      const options = prepareChartOptions(chartType, config)
+      
+      setChartData(data)
+      setChartOptions(options)
+    }, 100)
+
+    return () => clearTimeout(timeoutId)
+  }, [chartType, config, chartRef])
 
   if (!chartType || !config || !chartData) {
     return (
@@ -68,8 +110,6 @@ export default function ChartPreview({ chartType, config, chartRef }) {
     )
   }
 
-  const ChartComponent = getChartComponent(chartType.id)
-
   return (
     <div className="bg-dark-secondary rounded-2xl shadow-lg p-6 flex flex-col h-[600px]">
       <div className="mb-4 flex-shrink-0">
@@ -77,14 +117,19 @@ export default function ChartPreview({ chartType, config, chartRef }) {
         <p className="text-sm text-dark-textGray">{chartType.name}</p>
       </div>
       <div className="bg-dark-bg rounded-xl p-6 flex items-center justify-center flex-1">
-        <div className="w-full h-full max-w-[600px] max-h-[450px] flex items-center justify-center">
-          <ChartComponent 
-            key={`${chartType.id}-${key}`} 
-            ref={chartRef} 
-            data={chartData} 
-            options={chartOptions} 
-          />
-        </div>
+        {chartData && (
+          <div className="w-full h-full max-w-[600px] max-h-[450px] flex items-center justify-center">
+            <ChartErrorBoundary chartType={chartType}>
+              <ChartWrapper
+                key={`${chartType.id}-${mountKey}`}
+                chartType={chartType}
+                data={chartData}
+                options={chartOptions}
+                chartRef={localChartRef}
+              />
+            </ChartErrorBoundary>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -281,7 +326,9 @@ function prepareChartOptions(chartType, config) {
         color: '#F8FAFC',
         font: { size: 20, family: 'Inter', weight: 'bold' }
       }
-    }
+    },
+    // Explicitly set scales to undefined for charts that don't use them
+    scales: undefined
   }
 
   // Bar charts

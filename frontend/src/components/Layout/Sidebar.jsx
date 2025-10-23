@@ -83,11 +83,23 @@ function getCategoryIcon(category) {
 }
 
 export default function Sidebar({ chartTypes, selectedChartType, onSelectChartType }) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [expandedCategories, setExpandedCategories] = useState({})
+
   const groupedCharts = useMemo(() => {
     const groups = new Map()
     let needsFallbackGroup = false
 
-    chartTypes.forEach(chart => {
+    // Filter charts based on search query
+    const filteredCharts = chartTypes.filter(chart => {
+      if (!searchQuery) return true
+      const query = searchQuery.toLowerCase()
+      const nameMatch = chart.name.toLowerCase().includes(query)
+      const descMatch = chart.description?.toLowerCase().includes(query)
+      return nameMatch || descMatch
+    })
+
+    filteredCharts.forEach(chart => {
       const hasCategory = !!chart.category
       const key = (chart.category || FALLBACK_CATEGORY_KEY).toLowerCase()
       if (!hasCategory) {
@@ -120,20 +132,20 @@ export default function Sidebar({ chartTypes, selectedChartType, onSelectChartTy
         ...group,
         charts: group.charts.sort((a, b) => a.name.localeCompare(b.name, 'de-DE'))
       }))
+      .filter(group => group.charts.length > 0)
       .sort((a, b) => a.label.localeCompare(b.label, 'de-DE'))
-  }, [chartTypes])
-
-  const [expandedCategories, setExpandedCategories] = useState({})
+  }, [chartTypes, searchQuery])
 
   useEffect(() => {
     setExpandedCategories(prev => {
       const nextState = {}
       groupedCharts.forEach(group => {
-        nextState[group.key] = prev[group.key] ?? true
+        // If searching, expand all categories, otherwise use previous state or default to true
+        nextState[group.key] = searchQuery ? true : (prev[group.key] ?? true)
       })
       return nextState
     })
-  }, [groupedCharts])
+  }, [groupedCharts, searchQuery])
 
   const toggleCategory = (categoryKey) => {
     setExpandedCategories(prev => ({
@@ -146,10 +158,47 @@ export default function Sidebar({ chartTypes, selectedChartType, onSelectChartTy
     <aside className="w-64 bg-dark-secondary border-r border-gray-700 h-screen sticky top-0 flex flex-col">
       <div className="p-4 border-b border-gray-700">
         <h2 className="text-lg font-semibold text-dark-textLight mb-2">Diagrammtypen</h2>
-        <p className="text-sm text-dark-textGray">Wähle einen Typ aus</p>
+        <p className="text-sm text-dark-textGray mb-3">Wähle einen Typ aus</p>
+        
+        {/* Search input */}
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Suche..."
+            className="w-full px-3 py-2 pl-9 bg-dark-bg text-dark-textLight text-sm rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all placeholder-dark-textGray"
+          />
+          <svg 
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-textGray"
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-700 rounded transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 text-dark-textGray hover:text-dark-textLight" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
-      <nav className="flex-1 overflow-y-auto p-4 space-y-3">
-        {groupedCharts.map((category) => (
+      <nav className="flex-1 overflow-y-auto p-4 pb-40 space-y-3">
+        {groupedCharts.length === 0 ? (
+          <div className="text-center py-8 text-dark-textGray text-sm">
+            <svg className="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Keine Diagramme gefunden
+          </div>
+        ) : (
+          groupedCharts.map((category) => (
           <div key={category.key} className="space-y-1">
             {/* Kategorie Header */}
             <button
@@ -204,7 +253,8 @@ export default function Sidebar({ chartTypes, selectedChartType, onSelectChartTy
               </div>
             )}
           </div>
-        ))}
+          ))
+        )}
       </nav>
     </aside>
   )

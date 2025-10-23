@@ -536,18 +536,32 @@ function OptionsTab({ chartType, config, onConfigChange }) {
 
   const schema = chartType.configSchema.options || {}
 
+  if (Object.keys(schema).length === 0) {
+    return (
+      <div className="text-sm text-dark-textGray bg-dark-bg rounded-lg p-4">
+        Für diesen Diagrammtyp sind keine speziellen Optionen verfügbar.
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {Object.entries(schema).map(([key, field]) => {
+        // Boolean Toggle
         if (field.type === 'boolean') {
           return (
-            <div key={key} className="flex items-center justify-between">
-              <label className="text-sm font-medium text-dark-textLight">
-                {formatLabel(key)}
-              </label>
+            <div key={key} className="flex items-center justify-between p-3 bg-dark-bg rounded-lg border border-gray-700 hover:border-gray-600 transition-all">
+              <div className="flex-1">
+                <label className="text-sm font-medium text-dark-textLight block">
+                  {formatLabel(key)}
+                </label>
+                {field.description && (
+                  <p className="text-xs text-dark-textGray mt-0.5">{field.description}</p>
+                )}
+              </div>
               <button
                 onClick={() => handleOptionChange(key, !config.options?.[key])}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ml-3 ${
                   config.options?.[key] ? 'bg-dark-accent1' : 'bg-gray-700'
                 }`}
               >
@@ -561,34 +575,125 @@ function OptionsTab({ chartType, config, onConfigChange }) {
           )
         }
 
+        // Number Input with Range Slider
         if (field.type === 'number') {
+          const value = config.options?.[key] ?? field.default
+          const hasRange = field.min !== undefined && field.max !== undefined
+
           return (
-            <div key={key}>
+            <div key={key} className="p-3 bg-dark-bg rounded-lg border border-gray-700">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-dark-textLight">
+                  {formatLabel(key)}
+                </label>
+                <span className="text-sm font-mono text-dark-accent1">{value}</span>
+              </div>
+              {field.description && (
+                <p className="text-xs text-dark-textGray mb-2">{field.description}</p>
+              )}
+              {hasRange ? (
+                <div className="space-y-2">
+                  <input
+                    type="range"
+                    min={field.min}
+                    max={field.max}
+                    step={field.step || 1}
+                    value={value}
+                    onChange={(e) => handleOptionChange(key, Number(e.target.value))}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-dark-accent1"
+                  />
+                  <div className="flex justify-between text-xs text-dark-textGray">
+                    <span>{field.min}</span>
+                    <span>{field.max}</span>
+                  </div>
+                </div>
+              ) : (
+                <input
+                  type="number"
+                  value={value}
+                  min={field.min}
+                  max={field.max}
+                  step={field.step || 1}
+                  onChange={(e) => handleOptionChange(key, Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                />
+              )}
+            </div>
+          )
+        }
+
+        // Select Dropdown
+        if (field.type === 'select' && field.options) {
+          return (
+            <div key={key} className="p-3 bg-dark-bg rounded-lg border border-gray-700">
               <label className="block text-sm font-medium text-dark-textLight mb-2">
                 {formatLabel(key)}
               </label>
+              {field.description && (
+                <p className="text-xs text-dark-textGray mb-2">{field.description}</p>
+              )}
+              <select
+                value={config.options?.[key] ?? field.default ?? ''}
+                onChange={(e) => handleOptionChange(key, e.target.value)}
+                className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+              >
+                {field.options.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )
+        }
+
+        // Text Input
+        if (field.type === 'string') {
+          return (
+            <div key={key} className="p-3 bg-dark-bg rounded-lg border border-gray-700">
+              <label className="block text-sm font-medium text-dark-textLight mb-2">
+                {formatLabel(key)}
+              </label>
+              {field.description && (
+                <p className="text-xs text-dark-textGray mb-2">{field.description}</p>
+              )}
               <input
-                type="number"
-                value={config.options?.[key] ?? field.default}
-                onChange={(e) => handleOptionChange(key, Number(e.target.value))}
-                className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+                type="text"
+                value={config.options?.[key] ?? field.default ?? ''}
+                onChange={(e) => handleOptionChange(key, e.target.value)}
+                placeholder={field.placeholder || ''}
+                className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
               />
             </div>
           )
         }
 
-        if (field.type === 'string') {
+        // Color Input
+        if (field.type === 'color') {
           return (
-            <div key={key}>
+            <div key={key} className="p-3 bg-dark-bg rounded-lg border border-gray-700">
               <label className="block text-sm font-medium text-dark-textLight mb-2">
                 {formatLabel(key)}
               </label>
-              <input
-                type="text"
-                value={config.options?.[key] ?? field.default ?? ''}
-                onChange={(e) => handleOptionChange(key, e.target.value)}
-                className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-              />
+              {field.description && (
+                <p className="text-xs text-dark-textGray mb-2">{field.description}</p>
+              )}
+              <div className="flex items-center space-x-3">
+                <input
+                  type="color"
+                  value={config.options?.[key] ?? field.default ?? '#3B82F6'}
+                  onChange={(e) => handleOptionChange(key, e.target.value)}
+                  className="w-16 h-16 rounded cursor-pointer border-2 border-gray-600 hover:border-dark-accent1 transition-all"
+                />
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={config.options?.[key] ?? field.default ?? '#3B82F6'}
+                    onChange={(e) => handleOptionChange(key, e.target.value)}
+                    className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
+                  />
+                </div>
+              </div>
             </div>
           )
         }

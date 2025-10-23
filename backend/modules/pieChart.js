@@ -38,8 +38,19 @@ export default {
       default: 600
     },
     options: {
-      showLegend: { type: "boolean", default: true },
-      showPercentage: { type: "boolean", default: true }
+      showLegend: { type: "boolean", default: true, description: "Legende ein-/ausblenden" },
+      legendPosition: { type: "select", default: "top", options: [
+        { value: "top", label: "Oben" }, { value: "bottom", label: "Unten" },
+        { value: "left", label: "Links" }, { value: "right", label: "Rechts" }
+      ], description: "Position der Legende" },
+      showPercentage: { type: "boolean", default: true, description: "Prozentangaben anzeigen" },
+      showValues: { type: "boolean", default: false, description: "Werte anzeigen" },
+      showLabels: { type: "boolean", default: true, description: "Labels anzeigen" },
+      borderWidth: { type: "number", min: 0, max: 10, step: 1, default: 3, description: "Rahmenbreite der Segmente" },
+      hoverOffset: { type: "number", min: 0, max: 50, step: 5, default: 10, description: "Hover-Abstand in Pixeln" },
+      startAngle: { type: "number", min: 0, max: 360, step: 15, default: 0, description: "Startwinkel in Grad" },
+      animation: { type: "boolean", default: true, description: "Animationen aktivieren" },
+      animationDuration: { type: "number", min: 0, max: 3000, step: 100, default: 1000, description: "Animationsdauer in Millisekunden" }
     }
   }
 };

@@ -203,8 +203,10 @@ function prepareChartData(chartType, config) {
           data: config.values || [],
           backgroundColor: config.colors || [],
           borderColor: config.colors || [],
-          borderWidth: 2,
-          borderRadius: 8
+          borderWidth: config.options?.borderWidth || 2,
+          borderRadius: config.options?.borderRadius || 8,
+          barThickness: config.options?.barThickness,
+          minBarLength: config.options?.minBarLength || 0
         }]
       }
 
@@ -217,10 +219,11 @@ function prepareChartData(chartType, config) {
           data: config.values || [],
           backgroundColor: config.colors || [],
           borderColor: config.colors?.[0] || '#3B82F6',
-          borderWidth: 3,
-          tension: config.options?.smooth ? 0.4 : 0,
+          borderWidth: config.options?.lineWidth || 3,
+          tension: config.options?.smooth ? (config.options?.tension || 0.4) : 0,
           fill: config.options?.fill || false,
-          pointRadius: config.options?.showPoints !== false ? 5 : 0,
+          pointRadius: config.options?.showPoints !== false ? (config.options?.pointRadius || 5) : 0,
+          pointStyle: config.options?.pointStyle || 'circle',
           pointBackgroundColor: config.colors?.[0] || '#3B82F6',
           pointBorderColor: '#fff',
           pointBorderWidth: 2
@@ -228,17 +231,18 @@ function prepareChartData(chartType, config) {
       }
 
     case 'area':
+      const areaOpacity = config.options?.fillOpacity !== undefined ? Math.round(config.options.fillOpacity * 2.55).toString(16).padStart(2, '0') : '60'
       return {
         labels: config.labels || [],
         datasets: [{
           label: config.datasetLabel || 'Datensatz',
           data: config.values || [],
-          backgroundColor: (config.colors?.[0] || '#06B6D4') + '60',
+          backgroundColor: (config.colors?.[0] || '#06B6D4') + areaOpacity,
           borderColor: config.colors?.[0] || '#06B6D4',
-          borderWidth: 3,
-          tension: config.options?.smooth ? 0.4 : 0,
+          borderWidth: config.options?.lineWidth || 3,
+          tension: config.options?.smooth ? (config.options?.tension || 0.4) : 0,
           fill: true,
-          pointRadius: config.options?.showPoints !== false ? 5 : 0,
+          pointRadius: config.options?.showPoints !== false ? (config.options?.pointRadius || 5) : 0,
           pointBackgroundColor: config.colors?.[0] || '#06B6D4',
           pointBorderColor: '#fff',
           pointBorderWidth: 2
@@ -270,8 +274,10 @@ function prepareChartData(chartType, config) {
           data: config.values || [],
           backgroundColor: config.colors?.[0] || '#8B5CF6',
           borderColor: config.colors?.[0] || '#8B5CF6',
-          pointRadius: config.options?.pointSize || 8,
-          pointHoverRadius: (config.options?.pointSize || 8) + 2
+          pointRadius: config.options?.pointRadius || 8,
+          pointStyle: config.options?.pointStyle || 'circle',
+          borderWidth: config.options?.borderWidth || 2,
+          pointHoverRadius: (config.options?.pointRadius || 8) + 2
         }]
       }
 
@@ -295,21 +301,22 @@ function prepareChartData(chartType, config) {
           data: config.values || [],
           backgroundColor: config.colors || [],
           borderColor: '#1E293B',
-          borderWidth: 3,
-          hoverOffset: 10
+          borderWidth: config.options?.borderWidth || 3,
+          hoverOffset: config.options?.hoverOffset || 10
         }]
       }
     
     case 'radar':
+      const radarOpacity = config.options?.fillOpacity !== undefined ? Math.round(config.options.fillOpacity * 2.55).toString(16).padStart(2, '0') : '40'
       return {
         labels: config.labels || [],
         datasets: [{
           label: config.datasetLabel || 'Bewertung',
           data: config.values || [],
-          backgroundColor: (config.colors?.[0] || '#22D3EE') + '40',
+          backgroundColor: config.options?.fill !== false ? ((config.colors?.[0] || '#22D3EE') + radarOpacity) : 'transparent',
           borderColor: config.colors?.[0] || '#22D3EE',
-          borderWidth: 3,
-          pointRadius: 5,
+          borderWidth: config.options?.lineWidth || 3,
+          pointRadius: config.options?.pointRadius || 5,
           pointBackgroundColor: config.colors?.[0] || '#22D3EE',
           pointBorderColor: '#fff',
           pointBorderWidth: 2
@@ -482,9 +489,13 @@ function prepareChartOptions(chartType, config) {
   const baseOptions = {
     responsive: true,
     maintainAspectRatio: true,
+    animation: {
+      duration: config.options?.animation !== false ? (config.options?.animationDuration || 1000) : 0
+    },
     plugins: {
       legend: {
         display: config.options?.showLegend !== false,
+        position: config.options?.legendPosition || 'top',
         labels: {
           color: '#F8FAFC',
           font: { size: 14, family: 'Inter' }
@@ -505,15 +516,21 @@ function prepareChartOptions(chartType, config) {
   if (['bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
-        beginAtZero: true,
+        beginAtZero: config.options?.beginAtZero !== false,
         stacked: ['stackedBar', 'segmentedBar'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked),
         grid: {
           display: config.options?.showGrid !== false,
-          color: '#334155'
+          color: config.options?.gridColor || '#334155'
         },
         ticks: {
           color: '#CBD5E1',
           font: { size: 12 }
+        },
+        title: {
+          display: !!config.options?.yAxisLabel,
+          text: config.options?.yAxisLabel || '',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
         }
       },
       x: {
@@ -524,8 +541,19 @@ function prepareChartOptions(chartType, config) {
         ticks: {
           color: '#CBD5E1',
           font: { size: 12 }
+        },
+        title: {
+          display: !!config.options?.xAxisLabel,
+          text: config.options?.xAxisLabel || '',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
         }
       }
+    }
+    
+    // Apply bar-specific options
+    if (config.options?.barThickness) {
+      baseOptions.barThickness = config.options.barThickness
     }
   }
 
@@ -561,14 +589,20 @@ function prepareChartOptions(chartType, config) {
     baseOptions.indexAxis = 'y'
     baseOptions.scales = {
       x: {
-        beginAtZero: true,
+        beginAtZero: config.options?.beginAtZero !== false,
         grid: {
           display: config.options?.showGrid !== false,
-          color: '#334155'
+          color: config.options?.gridColor || '#334155'
         },
         ticks: {
           color: '#CBD5E1',
           font: { size: 12 }
+        },
+        title: {
+          display: !!config.options?.xAxisLabel,
+          text: config.options?.xAxisLabel || '',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
         }
       },
       y: {
@@ -578,8 +612,18 @@ function prepareChartOptions(chartType, config) {
         ticks: {
           color: '#CBD5E1',
           font: { size: 12 }
+        },
+        title: {
+          display: !!config.options?.yAxisLabel,
+          text: config.options?.yAxisLabel || '',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
         }
       }
+    }
+    
+    if (config.options?.barThickness) {
+      baseOptions.barThickness = config.options.barThickness
     }
   }
 
@@ -587,24 +631,36 @@ function prepareChartOptions(chartType, config) {
   if (['line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
-        beginAtZero: true,
+        beginAtZero: config.options?.beginAtZero !== false,
         grid: {
           display: config.options?.showGrid !== false,
-          color: '#334155'
+          color: config.options?.gridColor || '#334155'
         },
         ticks: {
           color: '#CBD5E1',
           font: { size: 12 }
+        },
+        title: {
+          display: !!config.options?.yAxisLabel,
+          text: config.options?.yAxisLabel || '',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
         }
       },
       x: {
         grid: {
           display: config.options?.showGrid !== false,
-          color: '#334155'
+          color: config.options?.gridColor || '#334155'
         },
         ticks: {
           color: '#CBD5E1',
           font: { size: 12 }
+        },
+        title: {
+          display: !!config.options?.xAxisLabel,
+          text: config.options?.xAxisLabel || '',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
         }
       }
     }
@@ -614,25 +670,37 @@ function prepareChartOptions(chartType, config) {
   if (['scatter', 'bubble', 'matrix'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
-        beginAtZero: true,
+        beginAtZero: config.options?.beginAtZero !== false,
         grid: {
           display: config.options?.showGrid !== false,
-          color: '#334155'
+          color: config.options?.gridColor || '#334155'
         },
         ticks: {
           color: '#CBD5E1',
           font: { size: 12 }
+        },
+        title: {
+          display: !!config.options?.yAxisLabel,
+          text: config.options?.yAxisLabel || '',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
         }
       },
       x: {
-        beginAtZero: true,
+        beginAtZero: config.options?.beginAtZero !== false,
         grid: {
           display: config.options?.showGrid !== false,
-          color: '#334155'
+          color: config.options?.gridColor || '#334155'
         },
         ticks: {
           color: '#CBD5E1',
           font: { size: 12 }
+        },
+        title: {
+          display: !!config.options?.xAxisLabel,
+          text: config.options?.xAxisLabel || '',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
         }
       }
     }
@@ -701,15 +769,16 @@ function prepareChartOptions(chartType, config) {
     baseOptions.scales = {
       r: {
         beginAtZero: true,
-        max: 100,
+        min: config.options?.scaleMin || 0,
+        max: config.options?.scaleMax || 100,
         ticks: {
-          stepSize: 20,
+          stepSize: config.options?.scaleStepSize || 20,
           color: '#CBD5E1',
           backdropColor: 'transparent',
           font: { size: 12 }
         },
         grid: {
-          color: '#334155'
+          color: config.options?.gridColor || '#334155'
         },
         pointLabels: {
           color: '#F8FAFC',
@@ -721,6 +790,9 @@ function prepareChartOptions(chartType, config) {
 
   // Polar Area
   if (chartType.id === 'polarArea') {
+    if (config.options?.startAngle !== undefined) {
+      baseOptions.rotation = config.options.startAngle
+    }
     baseOptions.scales = {
       r: {
         ticks: {
@@ -728,7 +800,7 @@ function prepareChartOptions(chartType, config) {
           color: '#CBD5E1'
         },
         grid: {
-          color: '#334155'
+          color: config.options?.gridColor || '#334155'
         }
       }
     }
@@ -737,6 +809,9 @@ function prepareChartOptions(chartType, config) {
   // Donut
   if (chartType.id === 'donut') {
     baseOptions.cutout = `${config.options?.cutout || 65}%`
+    if (config.options?.startAngle !== undefined) {
+      baseOptions.rotation = config.options.startAngle
+    }
   }
 
   // Nested Donut

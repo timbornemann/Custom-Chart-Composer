@@ -80,12 +80,17 @@ export const useExport = () => {
         options: JSON.parse(JSON.stringify(originalChart.config.options))
       }
 
-      // Calculate scaling factor based on export size vs typical preview size (600px)
-      const scaleFactor = Math.max(width, height) / 600
+      // Calculate scaling factor based on export size vs typical preview size (450px height)
+      // We use 450 because that's the typical preview chart height
+      const scaleFactor = height / 450
 
-      // Scale fonts and elements proportionally
+      // Scale ALL elements proportionally to maintain exact visual appearance
+      const scaleValue = (value) => {
+        if (value === undefined || value === null) return undefined
+        return Math.max(1, Math.round(value * scaleFactor))
+      }
+      
       const scaleFont = (fontSize) => Math.round(fontSize * scaleFactor)
-      const scaleSize = (size) => Math.round(size * scaleFactor)
 
       // Update options for high-res rendering
       chartConfig.options = {
@@ -104,9 +109,9 @@ export const useExport = () => {
                 ...chartConfig.options.plugins?.legend?.labels?.font,
                 size: scaleFont(14)
               },
-              padding: scaleSize(10),
-              boxWidth: scaleSize(40),
-              boxHeight: scaleSize(15)
+              padding: scaleValue(10),
+              boxWidth: scaleValue(40),
+              boxHeight: scaleValue(15)
             }
           },
           title: {
@@ -115,7 +120,7 @@ export const useExport = () => {
               ...chartConfig.options.plugins?.title?.font,
               size: scaleFont(20)
             },
-            padding: scaleSize(20)
+            padding: scaleValue(20)
           },
           tooltip: {
             ...chartConfig.options.plugins?.tooltip,
@@ -125,12 +130,12 @@ export const useExport = () => {
             bodyFont: {
               size: scaleFont(12)
             },
-            padding: scaleSize(12)
+            padding: scaleValue(12)
           }
         }
       }
 
-      // Scale axis fonts if scales exist
+      // Scale axis fonts if scales exist, but keep grid lines at original size
       if (chartConfig.options.scales) {
         Object.keys(chartConfig.options.scales).forEach(scaleKey => {
           const scale = chartConfig.options.scales[scaleKey]
@@ -152,24 +157,57 @@ export const useExport = () => {
               }
             }
           }
+          if (scale.title) {
+            scale.title = {
+              ...scale.title,
+              font: {
+                ...scale.title.font,
+                size: scaleFont(13)
+              }
+            }
+          }
+          // Scale grid line width proportionally
           if (scale.grid) {
             scale.grid = {
               ...scale.grid,
-              lineWidth: Math.max(1, scaleFactor * 0.5)
+              lineWidth: Math.max(1, scaleFactor * 1)
             }
           }
         })
       }
 
-      // Scale dataset properties
+      // Scale ALL dataset properties proportionally to maintain visual consistency
+      // This ensures the export looks EXACTLY like the preview, just in higher resolution
       chartConfig.data.datasets = chartConfig.data.datasets.map(ds => ({
         ...ds,
-        borderWidth: ds.borderWidth ? scaleSize(ds.borderWidth) : undefined,
-        pointRadius: ds.pointRadius ? scaleSize(ds.pointRadius) : undefined,
-        pointHoverRadius: ds.pointHoverRadius ? scaleSize(ds.pointHoverRadius) : undefined,
-        pointBorderWidth: ds.pointBorderWidth ? scaleSize(ds.pointBorderWidth) : undefined,
-        borderRadius: ds.borderRadius ? scaleSize(ds.borderRadius) : undefined
+        // Scale all visual properties
+        borderWidth: scaleValue(ds.borderWidth),
+        pointRadius: scaleValue(ds.pointRadius),
+        pointHoverRadius: scaleValue(ds.pointHoverRadius),
+        pointBorderWidth: scaleValue(ds.pointBorderWidth),
+        borderRadius: scaleValue(ds.borderRadius),
+        barThickness: scaleValue(ds.barThickness),
+        minBarLength: scaleValue(ds.minBarLength),
+        hoverOffset: scaleValue(ds.hoverOffset),
+        // Scale border dash pattern if it exists
+        borderDash: ds.borderDash ? ds.borderDash.map(v => scaleValue(v)) : undefined,
+        // Keep non-numeric properties as-is
+        pointStyle: ds.pointStyle,
+        tension: ds.tension,
+        fill: ds.fill,
+        stepped: ds.stepped,
+        backgroundColor: ds.backgroundColor,
+        borderColor: ds.borderColor
       }))
+      
+      // Apply scaled barThickness at chart level if it exists in options
+      if (chartConfig.options.barThickness) {
+        chartConfig.options.datasets = {
+          bar: {
+            barThickness: scaleValue(chartConfig.options.barThickness)
+          }
+        }
+      }
 
       // Create a temporary high-resolution chart
       const tempChart = new ChartJS(exportCanvas, chartConfig)

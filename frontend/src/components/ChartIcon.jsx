@@ -209,17 +209,41 @@ function prepareIconData(chartType, config) {
           data: (config.values || []).slice(0, 8),
           backgroundColor: colorPalette[0],
           borderColor: colorPalette[0],
-          pointRadius: 2
+          pointRadius: 3.5,
+          pointStyle: 'circle'
         }]
       }
 
     case 'bubble':
+      return {
+        labels: [],
+        datasets: [{
+          label: 'Bubbles',
+          data: [
+            { x: 25, y: 70, r: 8 },
+            { x: 50, y: 35, r: 6 },
+            { x: 75, y: 60, r: 10 },
+            { x: 40, y: 20, r: 7 }
+          ],
+          backgroundColor: 'rgba(236, 72, 153, 0.7)',
+          borderColor: '#EC4899',
+          borderWidth: 1
+        }]
+      }
+
     case 'matrix':
       return {
+        labels: [],
         datasets: [{
-          data: (config.values || []).slice(0, 6),
-          backgroundColor: colorPalette[0] + '80',
-          borderColor: colorPalette[0],
+          label: 'Matrix',
+          data: [
+            { x: 30, y: 75, r: 9 },
+            { x: 55, y: 45, r: 11 },
+            { x: 75, y: 65, r: 8 },
+            { x: 35, y: 25, r: 10 }
+          ],
+          backgroundColor: 'rgba(139, 92, 246, 0.7)',
+          borderColor: '#8B5CF6',
           borderWidth: 1
         }]
       }
@@ -289,7 +313,7 @@ function prepareIconData(chartType, config) {
 function prepareIconOptions(chartType) {
   const baseOptions = {
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     animation: false,
     plugins: {
       legend: { display: false },
@@ -330,8 +354,16 @@ function prepareIconOptions(chartType) {
   // Scatter & Bubble
   if (['scatter', 'bubble', 'matrix'].includes(chartType.id)) {
     baseOptions.scales = {
-      y: { display: false, beginAtZero: true },
-      x: { display: false, beginAtZero: true }
+      y: { 
+        display: false, 
+        min: 0, 
+        max: 100 
+      },
+      x: { 
+        display: false, 
+        min: 0, 
+        max: 100 
+      }
     }
   }
 
@@ -435,10 +467,16 @@ export default function ChartIcon({ chartType }) {
   const options = prepareIconOptions(chartType)
   const ChartComponent = getChartComponent(chartType.id)
 
+  // Debug für Bubble und Matrix
+  if (chartType.id === 'bubble' || chartType.id === 'matrix') {
+    console.log(`${chartType.id} Icon Data:`, data)
+    console.log(`${chartType.id} Icon Options:`, options)
+  }
+
   return (
     <div 
       ref={containerRef}
-      className="w-12 h-12 flex items-center justify-center rounded-lg p-1.5"
+      className="w-14 h-14 flex items-center justify-center rounded-lg p-2"
       style={{ 
         background: 'rgba(6, 182, 212, 0.1)',
         pointerEvents: 'none'

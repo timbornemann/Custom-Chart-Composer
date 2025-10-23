@@ -220,14 +220,14 @@ function prepareIconData(chartType, config) {
         datasets: [{
           label: 'Bubbles',
           data: [
-            { x: 25, y: 70, r: 8 },
-            { x: 50, y: 35, r: 6 },
-            { x: 75, y: 60, r: 10 },
-            { x: 40, y: 20, r: 7 }
+            { x: 20, y: 75, r: 4 },
+            { x: 50, y: 30, r: 3 },
+            { x: 75, y: 60, r: 5 },
+            { x: 35, y: 15, r: 3.5 }
           ],
-          backgroundColor: 'rgba(236, 72, 153, 0.7)',
+          backgroundColor: 'rgba(236, 72, 153, 0.85)',
           borderColor: '#EC4899',
-          borderWidth: 1
+          borderWidth: 1.5
         }]
       }
 
@@ -237,14 +237,14 @@ function prepareIconData(chartType, config) {
         datasets: [{
           label: 'Matrix',
           data: [
-            { x: 30, y: 75, r: 9 },
-            { x: 55, y: 45, r: 11 },
-            { x: 75, y: 65, r: 8 },
-            { x: 35, y: 25, r: 10 }
+            { x: 25, y: 80, r: 4.5 },
+            { x: 55, y: 45, r: 5.5 },
+            { x: 75, y: 65, r: 4 },
+            { x: 35, y: 20, r: 5 }
           ],
-          backgroundColor: 'rgba(139, 92, 246, 0.7)',
+          backgroundColor: 'rgba(139, 92, 246, 0.85)',
           borderColor: '#8B5CF6',
-          borderWidth: 1
+          borderWidth: 1.5
         }]
       }
 
@@ -357,13 +357,19 @@ function prepareIconOptions(chartType) {
       y: { 
         display: false, 
         min: 0, 
-        max: 100 
+        max: 100,
+        grid: { display: false }
       },
       x: { 
         display: false, 
         min: 0, 
-        max: 100 
+        max: 100,
+        grid: { display: false }
       }
+    }
+    // Add padding around the chart area for bubbles
+    baseOptions.layout = {
+      padding: 10
     }
   }
 
@@ -476,13 +482,16 @@ export default function ChartIcon({ chartType }) {
   return (
     <div 
       ref={containerRef}
-      className="w-14 h-14 flex items-center justify-center rounded-lg p-2"
+      className="flex items-center justify-center rounded-lg"
       style={{ 
+        width: '64px',
+        height: '64px',
+        padding: '8px',
         background: 'rgba(6, 182, 212, 0.1)',
         pointerEvents: 'none'
       }}
     >
-      <div className="w-full h-full">
+      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
         <ChartComponent
           key={`${chartType.id}-${iconKey}`}
           ref={chartRef}

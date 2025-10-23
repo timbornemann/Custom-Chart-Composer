@@ -1,8 +1,15 @@
 export default {
   id: "matrix",
   name: "Matrix-Diagramm",
+  category: "scatter",
+  icon: "🔘",
+  description: "Matrixdiagramm mit gewichteten Punkten.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Preis vs. Qualität"] 
@@ -16,6 +23,10 @@ export default {
         { x: 35, y: 45, r: 10 },
         { x: 85, y: 75, r: 30 }
       ]
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: {
       type: "array",

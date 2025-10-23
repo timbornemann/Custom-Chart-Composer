@@ -1,8 +1,15 @@
 export default {
   id: "rangeBar",
   name: "Bereichs-Balkendiagramm",
+  category: "bar",
+  icon: "📊",
+  description: "Stellt Wertebereiche mit Balkenintervallen dar.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Task 1", "Task 2", "Task 3", "Task 4", "Task 5"] 

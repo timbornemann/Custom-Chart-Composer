@@ -8,6 +8,9 @@ export const getChartTypes = (req, res) => {
     const chartTypes = modules.map(module => ({
       id: module.id,
       name: module.name,
+      category: module.category || null,
+      icon: module.icon || null,
+      description: module.description || '',
       library: module.library,
       configSchema: module.configSchema
     }));

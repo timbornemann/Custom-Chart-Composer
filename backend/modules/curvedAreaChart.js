@@ -1,8 +1,15 @@
 export default {
   id: "curvedArea",
   name: "Geschwungenes Flächendiagramm",
+  category: "line",
+  icon: "📈",
+  description: "Weich gefüllte Kurvenfläche für Trends.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"] 

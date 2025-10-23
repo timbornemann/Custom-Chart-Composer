@@ -1,8 +1,15 @@
 export default {
   id: "area",
   name: "Flächendiagramm",
+  category: "line",
+  icon: "📈",
+  description: "Gefülltes Liniendiagramm zur Hervorhebung von Flächen.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [30, 45, 35, 50, 45, 60, 55] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

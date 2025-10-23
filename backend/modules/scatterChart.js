@@ -1,8 +1,15 @@
 export default {
   id: "scatter",
   name: "Streudiagramm",
+  category: "scatter",
+  icon: "🔘",
+  description: "Punkte zur Analyse von Zusammenhängen zweier Variablen.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Datenpunkt"] 
@@ -18,6 +25,10 @@ export default {
         { x: 35, y: 55 },
         { x: 40, y: 50 }
       ]
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

@@ -1,8 +1,15 @@
 export default {
   id: "radar",
   name: "Radar-Chart",
+  category: "special",
+  icon: "✨",
+  description: "Mehrdimensionale Daten auf polaren Achsen.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Geschwindigkeit", "Zuverlässigkeit", "Komfort", "Sicherheit", "Design"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [85, 90, 75, 95, 80] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

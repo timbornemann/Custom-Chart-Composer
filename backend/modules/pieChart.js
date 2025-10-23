@@ -1,8 +1,15 @@
 export default {
   id: "pie",
   name: "Kreisdiagramm",
+  category: "pie",
+  icon: "🥧",
+  description: "Teilt ein Ganzes in proportionale Sektoren.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Rot", "Blau", "Gelb", "Grün", "Lila"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [300, 50, 100, 80, 120] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

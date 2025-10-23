@@ -1,8 +1,15 @@
 export default {
   id: "stackedBar",
   name: "Gestapeltes Balkendiagramm",
+  category: "bar",
+  icon: "📊",
+  description: "Gestapelte Balken zum Vergleichen von Summen und Anteilen.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Q1", "Q2", "Q3", "Q4"] 

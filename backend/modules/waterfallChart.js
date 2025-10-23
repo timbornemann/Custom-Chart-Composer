@@ -1,8 +1,15 @@
 export default {
   id: "waterfall",
   name: "Wasserfalldiagramm",
+  category: "bar",
+  icon: "📊",
+  description: "Visualisiert kumulative Effekte mit Wasserfall-Balken.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Start", "Einnahmen", "Kosten", "Gewinn", "Steuern", "Ende"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [1000, 500, -300, 400, -200, 1400] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

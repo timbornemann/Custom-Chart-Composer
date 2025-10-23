@@ -1,8 +1,15 @@
 export default {
   id: "mixed",
   name: "Kombiniertes Diagramm",
+  category: "special",
+  icon: "✨",
+  description: "Kombiniert verschiedene Charttypen in einem Diagramm.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Jan", "Feb", "Mär", "Apr", "Mai"] 

@@ -1,8 +1,15 @@
 export default {
   id: "semiCircle",
   name: "Halbkreis-Diagramm",
+  category: "pie",
+  icon: "🥧",
+  description: "Halbkreis-Donut für begrenzte Winkelansicht.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Erreicht", "Verbleibend"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [75, 25] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

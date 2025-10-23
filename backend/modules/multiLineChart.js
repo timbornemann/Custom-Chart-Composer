@@ -1,8 +1,15 @@
 export default {
   id: "multiLine",
   name: "Multi-Liniendiagramm",
+  category: "line",
+  icon: "📈",
+  description: "Mehrere Linien zum Vergleich verschiedener Serien.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun"] 

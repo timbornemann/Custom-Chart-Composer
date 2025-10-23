@@ -1,8 +1,15 @@
 export default {
   id: "nestedDonut",
   name: "Verschachteltes Donut-Diagramm",
+  category: "pie",
+  icon: "🥧",
+  description: "Mehrere Donuts zur Darstellung hierarchischer Daten.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Desktop", "Mobile", "Tablet"] 

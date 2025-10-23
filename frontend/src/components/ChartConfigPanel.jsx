@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import PropTypes from 'prop-types'
 import DatasetEditor from './DatasetEditor'
 import PointEditor from './PointEditor'
 import SimpleDataEditor from './SimpleDataEditor'
@@ -66,8 +67,22 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange, ch
       </div>
 
       <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
-        {activeTab === 'data' && <DataTab chartType={chartType} config={config} onConfigChange={onConfigChange} onResetData={onResetData} onClearData={onClearData} />}
-        {activeTab === 'styling' && <StylingTab config={config} onConfigChange={onConfigChange} />}
+        {activeTab === 'data' && (
+          <DataTab
+            chartType={chartType}
+            config={config}
+            onConfigChange={onConfigChange}
+            onResetData={onResetData}
+            onClearData={onClearData}
+          />
+        )}
+        {activeTab === 'styling' && (
+          <StylingTab
+            chartType={chartType}
+            config={config}
+            onConfigChange={onConfigChange}
+          />
+        )}
         {activeTab === 'options' && <OptionsTab chartType={chartType} config={config} onConfigChange={onConfigChange} />}
         {activeTab === 'export' && <ExportTab chartType={chartType} config={config} chartRef={chartRef} onConfigChange={onConfigChange} />}
       </div>
@@ -75,15 +90,29 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange, ch
   )
 }
 
-function DataTab({ config, onConfigChange, chartType, onResetData, onClearData }) {
-  // Bestimme welcher Input-Typ benötigt wird
-  const needsScatterBubbleInput = ['scatter', 'bubble', 'matrix'].includes(chartType?.id)
-  const needsRangeBarInput = chartType?.id === 'rangeBar'
-  const needsHeatmapInput = chartType?.id === 'heatmap'
-  const needsDatasetInput = [
-    'stackedBar', 'multiLine', 'mixed', 'groupedBar', 'percentageBar',
-    'segmentedBar', 'nestedDonut', 'smoothLine', 'dashedLine', 'curvedArea'
-  ].includes(chartType?.id)
+function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }) {
+  const schema = chartType?.configSchema || {}
+
+  const labelsSchema = schema.labels
+  const valuesSchema = schema.values
+  const datasetsSchema = schema.datasets
+  const datasetLabelSchema = schema.datasetLabel
+
+  const defaultValues = Array.isArray(valuesSchema?.default) ? valuesSchema.default : []
+  const defaultDatasets = Array.isArray(datasetsSchema?.default) ? datasetsSchema.default : []
+  const sampleValue = defaultValues[0]
+  const sampleDataset = defaultDatasets[0]
+  const sampleDatasetEntry = Array.isArray(sampleDataset?.data) ? sampleDataset.data[0] : undefined
+
+  const hasSimpleValues = Array.isArray(defaultValues) && sampleValue !== undefined && typeof sampleValue !== 'object'
+  const hasPointValues = Array.isArray(defaultValues) && typeof sampleValue === 'object' && sampleValue !== null
+  const isBubbleValues = hasPointValues && !!((config.values?.[0] ?? sampleValue)?.r || (config.values?.[0] ?? sampleValue)?.v)
+  const isRangeDataset = Array.isArray(sampleDatasetEntry)
+  const isHeatmapDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
+  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset
+  const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues
+  const excludedKeys = ['title', 'labels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
+  const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
 
   const handleClearAllData = () => {
     if (window.confirm('Möchten Sie wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
@@ -91,171 +120,177 @@ function DataTab({ config, onConfigChange, chartType, onResetData, onClearData }
     }
   }
 
+  const handleFieldChange = (key, value) => {
+    onConfigChange({ [key]: value })
+  }
+
+  const renderDatasetEditor = () => {
+    if (!datasetsSchema) return null
+
+    if (isRangeDataset) {
+      return (
+        <RangeBarEditor
+          labels={config.labels || []}
+          datasets={config.datasets || []}
+          onLabelsChange={(labels) => onConfigChange({ labels })}
+          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+        />
+      )
+    }
+
+    if (isHeatmapDataset) {
+      return (
+        <HeatmapEditor
+          datasets={config.datasets || []}
+          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+        />
+      )
+    }
+
+    if (usesDatasetEditor) {
+      return (
+        <DatasetEditor
+          datasets={config.datasets || []}
+          labels={config.labels || []}
+          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+          onLabelsChange={(labels) => onConfigChange({ labels })}
+        />
+      )
+    }
+
+    return null
+  }
+
+  const renderAdditionalField = (key, field) => {
+    if (!field) return null
+
+    const label = formatLabel(key)
+
+    if (field.type === 'number') {
+      return (
+        <div key={key}>
+          <label className="block text-sm font-medium text-dark-textLight mb-2">
+            {label}
+          </label>
+          <input
+            type="number"
+            value={config[key] ?? field.default ?? 0}
+            onChange={(e) => handleFieldChange(key, Number(e.target.value))}
+            className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+          />
+        </div>
+      )
+    }
+
+    if (field.type === 'string') {
+      return (
+        <div key={key}>
+          <label className="block text-sm font-medium text-dark-textLight mb-2">
+            {label}
+          </label>
+          <input
+            type="text"
+            value={config[key] ?? field.default ?? ''}
+            onChange={(e) => handleFieldChange(key, e.target.value)}
+            className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+          />
+        </div>
+      )
+    }
+
+    if (field.type === 'array') {
+      return (
+        <JsonFieldEditor
+          key={key}
+          label={label}
+          value={config[key] ?? field.default ?? []}
+          onChange={(value) => handleFieldChange(key, value)}
+        />
+      )
+    }
+
+    return null
+  }
+
+  const renderValueFields = () => {
+    if (!valuesSchema) return null
+
+    if (hasPointValues) {
+      return (
+        <PointEditor
+          points={config.values || []}
+          onPointsChange={(values) => onConfigChange({ values })}
+          isBubble={isBubbleValues}
+        />
+      )
+    }
+
+    if (hasSimpleValues) {
+      return (
+        <ArrayFieldEditor
+          label="Werte"
+          values={config.values || []}
+          onChange={(values) => onConfigChange({ values })}
+          itemType="number"
+        />
+      )
+    }
+
+    return (
+      <JsonFieldEditor
+        label="Werte"
+        value={config.values || []}
+        onChange={(values) => onConfigChange({ values })}
+      />
+    )
+  }
+
+  const renderLabelFields = () => {
+    if (!labelsSchema) return null
+
+    if (usesDatasetEditor || usesSimpleEditor) {
+      return null
+    }
+
+    if (hasPointValues) {
+      return (
+        <ArrayFieldEditor
+          label="Labels"
+          values={config.labels || []}
+          onChange={(labels) => onConfigChange({ labels })}
+          itemType="string"
+        />
+      )
+    }
+
+    return (
+      <ArrayFieldEditor
+        label="Labels"
+        values={config.labels || []}
+        onChange={(labels) => onConfigChange({ labels })}
+        itemType="string"
+      />
+    )
+  }
+
   return (
     <>
-      <div>
-        <label className="block text-sm font-medium text-dark-textLight mb-2">
-          Titel
-        </label>
-        <input
-          type="text"
-          value={config.title || ''}
-          onChange={(e) => onConfigChange({ title: e.target.value })}
-          placeholder="Diagrammtitel (optional)"
-          className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-        />
-      </div>
+      {schema.title && (
+        <div>
+          <label className="block text-sm font-medium text-dark-textLight mb-2">
+            Titel
+          </label>
+          <input
+            type="text"
+            value={config.title || ''}
+            onChange={(e) => onConfigChange({ title: e.target.value })}
+            placeholder="Diagrammtitel (optional)"
+            className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+          />
+        </div>
+      )}
 
-      {needsRangeBarInput ? (
-        <>
-          <RangeBarEditor
-            labels={config.labels || []}
-            datasets={config.datasets || []}
-            onLabelsChange={(labels) => onConfigChange({ labels })}
-            onDatasetsChange={(datasets) => onConfigChange({ datasets })}
-          />
-          
-          {/* Daten-Management Buttons */}
-          <div className="pt-4 mt-4 border-t border-gray-700">
-            <div className="flex items-center justify-end space-x-2">
-              <button
-                onClick={onResetData}
-                className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
-                title="Beispieldaten laden"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Beispieldaten</span>
-              </button>
-              <button
-                onClick={handleClearAllData}
-                className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
-                title="Alle Daten löschen"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                <span>Alle löschen</span>
-              </button>
-            </div>
-          </div>
-        </>
-      ) : needsHeatmapInput ? (
-        <>
-          <HeatmapEditor
-            datasets={config.datasets || []}
-            onDatasetsChange={(datasets) => onConfigChange({ datasets })}
-          />
-          
-          {/* Daten-Management Buttons */}
-          <div className="pt-4 mt-4 border-t border-gray-700">
-            <div className="flex items-center justify-end space-x-2">
-              <button
-                onClick={onResetData}
-                className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
-                title="Beispieldaten laden"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Beispieldaten</span>
-              </button>
-              <button
-                onClick={handleClearAllData}
-                className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
-                title="Alle Daten löschen"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                <span>Alle löschen</span>
-              </button>
-            </div>
-          </div>
-        </>
-      ) : needsDatasetInput ? (
-        <>
-          <DatasetEditor
-            datasets={config.datasets || []}
-            labels={config.labels || []}
-            onDatasetsChange={(datasets) => onConfigChange({ datasets })}
-            onLabelsChange={(labels) => onConfigChange({ labels })}
-          />
-          
-          {/* Daten-Management Buttons */}
-          <div className="pt-4 mt-4 border-t border-gray-700">
-            <div className="flex items-center justify-end space-x-2">
-              <button
-                onClick={onResetData}
-                className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
-                title="Beispieldaten laden"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Beispieldaten</span>
-              </button>
-              <button
-                onClick={handleClearAllData}
-                className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
-                title="Alle Daten löschen"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                <span>Alle löschen</span>
-              </button>
-            </div>
-          </div>
-        </>
-      ) : needsScatterBubbleInput ? (
-        <>
-          <div>
-            <label className="block text-sm font-medium text-dark-textLight mb-2">
-              Label
-            </label>
-            <input
-              type="text"
-              value={config.labels?.[0] || ''}
-              onChange={(e) => onConfigChange({ labels: [e.target.value] })}
-              placeholder="z.B. Datenpunkte"
-              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-            />
-          </div>
-          <PointEditor
-            points={config.values || []}
-            onPointsChange={(values) => onConfigChange({ values })}
-            isBubble={['bubble', 'matrix'].includes(chartType?.id)}
-          />
-          
-          {/* Daten-Management Buttons */}
-          <div className="pt-4 mt-4 border-t border-gray-700">
-            <div className="flex items-center justify-end space-x-2">
-              <button
-                onClick={onResetData}
-                className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
-                title="Beispieldaten laden"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Beispieldaten</span>
-              </button>
-              <button
-                onClick={handleClearAllData}
-                className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
-                title="Alle Daten löschen"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                <span>Alle löschen</span>
-              </button>
-            </div>
-          </div>
-        </>
-      ) : (
+      {usesSimpleEditor ? (
         <>
           <SimpleDataEditor
             labels={config.labels || []}
@@ -263,23 +298,45 @@ function DataTab({ config, onConfigChange, chartType, onResetData, onClearData }
             onLabelsChange={(labels) => onConfigChange({ labels })}
             onValuesChange={(values) => onConfigChange({ values })}
           />
-
-          <div>
-            <label className="block text-sm font-medium text-dark-textLight mb-2">
-              Datensatz-Label
-            </label>
-            <input
-              type="text"
-              value={config.datasetLabel || ''}
-              onChange={(e) => onConfigChange({ datasetLabel: e.target.value })}
-              placeholder="z.B. Verkaufszahlen"
-              className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
-            />
-          </div>
+          {datasetLabelSchema && (
+            <div>
+              <label className="block text-sm font-medium text-dark-textLight mb-2">
+                Datensatz-Label
+              </label>
+              <input
+                type="text"
+                value={config.datasetLabel || ''}
+                onChange={(e) => onConfigChange({ datasetLabel: e.target.value })}
+                placeholder="z.B. Verkaufszahlen"
+                className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+              />
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {renderLabelFields()}
+          {renderValueFields()}
+          {datasetLabelSchema && !usesDatasetEditor && !usesSimpleEditor && (
+            <div>
+              <label className="block text-sm font-medium text-dark-textLight mb-2">
+                Datensatz-Label
+              </label>
+              <input
+                type="text"
+                value={config.datasetLabel || ''}
+                onChange={(e) => onConfigChange({ datasetLabel: e.target.value })}
+                placeholder="z.B. Verkaufszahlen"
+                className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+              />
+            </div>
+          )}
+          {renderDatasetEditor()}
         </>
       )}
 
-      {/* Daten-Management Buttons */}
+      {additionalFields.map(([key, field]) => renderAdditionalField(key, field))}
+
       <div className="pt-4 mt-4 border-t border-gray-700">
         <div className="flex items-center justify-end space-x-2">
           <button
@@ -308,7 +365,12 @@ function DataTab({ config, onConfigChange, chartType, onResetData, onClearData }
   )
 }
 
-function StylingTab({ config, onConfigChange }) {
+function StylingTab({ chartType, config, onConfigChange }) {
+  const schema = chartType?.configSchema || {}
+  const hasColors = !!schema.colors
+  const hasBackground = !!schema.backgroundColor
+  const hasDimensions = !!schema.width || !!schema.height
+
   const presetColors = [
     ['#4ADE80', '#22D3EE', '#F472B6', '#FBBF24', '#A78BFA'],
     ['#EF4444', '#3B82F6', '#FBBF24', '#10B981', '#A78BFA'],
@@ -324,64 +386,109 @@ function StylingTab({ config, onConfigChange }) {
     { name: 'Transparent', value: 'transparent' }
   ]
 
+  if (!hasColors && !hasBackground && !hasDimensions) {
+    return (
+      <div className="text-sm text-dark-textGray">
+        Für diesen Diagrammtyp sind keine Styling-Optionen definiert.
+      </div>
+    )
+  }
+
   return (
-    <>
-      <div>
-        <label className="block text-sm font-medium text-dark-textLight mb-3">
-          Farbpalette
-        </label>
-        <div className="grid grid-cols-2 gap-3">
-          {presetColors.map((colors, idx) => (
-            <button
-              key={idx}
-              onClick={() => onConfigChange({ colors })}
-              className="flex space-x-1 p-2 bg-dark-bg rounded-lg hover:bg-gray-800 transition-all"
-            >
-              {colors.map((color, i) => (
-                <div key={i} className="w-8 h-8 rounded" style={{ backgroundColor: color }} />
+    <div className="space-y-6">
+      {hasColors && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-dark-textLight mb-3">
+              Farbpalette
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {presetColors.map((colors, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onConfigChange({ colors })}
+                  className="flex space-x-1 p-2 bg-dark-bg rounded-lg hover:bg-gray-800 transition-all"
+                >
+                  {colors.map((color, i) => (
+                    <div key={i} className="w-8 h-8 rounded" style={{ backgroundColor: color }} />
+                  ))}
+                </button>
               ))}
-            </button>
-          ))}
+            </div>
+          </div>
+
+          <ColorListEditor
+            colors={config.colors}
+            onColorsChange={(colors) => onConfigChange({ colors })}
+          />
         </div>
-      </div>
+      )}
 
-      <ColorListEditor
-        colors={config.colors}
-        onColorsChange={(colors) => onConfigChange({ colors })}
-      />
+      {hasBackground && (
+        <div>
+          <label className="block text-sm font-medium text-dark-textLight mb-3">
+            Hintergrundfarbe
+          </label>
+          <div className="grid grid-cols-5 gap-2">
+            {backgroundPresets.map((preset) => (
+              <button
+                key={preset.value}
+                onClick={() => onConfigChange({ backgroundColor: preset.value })}
+                className={`p-3 rounded-lg border-2 transition-all ${
+                  config.backgroundColor === preset.value
+                    ? 'border-dark-accent1'
+                    : 'border-gray-700 hover:border-gray-600'
+                }`}
+              >
+                <div
+                  className="w-full h-8 rounded"
+                  style={{
+                    backgroundColor: preset.value === 'transparent' ? '#fff' : preset.value,
+                    backgroundImage: preset.value === 'transparent'
+                      ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)'
+                      : 'none',
+                    backgroundSize: '10px 10px',
+                    backgroundPosition: '0 0, 5px 5px'
+                  }}
+                />
+                <span className="text-xs text-dark-textGray mt-1 block">{preset.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
-      <div>
-        <label className="block text-sm font-medium text-dark-textLight mb-3">
-          Hintergrundfarbe
-        </label>
-        <div className="grid grid-cols-5 gap-2">
-          {backgroundPresets.map((preset) => (
-            <button
-              key={preset.value}
-              onClick={() => onConfigChange({ backgroundColor: preset.value })}
-              className={`p-3 rounded-lg border-2 transition-all ${
-                config.backgroundColor === preset.value
-                  ? 'border-dark-accent1'
-                  : 'border-gray-700 hover:border-gray-600'
-              }`}
-            >
-              <div 
-                className="w-full h-8 rounded" 
-                style={{ 
-                  backgroundColor: preset.value === 'transparent' ? '#fff' : preset.value,
-                  backgroundImage: preset.value === 'transparent' 
-                    ? 'linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc)'
-                    : 'none',
-                  backgroundSize: '10px 10px',
-                  backgroundPosition: '0 0, 5px 5px'
-                }} 
+      {hasDimensions && (
+        <div className="grid grid-cols-2 gap-3">
+          {schema.width && (
+            <div>
+              <label className="text-xs text-dark-textGray mb-1 block">Breite (px)</label>
+              <input
+                type="number"
+                value={config.width ?? schema.width.default ?? 800}
+                onChange={(e) => onConfigChange({ width: Number(e.target.value) })}
+                min="100"
+                max="7680"
+                className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
               />
-              <span className="text-xs text-dark-textGray mt-1 block">{preset.name}</span>
-            </button>
-          ))}
+            </div>
+          )}
+          {schema.height && (
+            <div>
+              <label className="text-xs text-dark-textGray mb-1 block">Höhe (px)</label>
+              <input
+                type="number"
+                value={config.height ?? schema.height.default ?? 600}
+                onChange={(e) => onConfigChange({ height: Number(e.target.value) })}
+                min="100"
+                max="7680"
+                className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+              />
+            </div>
+          )}
         </div>
-      </div>
-    </>
+      )}
+    </div>
   )
 }
 
@@ -438,8 +545,128 @@ function OptionsTab({ chartType, config, onConfigChange }) {
           )
         }
 
+        if (field.type === 'string') {
+          return (
+            <div key={key}>
+              <label className="block text-sm font-medium text-dark-textLight mb-2">
+                {formatLabel(key)}
+              </label>
+              <input
+                type="text"
+                value={config.options?.[key] ?? field.default ?? ''}
+                onChange={(e) => handleOptionChange(key, e.target.value)}
+                className="w-full px-4 py-2 bg-dark-bg text-dark-textLight rounded-lg border border-gray-700 focus:border-dark-accent1 focus:outline-none transition-all"
+              />
+            </div>
+          )
+        }
+
         return null
       })}
+    </div>
+  )
+}
+
+function ArrayFieldEditor({ label, values, onChange, itemType = 'string' }) {
+  const normalizedValues = Array.isArray(values) ? values : []
+
+  const handleValueChange = (index, value) => {
+    const updated = normalizedValues.map((entry, i) => {
+      if (i === index) {
+        return itemType === 'number' ? Number(value) || 0 : value
+      }
+      return entry
+    })
+    onChange(updated)
+  }
+
+  const handleAddValue = () => {
+    const defaultValue = itemType === 'number' ? 0 : `Eintrag ${normalizedValues.length + 1}`
+    onChange([...normalizedValues, defaultValue])
+  }
+
+  const handleRemoveValue = (index) => {
+    onChange(normalizedValues.filter((_, i) => i !== index))
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium text-dark-textLight">
+          {label}
+        </label>
+        <button
+          onClick={handleAddValue}
+          className="text-xs px-3 py-1 bg-dark-secondary hover:bg-gray-800 text-dark-textLight rounded transition-all"
+        >
+          + Eintrag
+        </button>
+      </div>
+      <div className="space-y-2">
+        {normalizedValues.map((entry, idx) => (
+          <div key={`${label}-${idx}`} className="flex items-center space-x-2">
+            <input
+              type={itemType === 'number' ? 'number' : 'text'}
+              value={entry}
+              onChange={(e) => handleValueChange(idx, e.target.value)}
+              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            />
+            <button
+              onClick={() => handleRemoveValue(idx)}
+              className="px-3 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded transition-all"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+      {normalizedValues.length === 0 && (
+        <div className="text-xs text-dark-textGray bg-dark-bg rounded p-3">
+          Keine Werte vorhanden. Füge über "Eintrag" neue Werte hinzu.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function JsonFieldEditor({ label, value, onChange }) {
+  const [rawValue, setRawValue] = useState(() => JSON.stringify(value, null, 2))
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    setRawValue(JSON.stringify(value, null, 2))
+  }, [value])
+
+  const handleBlur = () => {
+    try {
+      const parsed = JSON.parse(rawValue)
+      onChange(parsed)
+      setError(null)
+    } catch (err) {
+      setError('Ungültiges JSON-Format. Bitte Struktur prüfen.')
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-dark-textLight">
+        {label}
+      </label>
+      <textarea
+        value={rawValue}
+        onChange={(e) => setRawValue(e.target.value)}
+        onBlur={handleBlur}
+        rows={6}
+        className={`w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border ${
+          error ? 'border-red-500 focus:border-red-500' : 'border-gray-700 focus:border-dark-accent1'
+        } focus:outline-none text-sm font-mono`}
+      />
+      <div className="text-xs text-dark-textGray">
+        Bearbeite komplexe Datenstrukturen direkt als JSON.
+      </div>
+      {error && (
+        <div className="text-xs text-red-400">{error}</div>
+      )}
     </div>
   )
 }
@@ -752,5 +979,63 @@ function formatLabel(key) {
     yAxisLabel: 'Y-Achsen-Label'
   }
   return labels[key] || key
+}
+
+const chartTypeShape = PropTypes.shape({
+  id: PropTypes.string.isRequired,
+  name: PropTypes.string.isRequired,
+  category: PropTypes.string,
+  icon: PropTypes.string,
+  description: PropTypes.string,
+  configSchema: PropTypes.object.isRequired
+})
+
+ChartConfigPanel.propTypes = {
+  chartType: chartTypeShape,
+  config: PropTypes.object.isRequired,
+  onConfigChange: PropTypes.func.isRequired,
+  chartRef: PropTypes.shape({ current: PropTypes.any }),
+  onResetData: PropTypes.func.isRequired,
+  onClearData: PropTypes.func.isRequired
+}
+
+DataTab.propTypes = {
+  chartType: chartTypeShape,
+  config: PropTypes.object.isRequired,
+  onConfigChange: PropTypes.func.isRequired,
+  onResetData: PropTypes.func.isRequired,
+  onClearData: PropTypes.func.isRequired
+}
+
+StylingTab.propTypes = {
+  chartType: chartTypeShape,
+  config: PropTypes.object.isRequired,
+  onConfigChange: PropTypes.func.isRequired
+}
+
+OptionsTab.propTypes = {
+  chartType: chartTypeShape,
+  config: PropTypes.object.isRequired,
+  onConfigChange: PropTypes.func.isRequired
+}
+
+ArrayFieldEditor.propTypes = {
+  label: PropTypes.string.isRequired,
+  values: PropTypes.array,
+  onChange: PropTypes.func.isRequired,
+  itemType: PropTypes.oneOf(['string', 'number'])
+}
+
+JsonFieldEditor.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.any,
+  onChange: PropTypes.func.isRequired
+}
+
+ExportTab.propTypes = {
+  chartType: chartTypeShape,
+  config: PropTypes.object.isRequired,
+  chartRef: PropTypes.shape({ current: PropTypes.any }),
+  onConfigChange: PropTypes.func.isRequired
 }
 

@@ -1,8 +1,15 @@
 export default {
   id: "sunburst",
   name: "Sunburst-Diagramm",
+  category: "pie",
+  icon: "🥧",
+  description: "Hierarchische Daten als konzentrische Ringe.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Kategorie A", "Kategorie B", "Kategorie C", "Kategorie D"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [30, 25, 25, 20] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

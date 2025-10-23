@@ -1,8 +1,15 @@
 export default {
   id: "polarArea",
   name: "Polar-Flächendiagramm",
+  category: "pie",
+  icon: "🥧",
+  description: "Radiale Darstellung kategorialer Werte.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Rot", "Grün", "Gelb", "Grau", "Blau"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [11, 16, 7, 3, 14] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

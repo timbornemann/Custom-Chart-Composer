@@ -1,8 +1,15 @@
 export default {
   id: "dashedLine",
   name: "Gestricheltes Liniendiagramm",
+  category: "line",
+  icon: "📈",
+  description: "Linie mit gestrichelter Darstellung.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Woche 1", "Woche 2", "Woche 3", "Woche 4", "Woche 5", "Woche 6"] 

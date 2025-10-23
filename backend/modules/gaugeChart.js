@@ -1,8 +1,15 @@
 export default {
   id: "gauge",
   name: "Tachometer-Diagramm",
+  category: "special",
+  icon: "✨",
+  description: "Tachometer zur Visualisierung eines aktuellen Wertes.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Niedrig", "Mittel", "Hoch"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [33, 33, 34] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     currentValue: {
       type: "number",

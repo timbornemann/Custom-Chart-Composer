@@ -1,8 +1,15 @@
 export default {
   id: "percentageBar",
   name: "Prozent-Balkendiagramm",
+  category: "bar",
+  icon: "📊",
+  description: "Balken mit Prozentanteilen pro Kategorie.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Projekt A", "Projekt B", "Projekt C", "Projekt D"] 

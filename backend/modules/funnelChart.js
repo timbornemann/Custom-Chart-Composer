@@ -1,8 +1,15 @@
 export default {
   id: "funnel",
   name: "Trichter-Diagramm",
+  category: "special",
+  icon: "✨",
+  description: "Trichterdiagramm zur Darstellung von Prozessphasen.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Besucher", "Interessenten", "Angebote", "Verhandlungen", "Abschlüsse"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [10000, 5000, 2500, 1000, 500] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

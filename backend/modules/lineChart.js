@@ -1,8 +1,15 @@
 export default {
   id: "line",
   name: "Liniendiagramm",
+  category: "line",
+  icon: "📈",
+  description: "Standard Liniendiagramm für zeitliche Verläufe.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [12, 19, 3, 5, 2, 3] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

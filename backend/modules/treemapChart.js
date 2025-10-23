@@ -1,8 +1,15 @@
 export default {
   id: "treemap",
   name: "Treemap-Diagramm",
+  category: "special",
+  icon: "✨",
+  description: "Hierarchische Daten als verschachtelte Rechtecke.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Marketing", "Entwicklung", "Vertrieb", "Support", "HR", "Verwaltung"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [150000, 250000, 180000, 120000, 90000, 110000] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

@@ -1,8 +1,15 @@
 export default {
   id: "bar",
   name: "Balkendiagramm",
+  category: "bar",
+  icon: "📊",
+  description: "Zeigt kategoriale Daten als vertikale Balken.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Januar", "Februar", "März", "April", "Mai"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [65, 59, 80, 81, 56] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

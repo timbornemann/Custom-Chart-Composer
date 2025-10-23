@@ -1,8 +1,15 @@
 export default {
   id: "smoothLine",
   name: "Geglättetes Liniendiagramm",
+  category: "line",
+  icon: "📈",
+  description: "Geglättete Linie mit weichen Kurven.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"] 

@@ -1,8 +1,15 @@
 export default {
   id: "steppedLine",
   name: "Treppenstufen-Liniendiagramm",
+  category: "line",
+  icon: "📈",
+  description: "Treppenförmige Linie für diskrete Änderungen.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [20, 20, 35, 35, 50] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

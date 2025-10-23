@@ -1,8 +1,15 @@
 export default {
   id: "donut",
   name: "Donutdiagramm",
+  category: "pie",
+  icon: "🥧",
+  description: "Ringdiagramm als Variation des Kreisdiagramms.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Desktop", "Mobile", "Tablet", "Andere"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [450, 320, 150, 80] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

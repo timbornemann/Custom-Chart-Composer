@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import PropTypes from 'prop-types'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -707,5 +708,20 @@ function prepareChartOptions(chartType, config) {
   }
 
   return baseOptions
+}
+
+const chartTypeShape = PropTypes.shape({
+  id: PropTypes.string.isRequired,
+  name: PropTypes.string.isRequired,
+  category: PropTypes.string,
+  icon: PropTypes.string,
+  description: PropTypes.string,
+  configSchema: PropTypes.object.isRequired
+})
+
+ChartPreview.propTypes = {
+  chartType: chartTypeShape,
+  config: PropTypes.object.isRequired,
+  chartRef: PropTypes.shape({ current: PropTypes.any })
 }
 

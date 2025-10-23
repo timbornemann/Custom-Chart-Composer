@@ -1,8 +1,15 @@
 export default {
   id: "bubble",
   name: "Blasendiagramm",
+  category: "scatter",
+  icon: "🔘",
+  description: "Blasen zeigen zusätzliche Dimension über den Radius.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Dataset 1"] 
@@ -17,6 +24,10 @@ export default {
         { x: 15, y: 45, r: 18 },
         { x: 45, y: 35, r: 8 }
       ]
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

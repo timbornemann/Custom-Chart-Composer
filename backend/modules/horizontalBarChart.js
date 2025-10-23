@@ -1,8 +1,15 @@
 export default {
   id: "horizontalBar",
   name: "Horizontales Balkendiagramm",
+  category: "bar",
+  icon: "📊",
+  description: "Horizontale Balken zur Darstellung von Kategorien.",
   library: "chartjs",
   configSchema: {
+    title: {
+      type: "string",
+      default: ""
+    },
     labels: { 
       type: "array", 
       default: ["Produkt A", "Produkt B", "Produkt C", "Produkt D"] 
@@ -10,6 +17,10 @@ export default {
     values: { 
       type: "array", 
       default: [85, 92, 78, 95] 
+    },
+    datasetLabel: {
+      type: "string",
+      default: "Datensatz"
     },
     colors: { 
       type: "array", 

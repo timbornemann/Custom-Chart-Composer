@@ -6,6 +6,7 @@ import SimpleDataEditor from './SimpleDataEditor'
 import ColorListEditor from './ColorListEditor'
 import RangeBarEditor from './RangeBarEditor'
 import HeatmapEditor from './HeatmapEditor'
+import ConfirmModal from './ConfirmModal'
 import { useExport } from '../hooks/useExport'
 
 export default function ChartConfigPanel({ chartType, config, onConfigChange, chartRef, onResetData, onClearData }) {
@@ -91,6 +92,9 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange, ch
 }
 
 function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }) {
+  const [showClearModal, setShowClearModal] = useState(false)
+  const [showResetModal, setShowResetModal] = useState(false)
+  
   const schema = chartType?.configSchema || {}
 
   const labelsSchema = schema.labels
@@ -113,12 +117,6 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues
   const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
   const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
-
-  const handleClearAllData = () => {
-    if (window.confirm('Möchten Sie wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-      onClearData()
-    }
-  }
 
   const handleFieldChange = (key, value) => {
     onConfigChange({ [key]: value })
@@ -279,6 +277,28 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
 
   return (
     <>
+      <ConfirmModal
+        isOpen={showClearModal}
+        onClose={() => setShowClearModal(false)}
+        onConfirm={onClearData}
+        title="Alle Daten löschen?"
+        message="Möchten Sie wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden."
+        confirmText="Löschen"
+        cancelText="Abbrechen"
+        variant="danger"
+      />
+
+      <ConfirmModal
+        isOpen={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        onConfirm={onResetData}
+        title="Beispieldaten laden?"
+        message="Die aktuellen Daten werden durch Beispieldaten ersetzt. Möchten Sie fortfahren?"
+        confirmText="Beispieldaten laden"
+        cancelText="Abbrechen"
+        variant="info"
+      />
+
       {schema.title && (
         <div>
           <label className="block text-sm font-medium text-dark-textLight mb-2">
@@ -293,6 +313,31 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
           />
         </div>
       )}
+
+      <div className="pb-4 mb-4 border-b border-gray-700">
+        <div className="flex items-center justify-end space-x-2">
+          <button
+            onClick={() => setShowResetModal(true)}
+            className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
+            title="Beispieldaten laden"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Beispieldaten</span>
+          </button>
+          <button
+            onClick={() => setShowClearModal(true)}
+            className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
+            title="Alle Daten löschen"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>Alle löschen</span>
+          </button>
+        </div>
+      </div>
 
       {usesSimpleEditor ? (
         <>
@@ -340,31 +385,6 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
       )}
 
       {additionalFields.map(([key, field]) => renderAdditionalField(key, field))}
-
-      <div className="pt-4 mt-4 border-t border-gray-700">
-        <div className="flex items-center justify-end space-x-2">
-          <button
-            onClick={onResetData}
-            className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
-            title="Beispieldaten laden"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>Beispieldaten</span>
-          </button>
-          <button
-            onClick={handleClearAllData}
-            className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
-            title="Alle Daten löschen"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            <span>Alle löschen</span>
-          </button>
-        </div>
-      </div>
     </>
   )
 }

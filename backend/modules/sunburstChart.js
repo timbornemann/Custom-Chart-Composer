@@ -2,7 +2,6 @@ export default {
   id: "sunburst",
   name: "Sunburst-Diagramm",
   category: "pie",
-  icon: "🥧",
   description: "Hierarchische Daten als konzentrische Ringe.",
   library: "chartjs",
   configSchema: {

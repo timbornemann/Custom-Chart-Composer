@@ -2,7 +2,6 @@ export default {
   id: "rangeBar",
   name: "Bereichs-Balkendiagramm",
   category: "bar",
-  icon: "📊",
   description: "Stellt Wertebereiche mit Balkenintervallen dar.",
   library: "chartjs",
   configSchema: {

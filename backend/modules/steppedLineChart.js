@@ -2,7 +2,6 @@ export default {
   id: "steppedLine",
   name: "Treppenstufen-Liniendiagramm",
   category: "line",
-  icon: "📈",
   description: "Treppenförmige Linie für diskrete Änderungen.",
   library: "chartjs",
   configSchema: {

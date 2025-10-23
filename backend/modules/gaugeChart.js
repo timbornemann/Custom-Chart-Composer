@@ -2,7 +2,6 @@ export default {
   id: "gauge",
   name: "Tachometer-Diagramm",
   category: "special",
-  icon: "✨",
   description: "Tachometer zur Visualisierung eines aktuellen Wertes.",
   library: "chartjs",
   configSchema: {

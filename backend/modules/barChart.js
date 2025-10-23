@@ -2,7 +2,6 @@ export default {
   id: "bar",
   name: "Balkendiagramm",
   category: "bar",
-  icon: "📊",
   description: "Zeigt kategoriale Daten als vertikale Balken.",
   library: "chartjs",
   configSchema: {

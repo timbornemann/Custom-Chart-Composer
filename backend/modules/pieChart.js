@@ -2,7 +2,6 @@ export default {
   id: "pie",
   name: "Kreisdiagramm",
   category: "pie",
-  icon: "🥧",
   description: "Teilt ein Ganzes in proportionale Sektoren.",
   library: "chartjs",
   configSchema: {

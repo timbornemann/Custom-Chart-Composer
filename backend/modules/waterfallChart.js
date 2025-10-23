@@ -2,7 +2,6 @@ export default {
   id: "waterfall",
   name: "Wasserfalldiagramm",
   category: "bar",
-  icon: "📊",
   description: "Visualisiert kumulative Effekte mit Wasserfall-Balken.",
   library: "chartjs",
   configSchema: {

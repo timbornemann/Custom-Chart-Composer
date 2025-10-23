@@ -2,7 +2,6 @@ export default {
   id: "percentageBar",
   name: "Prozent-Balkendiagramm",
   category: "bar",
-  icon: "📊",
   description: "Balken mit Prozentanteilen pro Kategorie.",
   library: "chartjs",
   configSchema: {

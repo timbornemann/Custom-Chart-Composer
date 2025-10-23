@@ -2,7 +2,6 @@ export default {
   id: "funnel",
   name: "Trichter-Diagramm",
   category: "special",
-  icon: "✨",
   description: "Trichterdiagramm zur Darstellung von Prozessphasen.",
   library: "chartjs",
   configSchema: {

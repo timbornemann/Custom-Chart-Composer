@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import PropTypes from 'prop-types'
+import ChartIcon from '../ChartIcon'
 
 const FALLBACK_CATEGORY_KEY = 'misc'
 
@@ -186,9 +187,9 @@ export default function Sidebar({ chartTypes, selectedChartType, onSelectChartTy
                     }`}
                   >
                     <div className="flex items-start space-x-3">
-                      <span className={`leading-none mt-0.5 ${selectedChartType?.id === chartType.id ? 'text-white' : 'text-dark-accent1'}`}>
-                        {getCategoryIcon(chartType.category)}
-                      </span>
+                      <div className="flex-shrink-0 mt-0.5">
+                        <ChartIcon chartType={chartType} />
+                      </div>
                       <div className="flex-1">
                         <span className="font-medium text-xs text-dark-textLight block">{chartType.name}</span>
                         {chartType.description && (

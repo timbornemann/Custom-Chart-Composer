@@ -2,7 +2,6 @@ export default {
   id: "treemap",
   name: "Treemap-Diagramm",
   category: "special",
-  icon: "✨",
   description: "Hierarchische Daten als verschachtelte Rechtecke.",
   library: "chartjs",
   configSchema: {

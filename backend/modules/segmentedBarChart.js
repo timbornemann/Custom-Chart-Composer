@@ -2,7 +2,6 @@ export default {
   id: "segmentedBar",
   name: "Segmentiertes Balkendiagramm",
   category: "bar",
-  icon: "📊",
   description: "Segmentierte Balken mit mehreren Abschnitten pro Kategorie.",
   library: "chartjs",
   configSchema: {

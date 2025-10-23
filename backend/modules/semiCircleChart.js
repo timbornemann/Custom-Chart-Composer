@@ -2,7 +2,6 @@ export default {
   id: "semiCircle",
   name: "Halbkreis-Diagramm",
   category: "pie",
-  icon: "🥧",
   description: "Halbkreis-Donut für begrenzte Winkelansicht.",
   library: "chartjs",
   configSchema: {

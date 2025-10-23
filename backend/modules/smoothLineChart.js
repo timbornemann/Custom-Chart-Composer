@@ -2,7 +2,6 @@ export default {
   id: "smoothLine",
   name: "Geglättetes Liniendiagramm",
   category: "line",
-  icon: "📈",
   description: "Geglättete Linie mit weichen Kurven.",
   library: "chartjs",
   configSchema: {

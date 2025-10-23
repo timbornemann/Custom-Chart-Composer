@@ -2,7 +2,6 @@ export default {
   id: "matrix",
   name: "Matrix-Diagramm",
   category: "scatter",
-  icon: "🔘",
   description: "Matrixdiagramm mit gewichteten Punkten.",
   library: "chartjs",
   configSchema: {

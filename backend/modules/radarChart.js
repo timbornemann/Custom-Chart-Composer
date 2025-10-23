@@ -2,7 +2,6 @@ export default {
   id: "radar",
   name: "Radar-Chart",
   category: "special",
-  icon: "✨",
   description: "Mehrdimensionale Daten auf polaren Achsen.",
   library: "chartjs",
   configSchema: {

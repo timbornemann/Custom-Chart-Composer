@@ -2,7 +2,6 @@ export default {
   id: "dashedLine",
   name: "Gestricheltes Liniendiagramm",
   category: "line",
-  icon: "📈",
   description: "Linie mit gestrichelter Darstellung.",
   library: "chartjs",
   configSchema: {

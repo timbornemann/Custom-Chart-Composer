@@ -2,7 +2,6 @@ export default {
   id: "multiLine",
   name: "Multi-Liniendiagramm",
   category: "line",
-  icon: "📈",
   description: "Mehrere Linien zum Vergleich verschiedener Serien.",
   library: "chartjs",
   configSchema: {

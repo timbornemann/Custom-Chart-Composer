@@ -2,7 +2,6 @@ export default {
   id: "horizontalBar",
   name: "Horizontales Balkendiagramm",
   category: "bar",
-  icon: "📊",
   description: "Horizontale Balken zur Darstellung von Kategorien.",
   library: "chartjs",
   configSchema: {

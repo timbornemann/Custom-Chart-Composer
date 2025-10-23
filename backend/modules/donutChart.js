@@ -2,7 +2,6 @@ export default {
   id: "donut",
   name: "Donutdiagramm",
   category: "pie",
-  icon: "🥧",
   description: "Ringdiagramm als Variation des Kreisdiagramms.",
   library: "chartjs",
   configSchema: {

@@ -2,7 +2,6 @@ export default {
   id: "verticalLine",
   name: "Vertikales Liniendiagramm",
   category: "line",
-  icon: "📈",
   description: "Vertikale Linien zur Darstellung von Entwicklungen.",
   library: "chartjs",
   configSchema: {

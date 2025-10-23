@@ -2,7 +2,6 @@ export default {
   id: "groupedBar",
   name: "Gruppiertes Balkendiagramm",
   category: "bar",
-  icon: "📊",
   description: "Gruppierte Balken zum Vergleich mehrerer Serien je Kategorie.",
   library: "chartjs",
   configSchema: {

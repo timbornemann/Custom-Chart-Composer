@@ -2,7 +2,6 @@ export default {
   id: "polarArea",
   name: "Polar-Flächendiagramm",
   category: "pie",
-  icon: "🥧",
   description: "Radiale Darstellung kategorialer Werte.",
   library: "chartjs",
   configSchema: {

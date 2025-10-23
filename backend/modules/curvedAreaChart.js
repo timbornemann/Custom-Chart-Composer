@@ -2,7 +2,6 @@ export default {
   id: "curvedArea",
   name: "Geschwungenes Flächendiagramm",
   category: "line",
-  icon: "📈",
   description: "Weich gefüllte Kurvenfläche für Trends.",
   library: "chartjs",
   configSchema: {

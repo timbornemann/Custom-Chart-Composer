@@ -2,7 +2,6 @@ export default {
   id: "scatter",
   name: "Streudiagramm",
   category: "scatter",
-  icon: "🔘",
   description: "Punkte zur Analyse von Zusammenhängen zweier Variablen.",
   library: "chartjs",
   configSchema: {

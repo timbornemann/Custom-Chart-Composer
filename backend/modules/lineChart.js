@@ -2,7 +2,6 @@ export default {
   id: "line",
   name: "Liniendiagramm",
   category: "line",
-  icon: "📈",
   description: "Standard Liniendiagramm für zeitliche Verläufe.",
   library: "chartjs",
   configSchema: {

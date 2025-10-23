@@ -2,7 +2,6 @@ export default {
   id: "bubble",
   name: "Blasendiagramm",
   category: "scatter",
-  icon: "🔘",
   description: "Blasen zeigen zusätzliche Dimension über den Radius.",
   library: "chartjs",
   configSchema: {

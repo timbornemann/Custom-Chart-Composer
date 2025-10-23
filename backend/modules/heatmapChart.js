@@ -2,7 +2,6 @@ export default {
   id: "heatmap",
   name: "Heatmap-Diagramm",
   category: "scatter",
-  icon: "🔘",
   description: "Matrixdarstellung mit Farbintensitäten für Dichte.",
   library: "chartjs",
   configSchema: {

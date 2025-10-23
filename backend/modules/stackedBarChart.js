@@ -2,7 +2,6 @@ export default {
   id: "stackedBar",
   name: "Gestapeltes Balkendiagramm",
   category: "bar",
-  icon: "📊",
   description: "Gestapelte Balken zum Vergleichen von Summen und Anteilen.",
   library: "chartjs",
   configSchema: {

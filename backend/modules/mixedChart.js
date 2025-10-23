@@ -2,7 +2,6 @@ export default {
   id: "mixed",
   name: "Kombiniertes Diagramm",
   category: "special",
-  icon: "✨",
   description: "Kombiniert verschiedene Charttypen in einem Diagramm.",
   library: "chartjs",
   configSchema: {

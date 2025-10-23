@@ -2,7 +2,6 @@ export default {
   id: "area",
   name: "Flächendiagramm",
   category: "line",
-  icon: "📈",
   description: "Gefülltes Liniendiagramm zur Hervorhebung von Flächen.",
   library: "chartjs",
   configSchema: {

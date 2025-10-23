@@ -258,9 +258,14 @@ function prepareIconData(chartType, config) {
         return {
           datasets: config.datasets.slice(0, 1).map(ds => ({
             ...ds,
-            data: (ds.data || []).slice(0, 12),
-            pointRadius: 3,
-            pointStyle: 'rect'
+            data: (ds.data || []).slice(0, 9),
+            pointRadius: 4,
+            pointStyle: 'rect',
+            backgroundColor: function(context) {
+              const value = context.raw?.v || 0;
+              const alpha = Math.max(0.3, value / 100); // Minimum 30% opacity for visibility
+              return `rgba(139, 92, 246, ${alpha})`; // Purple color for scatter category
+            }
           }))
         }
       }
@@ -296,7 +301,7 @@ function prepareIconOptions(chartType) {
   }
 
   // Bar charts
-  if (['bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'rangeBar'].includes(chartType.id)) {
+  if (['bar', 'horizontalBar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'rangeBar'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         display: false,
@@ -310,7 +315,7 @@ function prepareIconOptions(chartType) {
     }
   }
 
-  if (chartType.id === 'horizontalBar' || (chartType.id === 'rangeBar')) {
+  if (chartType.id === 'horizontalBar' || chartType.id === 'rangeBar') {
     baseOptions.indexAxis = 'y'
   }
 
@@ -323,10 +328,29 @@ function prepareIconOptions(chartType) {
   }
 
   // Scatter & Bubble
-  if (['scatter', 'bubble', 'heatmap', 'matrix'].includes(chartType.id)) {
+  if (['scatter', 'bubble', 'matrix'].includes(chartType.id)) {
     baseOptions.scales = {
       y: { display: false, beginAtZero: true },
       x: { display: false, beginAtZero: true }
+    }
+  }
+
+  // Heatmap (categorical axes)
+  if (chartType.id === 'heatmap') {
+    const config = getDefaultConfig(chartType)
+    baseOptions.scales = {
+      y: { 
+        type: 'category',
+        labels: config?.yLabels || ['06:00', '12:00', '18:00'],
+        display: false,
+        offset: true
+      },
+      x: { 
+        type: 'category',
+        labels: config?.labels || ['Mo', 'Di', 'Mi'],
+        display: false,
+        offset: true
+      }
     }
   }
 

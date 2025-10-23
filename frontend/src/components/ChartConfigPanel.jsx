@@ -111,7 +111,7 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   const isHeatmapDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
   const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues
-  const excludedKeys = ['title', 'labels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
+  const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
   const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
 
   const handleClearAllData = () => {
@@ -141,7 +141,11 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
     if (isHeatmapDataset) {
       return (
         <HeatmapEditor
+          labels={config.labels || []}
+          yLabels={config.yLabels || []}
           datasets={config.datasets || []}
+          onLabelsChange={(labels) => onConfigChange({ labels })}
+          onYLabelsChange={(yLabels) => onConfigChange({ yLabels })}
           onDatasetsChange={(datasets) => onConfigChange({ datasets })}
         />
       )

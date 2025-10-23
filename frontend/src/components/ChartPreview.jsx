@@ -416,7 +416,18 @@ function prepareChartData(chartType, config) {
           datasets: config.datasets.map(ds => ({
             ...ds,
             pointRadius: 20,
-            pointStyle: 'rect'
+            pointStyle: 'rect',
+            backgroundColor: function(context) {
+              const value = context.raw?.v || 0;
+              const alpha = value / 100;
+              const color = ds.backgroundColor || '#3B82F6';
+              // Extract RGB from hex color
+              const hex = color.replace('#', '');
+              const r = parseInt(hex.substr(0, 2), 16);
+              const g = parseInt(hex.substr(2, 2), 16);
+              const b = parseInt(hex.substr(4, 2), 16);
+              return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            }
           }))
         }
       }
@@ -586,7 +597,7 @@ function prepareChartOptions(chartType, config) {
   }
 
   // Scatter & Bubble
-  if (['scatter', 'bubble', 'heatmap', 'matrix'].includes(chartType.id)) {
+  if (['scatter', 'bubble', 'matrix'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         beginAtZero: true,
@@ -601,6 +612,38 @@ function prepareChartOptions(chartType, config) {
       },
       x: {
         beginAtZero: true,
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: '#334155'
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      }
+    }
+  }
+
+  // Heatmap (categorical axes)
+  if (chartType.id === 'heatmap') {
+    baseOptions.scales = {
+      y: {
+        type: 'category',
+        labels: config.yLabels || ['06:00', '12:00', '18:00'],
+        offset: true,
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: '#334155'
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      },
+      x: {
+        type: 'category',
+        labels: config.labels || ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'],
+        offset: true,
         grid: {
           display: config.options?.showGrid !== false,
           color: '#334155'

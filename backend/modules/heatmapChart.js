@@ -13,6 +13,10 @@ export default {
       type: "array", 
       default: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"] 
     },
+    yLabels: {
+      type: "array",
+      default: ["06:00", "12:00", "18:00"]
+    },
     datasets: {
       type: "array",
       default: [
@@ -29,11 +33,7 @@ export default {
             { x: "Mi", y: "12:00", v: 55 },
             { x: "Mi", y: "18:00", v: 85 }
           ],
-          backgroundColor: function(context) {
-            const value = context.parsed.v;
-            const alpha = value / 100;
-            return `rgba(59, 130, 246, ${alpha})`;
-          }
+          backgroundColor: "#3B82F6"
         }
       ]
     },

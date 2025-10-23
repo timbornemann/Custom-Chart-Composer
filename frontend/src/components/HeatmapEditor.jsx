@@ -1,4 +1,6 @@
-export default function HeatmapEditor({ datasets, onDatasetsChange }) {
+import PropTypes from 'prop-types'
+
+export default function HeatmapEditor({ labels, yLabels, datasets, onLabelsChange, onYLabelsChange, onDatasetsChange }) {
   const dataset = datasets[0] || { label: 'Aktivität', data: [] }
 
   const addPoint = () => {
@@ -34,8 +36,99 @@ export default function HeatmapEditor({ datasets, onDatasetsChange }) {
     onDatasetsChange(updated)
   }
 
+  const addXLabel = () => {
+    onLabelsChange([...(labels || []), 'Neu'])
+  }
+
+  const removeXLabel = (index) => {
+    onLabelsChange((labels || []).filter((_, i) => i !== index))
+  }
+
+  const updateXLabel = (index, value) => {
+    onLabelsChange((labels || []).map((label, i) => i === index ? value : label))
+  }
+
+  const addYLabel = () => {
+    onYLabelsChange([...(yLabels || []), '00:00'])
+  }
+
+  const removeYLabel = (index) => {
+    onYLabelsChange((yLabels || []).filter((_, i) => i !== index))
+  }
+
+  const updateYLabel = (index, value) => {
+    onYLabelsChange((yLabels || []).map((label, i) => i === index ? value : label))
+  }
+
   return (
     <div className="space-y-4">
+      {/* X-Achsen Labels (z.B. Tage) */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-dark-textLight">
+            X-Achsen Labels (z.B. Tage)
+          </label>
+          <button
+            onClick={addXLabel}
+            className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-all"
+          >
+            + Label
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(labels || []).map((label, idx) => (
+            <div key={idx} className="flex items-center gap-1 bg-dark-bg rounded px-2 py-1 border border-gray-700">
+              <input
+                type="text"
+                value={label}
+                onChange={(e) => updateXLabel(idx, e.target.value)}
+                className="w-16 px-2 py-1 bg-dark-secondary text-dark-textLight rounded border-0 focus:outline-none text-xs"
+              />
+              <button
+                onClick={() => removeXLabel(idx)}
+                className="px-1 text-red-400 hover:text-red-300 text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Y-Achsen Labels (z.B. Uhrzeiten) */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-dark-textLight">
+            Y-Achsen Labels (z.B. Uhrzeiten)
+          </label>
+          <button
+            onClick={addYLabel}
+            className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-all"
+          >
+            + Label
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(yLabels || []).map((label, idx) => (
+            <div key={idx} className="flex items-center gap-1 bg-dark-bg rounded px-2 py-1 border border-gray-700">
+              <input
+                type="text"
+                value={label}
+                onChange={(e) => updateYLabel(idx, e.target.value)}
+                className="w-16 px-2 py-1 bg-dark-secondary text-dark-textLight rounded border-0 focus:outline-none text-xs"
+              />
+              <button
+                onClick={() => removeYLabel(idx)}
+                className="px-1 text-red-400 hover:text-red-300 text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Datenpunkte */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-sm font-medium text-dark-textLight">
@@ -102,9 +195,18 @@ export default function HeatmapEditor({ datasets, onDatasetsChange }) {
       </div>
 
       <div className="text-xs text-dark-textGray bg-dark-bg p-3 rounded border border-gray-700">
-        💡 Füge Datenpunkte mit X-Position, Y-Position und Intensitätswert (0-100) hinzu
+        💡 Definiere zuerst die Achsen-Labels, dann füge Datenpunkte hinzu (X, Y und Intensität 0-100)
       </div>
     </div>
   )
+}
+
+HeatmapEditor.propTypes = {
+  labels: PropTypes.arrayOf(PropTypes.string),
+  yLabels: PropTypes.arrayOf(PropTypes.string),
+  datasets: PropTypes.arrayOf(PropTypes.object).isRequired,
+  onLabelsChange: PropTypes.func.isRequired,
+  onYLabelsChange: PropTypes.func.isRequired,
+  onDatasetsChange: PropTypes.func.isRequired
 }
 

@@ -111,13 +111,27 @@ export default function ChartPreview({ chartType, config, chartRef }) {
     )
   }
 
+  // Get background color from config, default to dark theme
+  const backgroundColor = config.backgroundColor || '#0F172A'
+  const isTransparent = backgroundColor === 'transparent'
+
   return (
     <div className="bg-dark-secondary rounded-2xl shadow-lg p-6 flex flex-col h-[600px]">
       <div className="mb-4 flex-shrink-0">
         <h2 className="text-xl font-semibold text-dark-textLight">Vorschau</h2>
         <p className="text-sm text-dark-textGray">{chartType.name}</p>
       </div>
-      <div className="bg-dark-bg rounded-xl p-6 flex items-center justify-center flex-1">
+      <div 
+        className="rounded-xl p-6 flex items-center justify-center flex-1 transition-colors duration-300"
+        style={{ 
+          backgroundColor: isTransparent ? '#1E293B' : backgroundColor,
+          backgroundImage: isTransparent 
+            ? 'linear-gradient(45deg, #334155 25%, transparent 25%, transparent 75%, #334155 75%, #334155), linear-gradient(45deg, #334155 25%, transparent 25%, transparent 75%, #334155 75%, #334155)'
+            : 'none',
+          backgroundSize: '20px 20px',
+          backgroundPosition: '0 0, 10px 10px'
+        }}
+      >
         {chartData && (
           <div className="w-full h-full max-w-[600px] max-h-[450px] flex items-center justify-center">
             <ChartErrorBoundary chartType={chartType}>

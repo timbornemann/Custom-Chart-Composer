@@ -7,6 +7,8 @@ import ColorListEditor from './ColorListEditor'
 import RangeBarEditor from './RangeBarEditor'
 import HeatmapEditor from './HeatmapEditor'
 import ConfirmModal from './ConfirmModal'
+import ColorPaletteSelector from './ColorPaletteSelector'
+import LabeledColorEditor from './LabeledColorEditor'
 import { useExport } from '../hooks/useExport'
 
 export default function ChartConfigPanel({ chartType, config, onConfigChange, chartRef, onResetData, onClearData }) {
@@ -393,24 +395,17 @@ function StylingTab({ chartType, config, onConfigChange }) {
   const schema = chartType?.configSchema || {}
   const hasColors = !!schema.colors
   const hasBackground = !!schema.backgroundColor
-  const hasDimensions = !!schema.width || !!schema.height
-
-  const presetColors = [
-    ['#4ADE80', '#22D3EE', '#F472B6', '#FBBF24', '#A78BFA'],
-    ['#EF4444', '#3B82F6', '#FBBF24', '#10B981', '#A78BFA'],
-    ['#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6'],
-    ['#06B6D4', '#8B5CF6', '#F43F5E', '#FBBF24', '#10B981']
-  ]
 
   const backgroundPresets = [
     { name: 'Dunkel', value: '#0F172A' },
     { name: 'Grau', value: '#1E293B' },
     { name: 'Schwarz', value: '#000000' },
     { name: 'Weiß', value: '#FFFFFF' },
+    { name: 'Hellgrau', value: '#F3F4F6' },
     { name: 'Transparent', value: 'transparent' }
   ]
 
-  if (!hasColors && !hasBackground && !hasDimensions) {
+  if (!hasColors && !hasBackground) {
     return (
       <div className="text-sm text-dark-textGray">
         Für diesen Diagrammtyp sind keine Styling-Optionen definiert.
@@ -418,54 +413,79 @@ function StylingTab({ chartType, config, onConfigChange }) {
     )
   }
 
+  // Determine which labels to use for color assignment
+  const getLabelsForColors = () => {
+    // For charts with datasets (multi-line, stacked bar, etc.)
+    if (config.datasets && Array.isArray(config.datasets) && config.datasets.length > 0) {
+      return config.datasets.map(ds => ds.label || 'Unbenannt')
+    }
+    // For simple charts (bar, pie, etc.)
+    if (config.labels && Array.isArray(config.labels)) {
+      return config.labels
+    }
+    return []
+  }
+
+  const colorLabels = getLabelsForColors()
+
   return (
     <div className="space-y-6">
       {hasColors && (
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-dark-textLight mb-3">
-              Farbpalette
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              {presetColors.map((colors, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => onConfigChange({ colors })}
-                  className="flex space-x-1 p-2 bg-dark-bg rounded-lg hover:bg-gray-800 transition-all"
-                >
-                  {colors.map((color, i) => (
-                    <div key={i} className="w-8 h-8 rounded" style={{ backgroundColor: color }} />
-                  ))}
-                </button>
-              ))}
-            </div>
+          {/* Color Palette Selector */}
+          <ColorPaletteSelector
+            selectedColors={config.colors}
+            onSelectPalette={(colors) => onConfigChange({ colors })}
+          />
+
+          {/* Individual Color Assignment with Labels */}
+          <div className="border-t border-gray-700 pt-4">
+            <LabeledColorEditor
+              labels={colorLabels}
+              colors={config.colors}
+              onColorsChange={(colors) => onConfigChange({ colors })}
+              mode={colorLabels.length > 0 ? 'single' : 'multiple'}
+            />
           </div>
 
-          <ColorListEditor
-            colors={config.colors}
-            onColorsChange={(colors) => onConfigChange({ colors })}
-          />
+          {/* Fallback: Manual color list editor if no labels */}
+          {colorLabels.length === 0 && (
+            <div className="border-t border-gray-700 pt-4">
+              <ColorListEditor
+                colors={config.colors}
+                onColorsChange={(colors) => onConfigChange({ colors })}
+              />
+            </div>
+          )}
         </div>
       )}
 
       {hasBackground && (
-        <div>
+        <div className="border-t border-gray-700 pt-4">
           <label className="block text-sm font-medium text-dark-textLight mb-3">
             Hintergrundfarbe
           </label>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="text-xs text-dark-textGray mb-3 bg-dark-bg/50 rounded-lg p-3 flex items-start space-x-2">
+            <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>
+              Die Hintergrundfarbe wird beim Export des Diagramms verwendet.
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
             {backgroundPresets.map((preset) => (
               <button
                 key={preset.value}
                 onClick={() => onConfigChange({ backgroundColor: preset.value })}
                 className={`p-3 rounded-lg border-2 transition-all ${
                   config.backgroundColor === preset.value
-                    ? 'border-dark-accent1'
-                    : 'border-gray-700 hover:border-gray-600'
+                    ? 'border-dark-accent1 bg-dark-bg'
+                    : 'border-gray-700 hover:border-gray-600 hover:bg-dark-bg'
                 }`}
               >
                 <div
-                  className="w-full h-8 rounded"
+                  className="w-full h-10 rounded border border-gray-600"
                   style={{
                     backgroundColor: preset.value === 'transparent' ? '#fff' : preset.value,
                     backgroundImage: preset.value === 'transparent'
@@ -475,41 +495,29 @@ function StylingTab({ chartType, config, onConfigChange }) {
                     backgroundPosition: '0 0, 5px 5px'
                   }}
                 />
-                <span className="text-xs text-dark-textGray mt-1 block">{preset.name}</span>
+                <span className="text-xs text-dark-textGray mt-2 block">{preset.name}</span>
               </button>
             ))}
           </div>
-        </div>
-      )}
-
-      {hasDimensions && (
-        <div className="grid grid-cols-2 gap-3">
-          {schema.width && (
-            <div>
-              <label className="text-xs text-dark-textGray mb-1 block">Breite (px)</label>
+          
+          {/* Custom color picker */}
+          <div className="mt-3">
+            <label className="text-xs text-dark-textGray mb-2 block">Benutzerdefinierte Farbe</label>
+            <div className="flex items-center space-x-3 bg-dark-bg rounded-lg p-3 border border-gray-700">
               <input
-                type="number"
-                value={config.width ?? schema.width.default ?? 800}
-                onChange={(e) => onConfigChange({ width: Number(e.target.value) })}
-                min="100"
-                max="7680"
-                className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                type="color"
+                value={config.backgroundColor && config.backgroundColor !== 'transparent' ? config.backgroundColor : '#0F172A'}
+                onChange={(e) => onConfigChange({ backgroundColor: e.target.value })}
+                className="w-16 h-16 rounded cursor-pointer border-2 border-gray-600 hover:border-dark-accent1 transition-all"
               />
+              <div className="flex-1">
+                <div className="text-sm text-dark-textLight font-medium">Eigene Farbe wählen</div>
+                <div className="text-xs text-dark-textGray font-mono">
+                  {config.backgroundColor || '#0F172A'}
+                </div>
+              </div>
             </div>
-          )}
-          {schema.height && (
-            <div>
-              <label className="text-xs text-dark-textGray mb-1 block">Höhe (px)</label>
-              <input
-                type="number"
-                value={config.height ?? schema.height.default ?? 600}
-                onChange={(e) => onConfigChange({ height: Number(e.target.value) })}
-                min="100"
-                max="7680"
-                className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
-              />
-            </div>
-          )}
+          </div>
         </div>
       )}
     </div>

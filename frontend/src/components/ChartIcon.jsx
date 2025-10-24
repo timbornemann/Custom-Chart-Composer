@@ -45,6 +45,7 @@ function getColorPalette(chartType) {
     segmentedBar: 'bar',
     waterfall: 'bar',
     rangeBar: 'bar',
+    radialBar: 'bar',
     funnel: 'special',
     treemap: 'special',
     
@@ -56,6 +57,7 @@ function getColorPalette(chartType) {
     smoothLine: 'line',
     dashedLine: 'line',
     curvedArea: 'line',
+    streamGraph: 'line',
     
     pie: 'pie',
     donut: 'pie',
@@ -70,7 +72,13 @@ function getColorPalette(chartType) {
     matrix: 'scatter',
     
     radar: 'special',
-    gauge: 'special'
+    gauge: 'special',
+    boxPlot: 'special',
+    violin: 'special',
+    candlestick: 'gradient',
+    sankey: 'gradient',
+    chord: 'gradient',
+    calendarHeatmap: 'scatter'
   }
   
   const paletteKey = typeMapping[chartType.id] || category
@@ -109,7 +117,15 @@ function getChartComponent(type) {
     matrix: Bubble,
     gauge: Doughnut,
     funnel: Bar,
-    treemap: Bar
+    treemap: Bar,
+    boxPlot: Bar,
+    violin: Bar,
+    candlestick: Bar,
+    radialBar: PolarArea,
+    sankey: Bar,
+    chord: Doughnut,
+    calendarHeatmap: Scatter,
+    streamGraph: Line
   }
   return components[type] || Bar
 }
@@ -305,6 +321,85 @@ function prepareIconData(chartType, config) {
         }]
       }
 
+    case 'boxPlot':
+    case 'violin':
+      return {
+        labels: (config.labels || []).slice(0, 3),
+        datasets: [{
+          data: (config.labels || []).slice(0, 3).map(() => [20, 40, 60, 80]),
+          backgroundColor: colorPalette[0],
+          borderWidth: 0,
+          borderRadius: 2
+        }]
+      }
+
+    case 'candlestick':
+      return {
+        labels: (config.labels || []).slice(0, 4),
+        datasets: [{
+          data: [30, 50, 40, 60],
+          backgroundColor: colorPalette.slice(0, 4),
+          borderWidth: 0
+        }]
+      }
+
+    case 'radialBar':
+      return {
+        labels: (config.labels || []).slice(0, 5),
+        datasets: [{
+          data: (config.values || []).slice(0, 5),
+          backgroundColor: colorPalette,
+          borderWidth: 0
+        }]
+      }
+
+    case 'sankey':
+    case 'chord':
+      return {
+        labels: (config.labels || config.nodes?.map(n => n.label) || []).slice(0, 4),
+        datasets: [{
+          data: [30, 25, 25, 20],
+          backgroundColor: colorPalette,
+          borderWidth: 0
+        }]
+      }
+
+    case 'calendarHeatmap':
+      return {
+        datasets: [{
+          data: Array.from({ length: 20 }, (_, i) => ({
+            x: i % 5,
+            y: Math.floor(i / 5),
+            v: Math.random() * 100
+          })),
+          pointRadius: 3,
+          pointStyle: 'rect',
+          backgroundColor: function(context) {
+            const value = context.raw?.v || 0;
+            const alpha = Math.max(0.3, value / 100);
+            return `rgba(59, 130, 246, ${alpha})`;
+          }
+        }]
+      }
+
+    case 'streamGraph':
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          labels: (config.labels || []).slice(0, 4),
+          datasets: config.datasets.slice(0, 3).map((ds, idx) => ({
+            ...ds,
+            data: (ds.data || []).slice(0, 4),
+            backgroundColor: ds.backgroundColor || colorPalette[idx],
+            borderColor: ds.borderColor || colorPalette[idx],
+            borderWidth: 0,
+            tension: 0.4,
+            fill: true,
+            pointRadius: 0
+          }))
+        }
+      }
+      return { labels: [], datasets: [] }
+
     default:
       return { labels: [], datasets: [] }
   }
@@ -325,7 +420,7 @@ function prepareIconOptions(chartType) {
   }
 
   // Bar charts
-  if (['bar', 'horizontalBar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'rangeBar'].includes(chartType.id)) {
+  if (['bar', 'horizontalBar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'rangeBar', 'boxPlot', 'violin', 'candlestick', 'sankey'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         display: false,
@@ -344,7 +439,7 @@ function prepareIconOptions(chartType) {
   }
 
   // Line charts
-  if (['line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea'].includes(chartType.id)) {
+  if (['line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea', 'streamGraph'].includes(chartType.id)) {
     baseOptions.scales = {
       y: { display: false, beginAtZero: true },
       x: { display: false }
@@ -439,6 +534,54 @@ function prepareIconOptions(chartType) {
 
   if (chartType.id === 'sunburst') {
     baseOptions.cutout = '30%'
+  }
+
+  // Radial Bar
+  if (chartType.id === 'radialBar') {
+    baseOptions.scales = {
+      r: {
+        display: false,
+        beginAtZero: true
+      }
+    }
+  }
+
+  // Chord
+  if (chartType.id === 'chord') {
+    baseOptions.cutout = '40%'
+  }
+
+  // Calendar Heatmap
+  if (chartType.id === 'calendarHeatmap') {
+    baseOptions.scales = {
+      y: { 
+        type: 'linear',
+        display: false,
+        min: 0,
+        max: 4
+      },
+      x: { 
+        type: 'linear',
+        display: false,
+        min: 0,
+        max: 5
+      }
+    }
+  }
+
+  // Stream Graph stacking
+  if (chartType.id === 'streamGraph') {
+    baseOptions.scales = {
+      y: { 
+        display: false, 
+        stacked: true,
+        beginAtZero: false
+      },
+      x: { 
+        display: false,
+        stacked: true
+      }
+    }
   }
 
   return baseOptions

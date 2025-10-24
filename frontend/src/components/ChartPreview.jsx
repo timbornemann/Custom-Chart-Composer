@@ -173,21 +173,29 @@ function getChartComponent(type) {
     segmentedBar: Bar,
     waterfall: Bar,
     rangeBar: Bar,
+    candlestick: Bar,
     // Neue Liniendiagramme
     smoothLine: Line,
     dashedLine: Line,
     curvedArea: Line,
+    streamGraph: Line,
     // Neue Kreisdiagramme
     semiCircle: Doughnut,
     nestedDonut: Doughnut,
     sunburst: Doughnut,
+    chord: Doughnut,
+    radialBar: PolarArea,
     // Neue Streudiagramme
     heatmap: Scatter,
     matrix: Bubble,
+    calendarHeatmap: Scatter,
     // Neue spezielle Diagramme
     gauge: Doughnut,
     funnel: Bar,
-    treemap: Bar
+    treemap: Bar,
+    boxPlot: Bar,
+    violin: Bar,
+    sankey: Bar
   }
   return components[type] || Bar
 }
@@ -479,6 +487,75 @@ function prepareChartData(chartType, config) {
           borderRadius: 8
         }]
       }
+
+    // Neue Diagrammtypen
+    case 'boxPlot':
+    case 'violin':
+    case 'candlestick':
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          labels: config.labels || [],
+          datasets: config.datasets.map(ds => ({
+            label: ds.label || 'Datensatz',
+            data: ds.data || [],
+            backgroundColor: ds.backgroundColor || '#3B82F6',
+            borderColor: ds.borderColor || '#1E3A8A',
+            borderWidth: 2,
+            borderRadius: 4
+          }))
+        }
+      }
+      return { labels: [], datasets: [] }
+
+    case 'radialBar':
+    case 'sankey':
+    case 'chord':
+      return {
+        labels: config.labels || [],
+        datasets: [{
+          label: config.datasetLabel || 'Datensatz',
+          data: config.values || [],
+          backgroundColor: config.colors || [],
+          borderWidth: 0
+        }]
+      }
+
+    case 'calendarHeatmap':
+      return {
+        datasets: [{
+          label: config.datasetLabel || 'Aktivität',
+          data: config.values || [],
+          backgroundColor: function(context) {
+            const value = context.raw?.v || 0
+            const colorScale = config.colors || ['#0F172A', '#1E3A5F', '#2563EB', '#3B82F6', '#60A5FA']
+            const index = Math.min(Math.floor((value / 5) * (colorScale.length - 1)), colorScale.length - 1)
+            return colorScale[index]
+          },
+          borderWidth: 2,
+          borderColor: '#0F172A',
+          pointRadius: config.options?.cellSize || 12,
+          pointStyle: 'rect'
+        }]
+      }
+
+    case 'streamGraph':
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          labels: config.labels || [],
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            label: ds.label || 'Stream',
+            data: ds.data || [],
+            backgroundColor: ds.backgroundColor || '#3B82F6',
+            borderColor: ds.backgroundColor || '#3B82F6',
+            borderWidth: 0,
+            fill: true,
+            tension: config.options?.smoothing || 0.4,
+            pointRadius: 0
+          }))
+        }
+      }
+      return { labels: [], datasets: [] }
     
     default:
       return { labels: [], datasets: [] }
@@ -513,11 +590,11 @@ function prepareChartOptions(chartType, config) {
   }
 
   // Bar charts
-  if (['bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap'].includes(chartType.id)) {
+  if (['bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'boxPlot', 'violin', 'candlestick', 'sankey'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         beginAtZero: config.options?.beginAtZero !== false,
-        stacked: ['stackedBar', 'segmentedBar'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked),
+        stacked: ['stackedBar', 'segmentedBar', 'boxPlot', 'violin', 'candlestick'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked) || (config.options?.stacked),
         grid: {
           display: config.options?.showGrid !== false,
           color: config.options?.gridColor || '#334155'
@@ -534,7 +611,7 @@ function prepareChartOptions(chartType, config) {
         }
       },
       x: {
-        stacked: ['stackedBar', 'segmentedBar'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked),
+        stacked: ['stackedBar', 'segmentedBar', 'boxPlot', 'violin', 'candlestick'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked) || (config.options?.stacked),
         grid: {
           display: false
         },
@@ -667,7 +744,7 @@ function prepareChartOptions(chartType, config) {
   }
 
   // Scatter & Bubble
-  if (['scatter', 'bubble', 'matrix'].includes(chartType.id)) {
+  if (['scatter', 'bubble', 'matrix', 'calendarHeatmap'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         beginAtZero: config.options?.beginAtZero !== false,
@@ -837,6 +914,78 @@ function prepareChartOptions(chartType, config) {
   if (chartType.id === 'sunburst') {
     baseOptions.cutout = config.options?.cutout || '30%'
     baseOptions.rotation = config.options?.rotation || 0
+  }
+
+  // Radial Bar
+  if (chartType.id === 'radialBar') {
+    baseOptions.scales = {
+      r: {
+        beginAtZero: true,
+        grid: {
+          display: config.options?.gridLines !== false,
+          color: config.options?.gridColor || '#334155'
+        },
+        ticks: {
+          display: false
+        }
+      }
+    }
+    baseOptions.startAngle = config.options?.startAngle || 0
+  }
+
+  // Chord
+  if (chartType.id === 'chord') {
+    baseOptions.cutout = config.options?.innerRadius ? `${config.options.innerRadius}%` : '40%'
+  }
+
+  // Calendar Heatmap
+  if (chartType.id === 'calendarHeatmap') {
+    baseOptions.scales = {
+      y: {
+        type: 'linear',
+        display: config.options?.showWeekdayLabels !== false,
+        grid: { display: false },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 10 }
+        }
+      },
+      x: {
+        type: 'linear',
+        display: config.options?.showMonthLabels !== false,
+        grid: { display: false },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 10 }
+        }
+      }
+    }
+  }
+
+  // Stream Graph
+  if (chartType.id === 'streamGraph') {
+    baseOptions.scales = {
+      y: {
+        stacked: true,
+        beginAtZero: false,
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: config.options?.gridColor || '#334155'
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      },
+      x: {
+        stacked: true,
+        grid: { display: false },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 }
+        }
+      }
+    }
   }
 
   return baseOptions

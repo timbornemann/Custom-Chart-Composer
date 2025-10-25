@@ -172,10 +172,13 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
 
     if (field.type === 'number') {
       return (
-        <div key={key}>
-          <label className="block text-sm font-medium text-dark-textLight mb-2">
+        <div key={key} className="space-y-2">
+          <label className="block text-sm font-medium text-dark-textLight">
             {label}
           </label>
+          {field.description && (
+            <p className="text-xs text-dark-textGray">{field.description}</p>
+          )}
           <input
             type="number"
             value={config[key] ?? field.default ?? 0}
@@ -188,10 +191,13 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
 
     if (field.type === 'string') {
       return (
-        <div key={key}>
-          <label className="block text-sm font-medium text-dark-textLight mb-2">
+        <div key={key} className="space-y-2">
+          <label className="block text-sm font-medium text-dark-textLight">
             {label}
           </label>
+          {field.description && (
+            <p className="text-xs text-dark-textGray">{field.description}</p>
+          )}
           <input
             type="text"
             value={config[key] ?? field.default ?? ''}
@@ -203,11 +209,45 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
     }
 
     if (field.type === 'array') {
+      const currentValue = Array.isArray(config[key])
+        ? config[key]
+        : Array.isArray(field.default)
+          ? field.default
+          : []
+
+      const sampleValue = (() => {
+        if (Array.isArray(currentValue) && currentValue.length > 0) {
+          return currentValue.find((entry) => entry !== undefined)
+        }
+        if (Array.isArray(field.default) && field.default.length > 0) {
+          return field.default.find((entry) => entry !== undefined)
+        }
+        return undefined
+      })()
+
+      const detectedType = typeof sampleValue
+      const primitiveTypes = ['string', 'number', 'boolean']
+      const isPrimitiveArray = sampleValue === undefined || primitiveTypes.includes(detectedType)
+
+      if (isPrimitiveArray) {
+        const itemType = detectedType === 'boolean' ? 'boolean' : detectedType === 'number' ? 'number' : 'string'
+        return (
+          <ArrayFieldEditor
+            key={key}
+            label={label}
+            values={currentValue}
+            onChange={(value) => handleFieldChange(key, value)}
+            itemType={itemType}
+            description={field.description}
+          />
+        )
+      }
+
       return (
         <JsonFieldEditor
           key={key}
           label={label}
-          value={config[key] ?? field.default ?? []}
+          value={currentValue}
           onChange={(value) => handleFieldChange(key, value)}
         />
       )
@@ -704,13 +744,19 @@ function OptionsTab({ chartType, config, onConfigChange }) {
   )
 }
 
-function ArrayFieldEditor({ label, values, onChange, itemType = 'string' }) {
+function ArrayFieldEditor({ label, values, onChange, itemType = 'string', description }) {
   const normalizedValues = Array.isArray(values) ? values : []
 
   const handleValueChange = (index, value) => {
     const updated = normalizedValues.map((entry, i) => {
       if (i === index) {
-        return itemType === 'number' ? Number(value) || 0 : value
+        if (itemType === 'number') {
+          return Number(value) || 0
+        }
+        if (itemType === 'boolean') {
+          return value === 'true'
+        }
+        return value
       }
       return entry
     })
@@ -718,7 +764,14 @@ function ArrayFieldEditor({ label, values, onChange, itemType = 'string' }) {
   }
 
   const handleAddValue = () => {
-    const defaultValue = itemType === 'number' ? 0 : `Eintrag ${normalizedValues.length + 1}`
+    let defaultValue
+    if (itemType === 'number') {
+      defaultValue = 0
+    } else if (itemType === 'boolean') {
+      defaultValue = false
+    } else {
+      defaultValue = `Eintrag ${normalizedValues.length + 1}`
+    }
     onChange([...normalizedValues, defaultValue])
   }
 
@@ -739,15 +792,29 @@ function ArrayFieldEditor({ label, values, onChange, itemType = 'string' }) {
           + Eintrag
         </button>
       </div>
+      {description && (
+        <p className="text-xs text-dark-textGray">{description}</p>
+      )}
       <div className="space-y-2">
         {normalizedValues.map((entry, idx) => (
           <div key={`${label}-${idx}`} className="flex items-center space-x-2">
-            <input
-              type={itemType === 'number' ? 'number' : 'text'}
-              value={entry}
-              onChange={(e) => handleValueChange(idx, e.target.value)}
-              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
-            />
+            {itemType === 'boolean' ? (
+              <select
+                value={entry ? 'true' : 'false'}
+                onChange={(e) => handleValueChange(idx, e.target.value)}
+                className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+              >
+                <option value="true">Wahr</option>
+                <option value="false">Falsch</option>
+              </select>
+            ) : (
+              <input
+                type={itemType === 'number' ? 'number' : 'text'}
+                value={entry}
+                onChange={(e) => handleValueChange(idx, e.target.value)}
+                className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+              />
+            )}
             <button
               onClick={() => handleRemoveValue(idx)}
               className="px-3 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded transition-all"

@@ -28,8 +28,104 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  valueLabelPlugin()
 )
+
+function valueLabelPlugin() {
+  return {
+    id: 'customValueLabels',
+    afterDatasetsDraw(chart, args, pluginOptions) {
+      if (!pluginOptions || !pluginOptions.display) {
+        return
+      }
+
+      const {
+        color = '#F8FAFC',
+        font = {},
+        layout = 'default',
+        offsetX = 0,
+        offsetY = 0,
+        formatter
+      } = pluginOptions
+
+      const resolveFont = {
+        family: font.family || 'Inter',
+        weight: font.weight || '600',
+        size: font.size || 12
+      }
+
+      const formatValue = typeof formatter === 'function'
+        ? formatter
+        : (value) => {
+            if (value === null || value === undefined) return ''
+            if (typeof value === 'number' && Number.isFinite(value)) {
+              return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(value)
+            }
+            if (typeof value === 'object') {
+              if (value === null) return ''
+              if (typeof value.v === 'number') {
+                return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(value.v)
+              }
+              if (typeof value.value === 'number') {
+                return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(value.value)
+              }
+              if (Array.isArray(value)) {
+                return value.join(' – ')
+              }
+            }
+            return String(value)
+          }
+
+      const { ctx } = chart
+      ctx.save()
+
+      chart.data.datasets.forEach((dataset, datasetIndex) => {
+        const meta = chart.getDatasetMeta(datasetIndex)
+        if (!meta || meta.hidden) return
+
+        meta.data.forEach((element, index) => {
+          if (!element || typeof element.tooltipPosition !== 'function') return
+
+          const rawValue = dataset?.data?.[index]
+
+          const formatted = formatValue(rawValue, dataset, index, chart)
+          const text = formatted === null || formatted === undefined ? '' : String(formatted)
+          if (!text || text.trim().length === 0) {
+            return
+          }
+
+          const position = element.tooltipPosition()
+          let drawX = position.x
+          let drawY = position.y
+          const numericValue = typeof rawValue === 'number' ? rawValue : Number(rawValue)
+          const isNumeric = Number.isFinite(numericValue)
+
+          if (layout === 'verticalBar') {
+            ctx.textAlign = 'center'
+            ctx.textBaseline = isNumeric && numericValue < 0 ? 'top' : 'bottom'
+            drawY = isNumeric && numericValue < 0 ? position.y + offsetY : position.y - offsetY
+          } else if (layout === 'horizontalBar') {
+            ctx.textAlign = isNumeric && numericValue < 0 ? 'right' : 'left'
+            ctx.textBaseline = 'middle'
+            drawX = isNumeric && numericValue < 0 ? position.x - offsetX : position.x + offsetX
+          } else {
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            drawX = position.x + offsetX
+            drawY = position.y - offsetY
+          }
+
+          ctx.fillStyle = typeof color === 'function' ? color(rawValue, dataset, index, chart) : color
+          ctx.font = `${resolveFont.weight} ${resolveFont.size}px ${resolveFont.family}`
+          ctx.fillText(text, drawX, drawY)
+        })
+      })
+
+      ctx.restore()
+    }
+  }
+}
 
 // Wrapper component to force complete remount
 function ChartWrapper({ chartType, data, options, chartRef }) {
@@ -985,6 +1081,45 @@ function prepareChartOptions(chartType, config) {
           font: { size: 12 }
         }
       }
+    }
+  }
+
+  const valueLabelChartTypes = {
+    bar: 'verticalBar',
+    stackedBar: 'verticalBar',
+    groupedBar: 'verticalBar',
+    percentageBar: 'verticalBar',
+    segmentedBar: 'verticalBar',
+    waterfall: 'verticalBar',
+    funnel: 'verticalBar',
+    treemap: 'verticalBar',
+    horizontalBar: 'horizontalBar',
+    donut: 'doughnut',
+    pie: 'doughnut',
+    chord: 'doughnut',
+    sankey: 'verticalBar',
+    radialBar: 'polar'
+  }
+
+  if (valueLabelChartTypes[chartType.id]) {
+    const layout = valueLabelChartTypes[chartType.id]
+    const pluginConfig = {
+      display: !!config.options?.showValues,
+      layout,
+      color: '#F8FAFC',
+      font: { family: 'Inter', weight: '600', size: 12 },
+      offsetX: layout === 'horizontalBar' ? 12 : 0,
+      offsetY: layout === 'verticalBar' ? 10 : 0
+    }
+
+    baseOptions.plugins = {
+      ...baseOptions.plugins,
+      customValueLabels: pluginConfig
+    }
+  } else {
+    baseOptions.plugins = {
+      ...baseOptions.plugins,
+      customValueLabels: { display: false }
     }
   }
 

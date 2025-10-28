@@ -5,12 +5,15 @@
 
 Ein modernes, webbasiertes Tool zur einfachen Erstellung ästhetisch ansprechender Diagramme. Mit einer intuitiven Benutzeroberfläche können Sie verschiedene Diagrammtypen auswählen, Daten und Farben anpassen und das fertige Ergebnis in verschiedenen Formaten exportieren.
 
+![Custom Chart Composer - Hauptansicht](screenshots/01_hauptansicht.png)
+*Die Hauptansicht der Custom Chart Composer Anwendung mit Sidebar für Diagrammtypen, Vorschau-Bereich und Konfigurationspanel*
+
 ## ✨ Features
 
-- 🎨 **17 Diagrammtypen**: Balken, Horizontal, Linie, Fläche, Kreis, Donut, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Vertikal, Prozent
+- 🎨 **40+ Diagrammtypen**: Balken, Horizontal, Linie, Fläche, Kreis, Donut, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Vertikal, Prozent, Heatmap, Treemap, Sankey, Trichter, Violin, Box-Plot, Kalender-Heatmap, Koordinaten, Matrix, Sunburst, Wasserfall und viele mehr
 - 🎯 **Modulares Plugin-System**: Neue Diagrammtypen einfach hinzufügen
 - 🖌️ **Umfangreiche Anpassungen**: Farben, Beschriftungen, Optionen
-- 📦 **Multiple Export-Formate**: PNG, JPEG, SVG, HTML
+- 📦 **Multiple Export-Formate**: PNG, JPEG, HTML
 - 🌙 **Modernes Dark Theme**: Professionelles UI-Design
 - 🐳 **Docker-Support**: Einfache Bereitstellung
 - ⚡ **Live-Vorschau**: Echtzeit-Aktualisierung bei Änderungen
@@ -130,24 +133,47 @@ Custom-Chart-Composer/
 │   ├── controllers/          # API-Controller
 │   ├── routes/              # API-Routes
 │   ├── services/            # Business Logic
-│   ├── modules/             # Chart-Module (Plugins)
+│   ├── modules/             # Chart-Module (40+ Diagrammtypen)
+│   │   ├── areaChart.js
 │   │   ├── barChart.js
+│   │   ├── boxPlotChart.js
+│   │   ├── bubbleChart.js
+│   │   ├── calendarHeatmap.js
+│   │   ├── candlestickChart.js
+│   │   ├── chordChart.js
+│   │   ├── coordinateChart.js
+│   │   ├── curvedAreaChart.js
+│   │   ├── dashedLineChart.js
+│   │   ├── donutChart.js
+│   │   ├── funnelChart.js
+│   │   ├── gaugeChart.js
+│   │   ├── groupedBarChart.js
+│   │   ├── heatmapChart.js
 │   │   ├── horizontalBarChart.js
 │   │   ├── lineChart.js
-│   │   ├── areaChart.js
-│   │   ├── pieChart.js
-│   │   ├── donutChart.js
-│   │   ├── radarChart.js
-│   │   ├── scatterChart.js
-│   │   ├── bubbleChart.js
-│   │   ├── polarAreaChart.js
-│   │   ├── stackedBarChart.js
-│   │   ├── multiLineChart.js
+│   │   ├── matrixChart.js
 │   │   ├── mixedChart.js
-│   │   ├── groupedBarChart.js
+│   │   ├── multiLineChart.js
+│   │   ├── nestedDonutChart.js
+│   │   ├── percentageBarChart.js
+│   │   ├── pieChart.js
+│   │   ├── polarAreaChart.js
+│   │   ├── radarChart.js
+│   │   ├── radialBarChart.js
+│   │   ├── rangeBarChart.js
+│   │   ├── sankeyChart.js
+│   │   ├── scatterChart.js
+│   │   ├── segmentedBarChart.js
+│   │   ├── semiCircleChart.js
+│   │   ├── smoothLineChart.js
+│   │   ├── stackedBarChart.js
 │   │   ├── steppedLineChart.js
+│   │   ├── streamGraph.js
+│   │   ├── sunburstChart.js
+│   │   ├── treemapChart.js
 │   │   ├── verticalLineChart.js
-│   │   └── percentageBarChart.js
+│   │   ├── violinChart.js
+│   │   └── waterfallChart.js
 │   ├── package.json
 │   └── server.js
 │
@@ -167,6 +193,9 @@ Custom-Chart-Composer/
 │
 ├── docker-compose.yml
 ├── Dockerfile
+├── screenshots/            # Screenshots der Anwendung
+│   ├── README.md          # Detaillierte Screenshot-Beschreibungen
+│   └── *.png              # Screenshots verschiedener Diagrammtypen
 ├── Guideline.md            # Technische Spezifikation
 └── README.md
 ```
@@ -175,32 +204,60 @@ Custom-Chart-Composer/
 
 ### 1. Diagrammtyp auswählen
 
+![Diagrammtyp-Auswahl](screenshots/02_chord_diagramm_auswahl.png)
+*Auswahl verschiedener Diagrammtypen mit Live-Vorschau*
+
 Wählen Sie in der Sidebar den gewünschten Diagrammtyp:
 
-**Balkendiagramme:**
+**Balkendiagramme (9 Typen):**
 - **Balkendiagramm**: Klassische Wertevergleiche
 - **Horizontales Balkendiagramm**: Balken von links nach rechts
 - **Gestapeltes Balkendiagramm**: Mehrere Datensätze übereinander
 - **Gruppiertes Balkendiagramm**: Mehrere Datensätze nebeneinander
 - **Prozent-Balkendiagramm**: Prozentuale Verteilung
+- **Radiales Balkendiagramm**: Kreisförmige Anordnung
+- **Range-Balkendiagramm**: Bereichswerte darstellen
+- **Segmentiertes Balkendiagramm**: Aufgeteilte Balken
+- **Wasserfall-Diagramm**: Kumulative Änderungen
 
-**Liniendiagramme:**
+**Liniendiagramme (9 Typen):**
 - **Liniendiagramm**: Trends und Zeitreihen
 - **Flächendiagramm**: Gefüllte Linie für Volumen
 - **Multi-Liniendiagramm**: Mehrere Linien vergleichen
 - **Treppenstufen-Liniendiagramm**: Gestufte Verläufe
 - **Vertikales Liniendiagramm**: Spezielle Darstellung
+- **Geglättetes Liniendiagramm**: Weiche Kurven
+- **Gestricheltes Liniendiagramm**: Gestrichelte Linien
+- **Geschwungenes Flächendiagramm**: Weich gefüllte Kurven
+- **Stream-Graph**: Gestapeltes Flächendiagramm
 
-**Kreisdiagramme:**
+**Kreisdiagramme (8 Typen):**
 - **Kreisdiagramm**: Anteile und Verhältnisse
 - **Donutdiagramm**: Modern mit Loch in der Mitte
 - **Polar-Flächendiagramm**: Kreisförmige Flächendarstellung
+- **Halbkreis-Diagramm**: Halbkreis-Donut
+- **Radiales Balkendiagramm**: Kreisförmige Balken
+- **Sunburst-Diagramm**: Hierarchische konzentrische Ringe
+- **Verschachteltes Donut**: Mehrere Donuts
+- **Chord-Diagramm**: Beziehungen zwischen Entitäten
 
-**Spezialdiagramme:**
-- **Radar-Chart**: Mehrere Eigenschaften vergleichen
-- **Streudiagramm**: Korrelationen zeigen
-- **Blasendiagramm**: 3-dimensionale Daten
-- **Kombiniertes Diagramm**: Balken + Linie kombiniert
+**Punktdiagramme (6 Typen):**
+- **Streudiagramm**: Korrelationen zwischen zwei Variablen
+- **Blasendiagramm**: 3-dimensionale Daten mit Radius
+- **Heatmap-Diagramm**: Matrix mit Farbintensitäten
+- **Kalender-Heatmap**: GitHub-Style Jahresübersicht
+- **Koordinatendiagramm**: Geografische Koordinaten
+- **Matrix-Diagramm**: Gewichtete Punkte
+
+**Spezialdiagramme (8 Typen):**
+- **Radar-Chart**: Mehrdimensionale Daten auf polaren Achsen
+- **Box-Plot-Diagramm**: Statistische Verteilungen
+- **Kombiniertes Diagramm**: Verschiedene Charttypen kombiniert
+- **Sankey-Diagramm**: Flussdiagramm für Datenflüsse
+- **Tachometer-Diagramm**: Aktuelle Werte visualisieren
+- **Treemap-Diagramm**: Hierarchische verschachtelte Rechtecke
+- **Trichter-Diagramm**: Prozessphasen darstellen
+- **Violin-Chart**: Erweiterte statistische Verteilungen
 
 ### 2. Daten konfigurieren
 
@@ -212,10 +269,14 @@ Im Tab **"Daten"**:
 
 ### 3. Styling anpassen
 
+![Styling-Optionen](screenshots/03_styling_optionen.png)
+*Umfangreiche Styling-Optionen mit Farbpalette, Hintergrundfarbe und Hintergrundbild-Upload*
+
 Im Tab **"Styling"**:
-- Farbpalette auswählen oder eigene Farben definieren
-- Hintergrundfarbe wählen
-- Transparente Hintergründe aktivieren
+- **Farbpalette**: Benutzerdefinierte Farbzuweisung für jeden Datenpunkt
+- **Hintergrundfarbe**: Vordefinierte Optionen oder eigene Farbauswahl
+- **Hintergrundbild**: Upload-Funktion für PNG, JPG, GIF bis 5MB
+- **Transparente Hintergründe**: Für Overlay-Darstellungen
 
 ### 4. Optionen einstellen
 
@@ -227,11 +288,51 @@ Im Tab **"Optionen"**:
 
 ### 5. Exportieren
 
-- Gewünschtes Format wählen (PNG, JPEG, SVG, HTML)
-- Bei Bedarf transparenten Hintergrund aktivieren
-- Auf "Diagramm exportieren" klicken
+![Export-Optionen](screenshots/04_export_optionen.png)
+*Umfangreiche Export-Funktionen mit verschiedenen Formaten und Auflösungen*
 
-## 🔌 API-Endpunkte
+**Export-Formate:**
+- **PNG**: Hochqualitative Rasterbilder
+- **JPEG**: Komprimierte Bilder für Web
+- **HTML**: Interaktive Diagramme für Webseiten
+
+**Auflösungen:**
+- **HD**: 1280×720 Pixel
+- **Full HD**: 1920×1080 Pixel  
+- **4K**: 3840×2160 Pixel
+- **Quadrat**: 1080×1080 Pixel
+- **Benutzerdefiniert**: Eigene Dimensionen
+
+**Zusätzliche Optionen:**
+- **Skalierung**: Prozentuale Größenanpassung
+- **Transparenter Hintergrund**: Für Overlay-Darstellungen
+- **JSON-Export**: Konfiguration speichern und teilen
+
+## 📊 Diagrammtypen im Detail
+
+Die Custom Chart Composer bietet eine beeindruckende Vielfalt an Diagrammtypen für alle Datenvisualisierungs-Anforderungen:
+
+### Kreisdiagramme
+![Kreisdiagramm](screenshots/07_kreisdiagramm.png)
+*Klassisches Kreisdiagramm mit proportionalen Sektoren*
+
+### Polar-Diagramme  
+![Polar-Flächendiagramm](screenshots/06_polar_flaechen_diagramm.png)
+*Radiale Darstellung kategorialer Werte*
+
+### Punktdiagramme
+![Streudiagramm](screenshots/08_streudiagramm.png)
+*Streudiagramm für Korrelationsanalyse zwischen zwei Variablen*
+
+### Spezialdiagramme
+![Radar-Chart](screenshots/09_radar_chart.png)
+*Radar-Chart für mehrdimensionale Daten auf polaren Achsen*
+
+### Suchfunktion
+![Suchfunktion](screenshots/05_suchfunktion.png)
+*Intelligente Suchfunktion zur schnellen Navigation durch alle Diagrammtypen*
+
+> **📸 Screenshots**: Eine detaillierte Sammlung aller Screenshots mit Beschreibungen finden Sie im Ordner [`screenshots/`](screenshots/README.md)
 
 | Methode | Route | Beschreibung |
 |---------|-------|--------------|

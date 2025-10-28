@@ -54,6 +54,16 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange, ch
           Styling
         </button>
         <button
+          onClick={() => setActiveTab('annotations')}
+          className={`px-4 py-2 font-medium transition-all ${
+            activeTab === 'annotations'
+              ? 'text-dark-accent1 border-b-2 border-dark-accent1'
+              : 'text-dark-textGray hover:text-dark-textLight'
+          }`}
+        >
+          Annotationen
+        </button>
+        <button
           onClick={() => setActiveTab('options')}
           className={`px-4 py-2 font-medium transition-all ${
             activeTab === 'options'
@@ -87,6 +97,13 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange, ch
         )}
         {activeTab === 'styling' && (
           <StylingTab
+            chartType={chartType}
+            config={config}
+            onConfigChange={onConfigChange}
+          />
+        )}
+        {activeTab === 'annotations' && (
+          <AnnotationsTab
             chartType={chartType}
             config={config}
             onConfigChange={onConfigChange}
@@ -602,7 +619,7 @@ function StylingTab({ chartType, config, onConfigChange }) {
   )
 }
 
-function OptionsTab({ chartType, config, onConfigChange }) {
+function AnnotationsTab({ chartType, config, onConfigChange }) {
   const handleOptionChange = (key, value) => {
     onConfigChange({
       options: {
@@ -620,6 +637,42 @@ function OptionsTab({ chartType, config, onConfigChange }) {
     'scatter', 'bubble', 'matrix', 'calendarHeatmap', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
   ]
   const showAnnotations = annotationSchema && supportedChartTypes.includes(chartType.id)
+
+  if (!showAnnotations) {
+    return (
+      <div className="text-sm text-dark-textGray bg-dark-bg/50 rounded-lg p-4 text-center">
+        Annotationen werden für diesen Diagrammtyp nicht unterstützt.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <AnnotationEditor
+        annotations={Array.isArray(config.options?.annotations)
+          ? config.options.annotations
+          : Array.isArray(annotationSchema.default)
+            ? [...annotationSchema.default]
+            : []}
+        onChange={(value) => handleOptionChange('annotations', value)}
+        chartType={chartType}
+        config={config}
+      />
+    </div>
+  )
+}
+
+function OptionsTab({ chartType, config, onConfigChange }) {
+  const handleOptionChange = (key, value) => {
+    onConfigChange({
+      options: {
+        ...config.options,
+        [key]: value
+      }
+    })
+  }
+
+  const schema = chartType.configSchema.options || {}
   const schemaEntries = Object.entries(schema).filter(([key]) => key !== 'annotations')
 
   // Aspect Ratio Presets
@@ -709,27 +762,14 @@ function OptionsTab({ chartType, config, onConfigChange }) {
         </div>
       )}
 
-      {showAnnotations && (
-        <AnnotationEditor
-          annotations={Array.isArray(config.options?.annotations)
-            ? config.options.annotations
-            : Array.isArray(annotationSchema.default)
-              ? [...annotationSchema.default]
-              : []}
-          onChange={(value) => handleOptionChange('annotations', value)}
-          chartType={chartType}
-          config={config}
-        />
-      )}
-
-      {/* Separator if there are additional options */}
+      {/* Chart-specific options */}
       {hasOptionFields && (
         <div className="border-t border-gray-700 pt-4">
           <h3 className="text-sm font-medium text-dark-textLight mb-4">Diagrammspezifische Optionen</h3>
         </div>
       )}
 
-      {!hasOptionFields && !showAnnotations && (
+      {!hasOptionFields && (
         <div className="text-sm text-dark-textGray bg-dark-bg/50 rounded-lg p-4 text-center">
           Keine weiteren diagrammspezifischen Optionen verfügbar.
         </div>
@@ -2838,6 +2878,12 @@ DataTab.propTypes = {
 }
 
 StylingTab.propTypes = {
+  chartType: chartTypeShape,
+  config: PropTypes.object.isRequired,
+  onConfigChange: PropTypes.func.isRequired
+}
+
+AnnotationsTab.propTypes = {
   chartType: chartTypeShape,
   config: PropTypes.object.isRequired,
   onConfigChange: PropTypes.func.isRequired

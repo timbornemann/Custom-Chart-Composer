@@ -80,8 +80,47 @@ npm install
 npm run dev
 ```
 
-**Frontend**: http://localhost:5173  
+**Frontend**: http://localhost:5173
 **Backend API**: http://localhost:3003
+
+## 🖥️ Electron Desktop (Windows)
+
+Die Desktop-Variante nutzt denselben Express-Server und das gebaute Vite-Frontend wie die Docker- bzw. Web-Version. Alle Änderungen an Backend, Frontend oder den Modulen wirken sich somit automatisch auch auf die Electron-App aus. Der Docker-Workflow bleibt unverändert funktionsfähig.
+
+### Vorbereitung
+
+```bash
+# Abhängigkeiten installieren
+cd backend && npm install && cd ..
+cd frontend && npm install && cd ..
+
+# Electron-Hülle installieren
+cd desktop/electron
+npm install
+```
+
+### Windows-Build erstellen
+
+```bash
+cd desktop/electron
+npm run build:win        # erzeugt frontend/dist und erstellt einen signierfreien NSIS-Installer in desktop/electron/dist
+```
+
+Der fertige Installer befindet sich im Verzeichnis `desktop/electron/dist`. Für andere Plattformen kann `npm run build` mit zusätzlichen Targets aus `electron-builder` verwendet werden.
+
+### Entwicklung im Desktop-Kontext
+
+```bash
+# Frontend-Dev-Server starten
+cd frontend
+npm run dev
+
+# In einem zweiten Terminal das Electron-Fenster öffnen (verwendet denselben Dev-Server)
+cd ../desktop/electron
+npm run dev
+```
+
+> **Hinweis:** Die Electron-App startet automatisch den Express-Server auf einem freien lokalen Port und übergibt diesen intern an das Frontend. Anpassungen am Backend (z. B. neue Module im Ordner `backend/modules`) stehen sowohl in Docker als auch in der Desktop-App direkt zur Verfügung.
 
 ## 📁 Projektstruktur
 

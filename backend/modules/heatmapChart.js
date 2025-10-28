@@ -50,8 +50,20 @@ export default {
       default: 600
     },
     options: {
-      showLegend: { type: "boolean", default: true },
-      showGrid: { type: "boolean", default: true }
+      showLegend: { type: "boolean", default: true, description: "Legende ein-/ausblenden" },
+      legendPosition: { type: "select", default: "top", options: [
+        { value: "top", label: "Oben" }, { value: "bottom", label: "Unten" },
+        { value: "left", label: "Links" }, { value: "right", label: "Rechts" }
+      ], description: "Position der Legende" },
+      showGrid: { type: "boolean", default: true, description: "Gitterlinien anzeigen" },
+      gridColor: { type: "color", default: "#334155", description: "Farbe der Gitterlinien" },
+      cellSize: { type: "number", min: 10, max: 50, step: 5, default: 20, description: "Größe der Zellen" },
+      cellSpacing: { type: "number", min: 0, max: 10, step: 1, default: 2, description: "Abstand zwischen Zellen" },
+      showValues: { type: "boolean", default: true, description: "Werte in Zellen anzeigen" },
+      xAxisLabel: { type: "string", default: "", placeholder: "z.B. Wochentage", description: "Beschriftung der X-Achse" },
+      yAxisLabel: { type: "string", default: "", placeholder: "z.B. Uhrzeiten", description: "Beschriftung der Y-Achse" },
+      animation: { type: "boolean", default: true, description: "Animationen aktivieren" },
+      animationDuration: { type: "number", min: 0, max: 3000, step: 100, default: 1000, description: "Animationsdauer in Millisekunden" }
     }
   }
 };

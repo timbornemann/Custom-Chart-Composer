@@ -354,17 +354,19 @@ function prepareChartData(chartType, config) {
       }
 
     case 'steppedLine':
+      const steppedOpacity = config.options?.fillOpacity !== undefined ? Math.round(config.options.fillOpacity * 2.55).toString(16).padStart(2, '0') : '40'
       return {
         labels: config.labels || [],
         datasets: [{
           label: config.datasetLabel || 'Datensatz',
           data: config.values || [],
-          backgroundColor: config.options?.fill ? (config.colors?.[0] || '#8B5CF6') + '40' : 'transparent',
+          backgroundColor: config.options?.fill ? (config.colors?.[0] || '#8B5CF6') + steppedOpacity : 'transparent',
           borderColor: config.colors?.[0] || '#8B5CF6',
-          borderWidth: 3,
+          borderWidth: config.options?.lineWidth || 3,
           stepped: true,
           fill: config.options?.fill || false,
-          pointRadius: config.options?.showPoints !== false ? 5 : 0,
+          pointRadius: config.options?.showPoints !== false ? (config.options?.pointRadius || 5) : 0,
+          pointStyle: config.options?.pointStyle || 'circle',
           pointBackgroundColor: config.colors?.[0] || '#8B5CF6',
           pointBorderColor: '#fff',
           pointBorderWidth: 2
@@ -457,18 +459,25 @@ function prepareChartData(chartType, config) {
     case 'smoothLine':
     case 'curvedArea':
       if (config.datasets && Array.isArray(config.datasets)) {
+        const smoothOpacity = config.options?.fillOpacity !== undefined ? Math.round(config.options.fillOpacity * 2.55).toString(16).padStart(2, '0') : '60'
         return {
           labels: config.labels || [],
-          datasets: config.datasets.map(ds => ({
-            ...ds,
-            borderWidth: ds.borderWidth || 3,
-            tension: ds.tension !== undefined ? ds.tension : 0.4,
-            fill: chartType.id === 'curvedArea' ? (ds.fill !== undefined ? ds.fill : true) : false,
-            pointRadius: 5,
-            pointBackgroundColor: ds.borderColor || ds.backgroundColor,
-            pointBorderColor: '#fff',
-            pointBorderWidth: 2
-          }))
+          datasets: config.datasets.map(ds => {
+            const shouldFill = chartType.id === 'curvedArea' ? (config.options?.fill !== false) : (config.options?.fill || false)
+            const bgColor = ds.backgroundColor || ds.borderColor || '#8B5CF6'
+            return {
+              ...ds,
+              borderWidth: ds.borderWidth || config.options?.lineWidth || 3,
+              tension: ds.tension !== undefined ? ds.tension : (config.options?.smoothing || 0.4),
+              fill: shouldFill,
+              backgroundColor: shouldFill ? bgColor + smoothOpacity : 'transparent',
+              pointRadius: config.options?.showPoints !== false ? (config.options?.pointRadius || 5) : 0,
+              pointStyle: config.options?.pointStyle || 'circle',
+              pointBackgroundColor: ds.borderColor || ds.backgroundColor,
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2
+            }
+          })
         }
       }
       return { labels: [], datasets: [] }
@@ -479,11 +488,12 @@ function prepareChartData(chartType, config) {
           labels: config.labels || [],
           datasets: config.datasets.map(ds => ({
             ...ds,
-            borderWidth: ds.borderWidth || 2,
+            borderWidth: ds.borderWidth || config.options?.lineWidth || 2,
             borderDash: ds.borderDash || [],
             tension: ds.tension || 0,
             fill: false,
-            pointRadius: config.options?.showPoints !== false ? 5 : 0,
+            pointRadius: config.options?.showPoints !== false ? (config.options?.pointRadius || 5) : 0,
+            pointStyle: config.options?.pointStyle || 'circle',
             pointBackgroundColor: ds.borderColor || ds.backgroundColor,
             pointBorderColor: '#fff',
             pointBorderWidth: 2
@@ -735,14 +745,20 @@ function prepareChartOptions(chartType, config) {
     baseOptions.indexAxis = config.options?.horizontal ? 'y' : 'x'
     baseOptions.scales = {
       x: {
-        beginAtZero: true,
+        beginAtZero: config.options?.beginAtZero !== false,
         grid: {
           display: config.options?.showGrid !== false,
-          color: '#334155'
+          color: config.options?.gridColor || '#334155'
         },
         ticks: {
           color: '#CBD5E1',
           font: { size: 12 }
+        },
+        title: {
+          display: !!config.options?.xAxisLabel,
+          text: config.options?.xAxisLabel || '',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
         }
       },
       y: {
@@ -752,6 +768,12 @@ function prepareChartOptions(chartType, config) {
         ticks: {
           color: '#CBD5E1',
           font: { size: 12 }
+        },
+        title: {
+          display: !!config.options?.yAxisLabel,
+          text: config.options?.yAxisLabel || '',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
         }
       }
     }
@@ -989,7 +1011,8 @@ function prepareChartOptions(chartType, config) {
 
   // Nested Donut
   if (chartType.id === 'nestedDonut') {
-    baseOptions.cutout = `${config.options?.cutout || 50}%`
+    const cutoutValue = config.options?.cutout !== undefined ? config.options.cutout : 50
+    baseOptions.cutout = typeof cutoutValue === 'number' ? `${cutoutValue}%` : cutoutValue
   }
 
   // Semi Circle
@@ -1003,12 +1026,14 @@ function prepareChartOptions(chartType, config) {
   if (chartType.id === 'gauge') {
     baseOptions.rotation = config.options?.rotation || -90
     baseOptions.circumference = config.options?.circumference || 180
-    baseOptions.cutout = config.options?.cutout || '75%'
+    const cutoutValue = config.options?.cutout !== undefined ? config.options.cutout : 75
+    baseOptions.cutout = typeof cutoutValue === 'number' ? `${cutoutValue}%` : cutoutValue
   }
 
   // Sunburst
   if (chartType.id === 'sunburst') {
-    baseOptions.cutout = config.options?.cutout || '30%'
+    const cutoutValue = config.options?.cutout !== undefined ? config.options.cutout : 30
+    baseOptions.cutout = typeof cutoutValue === 'number' ? `${cutoutValue}%` : cutoutValue
     baseOptions.rotation = config.options?.rotation || 0
   }
 

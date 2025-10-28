@@ -893,7 +893,7 @@ function normalizeAnnotationValue(value) {
   return Number.isNaN(numeric) ? value : numeric
 }
 
-function transformLineAnnotation(annotation) {
+function transformLineAnnotation(annotation, chartType) {
   const scaleID = annotation.scaleID || (annotation.orientation === 'horizontal' ? 'y' : 'x')
   const value = normalizeAnnotationValue(annotation.value)
 
@@ -901,10 +901,16 @@ function transformLineAnnotation(annotation) {
     return null
   }
 
+  // For horizontal charts, adjust scale ID if not explicitly set
+  let finalScaleID = scaleID
+  if (['horizontalBar', 'rangeBar'].includes(chartType.id) && !annotation.scaleID) {
+    finalScaleID = annotation.orientation === 'horizontal' ? 'x' : 'y'
+  }
+
   const borderWidth = Number(annotation.borderWidth)
   const result = {
     type: 'line',
-    scaleID,
+    scaleID: finalScaleID,
     value,
     borderColor: annotation.borderColor || '#F97316',
     borderWidth: Number.isNaN(borderWidth) ? 2 : borderWidth,
@@ -942,13 +948,25 @@ function transformLineAnnotation(annotation) {
   return result
 }
 
-function transformBoxAnnotation(annotation) {
+function transformBoxAnnotation(annotation, chartType) {
+  // Determine correct scale IDs based on chart type
+  let xScaleID = annotation.xScaleID || 'x'
+  let yScaleID = annotation.yScaleID || 'y'
+  
+  // For horizontal charts, swap the scale IDs
+  if (['horizontalBar', 'rangeBar'].includes(chartType.id) && !annotation.xScaleID && !annotation.yScaleID) {
+    xScaleID = 'y'
+    yScaleID = 'x'
+  }
+
   const result = {
     type: 'box',
     backgroundColor: annotation.backgroundColor || 'rgba(59, 130, 246, 0.15)',
     borderColor: annotation.borderColor || '#3B82F6',
     borderWidth: Number(annotation.borderWidth) || 1,
-    display: annotation.display !== false
+    display: annotation.display !== false,
+    xScaleID,
+    yScaleID
   }
 
   const xMin = normalizeAnnotationValue(annotation.xMin)
@@ -985,12 +1003,22 @@ function transformBoxAnnotation(annotation) {
   return result
 }
 
-function transformLabelAnnotation(annotation) {
+function transformLabelAnnotation(annotation, chartType) {
   const xValue = normalizeAnnotationValue(annotation.xValue)
   const yValue = normalizeAnnotationValue(annotation.yValue)
 
   if (xValue === undefined || yValue === undefined || !annotation.content) {
     return null
+  }
+
+  // Determine correct scale IDs based on chart type
+  let xScaleID = annotation.xScaleID || 'x'
+  let yScaleID = annotation.yScaleID || 'y'
+  
+  // For horizontal charts, swap the scale IDs
+  if (['horizontalBar', 'rangeBar'].includes(chartType.id) && !annotation.xScaleID && !annotation.yScaleID) {
+    xScaleID = 'y'
+    yScaleID = 'x'
   }
 
   const fontSize = Number(annotation.fontSize)
@@ -1008,7 +1036,9 @@ function transformLabelAnnotation(annotation) {
     },
     padding: annotation.padding ?? 6,
     textAlign: annotation.textAlign || 'center',
-    display: annotation.display !== false
+    display: annotation.display !== false,
+    xScaleID,
+    yScaleID
   }
 
   if (annotation.borderRadius !== undefined && annotation.borderRadius !== null) {
@@ -1026,8 +1056,19 @@ function transformLabelAnnotation(annotation) {
   return result
 }
 
-function buildAnnotationConfig(annotations = []) {
+function buildAnnotationConfig(annotations = [], chartType) {
   if (!Array.isArray(annotations) || annotations.length === 0) {
+    return null
+  }
+
+  // Check if chart type supports annotations
+  const supportedChartTypes = [
+    'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'boxPlot', 'violin', 'candlestick', 'sankey',
+    'line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea',
+    'scatter', 'bubble', 'matrix', 'calendarHeatmap', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
+  ]
+
+  if (!supportedChartTypes.includes(chartType.id)) {
     return null
   }
 
@@ -1043,14 +1084,14 @@ function buildAnnotationConfig(annotations = []) {
 
     switch (annotation.type) {
       case 'box':
-        parsed = transformBoxAnnotation(annotation)
+        parsed = transformBoxAnnotation(annotation, chartType)
         break
       case 'label':
-        parsed = transformLabelAnnotation(annotation)
+        parsed = transformLabelAnnotation(annotation, chartType)
         break
       case 'line':
       default:
-        parsed = transformLineAnnotation(annotation)
+        parsed = transformLineAnnotation(annotation, chartType)
         break
     }
 
@@ -1158,7 +1199,7 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     scales: undefined
   }
 
-  const annotationConfig = buildAnnotationConfig(config.options?.annotations)
+  const annotationConfig = buildAnnotationConfig(config.options?.annotations, chartType)
   baseOptions.plugins.annotation = annotationConfig
     ? { annotations: annotationConfig }
     : { annotations: {} }

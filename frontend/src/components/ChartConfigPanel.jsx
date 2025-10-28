@@ -15,6 +15,7 @@ import ColorPaletteSelector from './ColorPaletteSelector'
 import LabeledColorEditor from './LabeledColorEditor'
 import BackgroundImageEditor from './BackgroundImageEditor'
 import { useExport } from '../hooks/useExport'
+import ExportPreviewModal from './ExportPreviewModal'
 
 export default function ChartConfigPanel({ chartType, config, onConfigChange, chartRef, onResetData, onClearData }) {
   const [activeTab, setActiveTab] = useState('data')
@@ -613,6 +614,12 @@ function OptionsTab({ chartType, config, onConfigChange }) {
 
   const schema = chartType.configSchema.options || {}
   const annotationSchema = schema.annotations
+  const supportedChartTypes = [
+    'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'boxPlot', 'violin', 'candlestick', 'sankey',
+    'line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea',
+    'scatter', 'bubble', 'matrix', 'calendarHeatmap', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
+  ]
+  const showAnnotations = annotationSchema && supportedChartTypes.includes(chartType.id)
   const schemaEntries = Object.entries(schema).filter(([key]) => key !== 'annotations')
 
   // Aspect Ratio Presets
@@ -702,7 +709,7 @@ function OptionsTab({ chartType, config, onConfigChange }) {
         </div>
       )}
 
-      {annotationSchema && (
+      {showAnnotations && (
         <AnnotationEditor
           annotations={Array.isArray(config.options?.annotations)
             ? config.options.annotations
@@ -710,6 +717,7 @@ function OptionsTab({ chartType, config, onConfigChange }) {
               ? [...annotationSchema.default]
               : []}
           onChange={(value) => handleOptionChange('annotations', value)}
+          chartType={chartType}
         />
       )}
 
@@ -720,7 +728,7 @@ function OptionsTab({ chartType, config, onConfigChange }) {
         </div>
       )}
 
-      {!hasOptionFields && !annotationSchema && (
+      {!hasOptionFields && !showAnnotations && (
         <div className="text-sm text-dark-textGray bg-dark-bg/50 rounded-lg p-4 text-center">
           Keine weiteren diagrammspezifischen Optionen verfügbar.
         </div>
@@ -883,7 +891,7 @@ function OptionsTab({ chartType, config, onConfigChange }) {
   )
 }
 
-function AnnotationEditor({ annotations, onChange }) {
+function AnnotationEditor({ annotations, onChange, chartType }) {
   const normalizedAnnotations = Array.isArray(annotations)
     ? annotations.map((annotation, index) => {
         if (annotation && typeof annotation === 'object' && !annotation.id) {
@@ -894,7 +902,7 @@ function AnnotationEditor({ annotations, onChange }) {
     : []
 
   const handleAdd = (type) => {
-    const newAnnotation = createDefaultAnnotation(type)
+    const newAnnotation = createDefaultAnnotation(type, null, chartType)
     onChange([...normalizedAnnotations, newAnnotation])
   }
 
@@ -922,7 +930,7 @@ function AnnotationEditor({ annotations, onChange }) {
       if (id !== targetId) {
         return annotation
       }
-      const base = createDefaultAnnotation(type, id)
+      const base = createDefaultAnnotation(type, id, chartType)
       return {
         ...base,
         display: annotation?.display !== undefined ? annotation.display : base.display
@@ -1028,12 +1036,14 @@ function AnnotationEditor({ annotations, onChange }) {
                   <BoxAnnotationForm
                     annotation={annotation}
                     onUpdate={(patch) => handleUpdate(id, patch)}
+                    chartType={chartType}
                   />
                 )}
                 {type === 'label' && (
                   <LabelAnnotationForm
                     annotation={annotation}
                     onUpdate={(patch) => handleUpdate(id, patch)}
+                    chartType={chartType}
                   />
                 )}
               </div>
@@ -1238,7 +1248,7 @@ function LineAnnotationForm({ annotation, onUpdate }) {
   )
 }
 
-function BoxAnnotationForm({ annotation, onUpdate }) {
+function BoxAnnotationForm({ annotation, onUpdate, chartType }) {
   const backgroundColorValue = typeof annotation.backgroundColor === 'string' && annotation.backgroundColor.startsWith('#')
     ? annotation.backgroundColor
     : '#3B82F6'
@@ -1252,8 +1262,38 @@ function BoxAnnotationForm({ annotation, onUpdate }) {
     ? annotation.labelColor
     : '#F8FAFC'
 
+  // Determine scale options based on chart type
+  const isHorizontalChart = ['horizontalBar', 'rangeBar'].includes(chartType?.id)
+  const xScaleLabel = isHorizontalChart ? 'Y-Skala (vertikal)' : 'X-Skala (horizontal)'
+  const yScaleLabel = isHorizontalChart ? 'X-Skala (horizontal)' : 'Y-Skala (vertikal)'
+
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">{xScaleLabel}</label>
+          <select
+            value={annotation.xScaleID || 'x'}
+            onChange={(e) => onUpdate({ xScaleID: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          >
+            <option value="x">X-Achse</option>
+            <option value="y">Y-Achse</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">{yScaleLabel}</label>
+          <select
+            value={annotation.yScaleID || 'y'}
+            onChange={(e) => onUpdate({ yScaleID: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          >
+            <option value="x">X-Achse</option>
+            <option value="y">Y-Achse</option>
+          </select>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-dark-textLight mb-1">X-Minimum</label>
@@ -1444,7 +1484,7 @@ function BoxAnnotationForm({ annotation, onUpdate }) {
   )
 }
 
-function LabelAnnotationForm({ annotation, onUpdate }) {
+function LabelAnnotationForm({ annotation, onUpdate, chartType }) {
   const backgroundColorValue = typeof annotation.backgroundColor === 'string' && annotation.backgroundColor.startsWith('#')
     ? annotation.backgroundColor
     : '#0F172A'
@@ -1452,8 +1492,38 @@ function LabelAnnotationForm({ annotation, onUpdate }) {
     ? annotation.color
     : '#F8FAFC'
 
+  // Determine scale options based on chart type
+  const isHorizontalChart = ['horizontalBar', 'rangeBar'].includes(chartType?.id)
+  const xScaleLabel = isHorizontalChart ? 'Y-Skala (vertikal)' : 'X-Skala (horizontal)'
+  const yScaleLabel = isHorizontalChart ? 'X-Skala (horizontal)' : 'Y-Skala (vertikal)'
+
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">{xScaleLabel}</label>
+          <select
+            value={annotation.xScaleID || 'x'}
+            onChange={(e) => onUpdate({ xScaleID: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          >
+            <option value="x">X-Achse</option>
+            <option value="y">Y-Achse</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">{yScaleLabel}</label>
+          <select
+            value={annotation.yScaleID || 'y'}
+            onChange={(e) => onUpdate({ yScaleID: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          >
+            <option value="x">X-Achse</option>
+            <option value="y">Y-Achse</option>
+          </select>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Text</label>
@@ -1601,12 +1671,17 @@ function LabelAnnotationForm({ annotation, onUpdate }) {
   )
 }
 
-function createDefaultAnnotation(type, idOverride) {
+function createDefaultAnnotation(type, idOverride, chartType) {
   const base = {
     id: idOverride || `annotation-${Math.random().toString(36).slice(2, 10)}`,
     type,
     display: true
   }
+
+  // Determine default scale IDs based on chart type
+  const isHorizontalChart = ['horizontalBar', 'rangeBar'].includes(chartType?.id)
+  const defaultXScaleID = isHorizontalChart ? 'y' : 'x'
+  const defaultYScaleID = isHorizontalChart ? 'x' : 'y'
 
   if (type === 'box') {
     return {
@@ -1615,6 +1690,8 @@ function createDefaultAnnotation(type, idOverride) {
       xMax: '',
       yMin: '',
       yMax: '',
+      xScaleID: defaultXScaleID,
+      yScaleID: defaultYScaleID,
       backgroundColor: 'rgba(59, 130, 246, 0.15)',
       borderColor: '#3B82F6',
       borderWidth: 1,
@@ -1634,6 +1711,8 @@ function createDefaultAnnotation(type, idOverride) {
       content: 'Neues Label',
       xValue: '',
       yValue: '',
+      xScaleID: defaultXScaleID,
+      yScaleID: defaultYScaleID,
       backgroundColor: 'rgba(15, 23, 42, 0.85)',
       color: '#F8FAFC',
       fontSize: 14,
@@ -1649,7 +1728,7 @@ function createDefaultAnnotation(type, idOverride) {
   return {
     ...base,
     orientation: 'vertical',
-    scaleID: 'x',
+    scaleID: defaultXScaleID,
     value: '',
     endValue: '',
     borderColor: '#F97316',
@@ -1813,6 +1892,7 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
   const [exportWidth, setExportWidth] = useState(1920)
   const [exportHeight, setExportHeight] = useState(1080)
   const [importError, setImportError] = useState(null)
+  const [showPreview, setShowPreview] = useState(false)
   const { handleExport, exporting, error } = useExport()
 
   const formats = [
@@ -1822,12 +1902,44 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
     { value: 'html', label: 'HTML', icon: '🌐' }
   ]
 
+  // Calculate actual export dimensions based on aspect ratio
+  const calculateActualDimensions = () => {
+    let actualWidth = exportWidth
+    let actualHeight = exportHeight
+    
+    // Chart types that don't support custom aspect ratio
+    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+    const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
+    
+    if (supportsAspectRatio && config.options?.aspectRatio && typeof config.options.aspectRatio === 'number') {
+      const aspectRatio = config.options.aspectRatio
+      // Maintain the specified aspect ratio while keeping within max dimensions
+      if (aspectRatio > (exportWidth / exportHeight)) {
+        // Wider - use full width, adjust height
+        actualHeight = Math.round(exportWidth / aspectRatio)
+      } else {
+        // Taller - use full height, adjust width
+        actualWidth = Math.round(exportHeight * aspectRatio)
+      }
+    }
+
+    return { actualWidth, actualHeight }
+  }
+
+  const { actualWidth, actualHeight } = calculateActualDimensions()
+
   const onExport = () => {
     if (!chartRef || !chartRef.current) {
-      // Show a more helpful error
       return
     }
     handleExport(chartType, config, format, transparent, chartRef, exportWidth, exportHeight)
+  }
+
+  const onPreview = () => {
+    if (!chartRef || !chartRef.current) {
+      return
+    }
+    setShowPreview(true)
   }
 
   const handleExportConfig = () => {
@@ -1899,6 +2011,38 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
     { name: '4K', width: 3840, height: 2160 },
     { name: 'Quadrat', width: 1080, height: 1080 }
   ]
+
+  // Calculate preset resolutions that respect aspect ratio
+  const getPresetResolutions = () => {
+    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+    const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
+    
+    if (!supportsAspectRatio || !config.options?.aspectRatio || typeof config.options.aspectRatio !== 'number') {
+      return presetResolutions
+    }
+
+    const aspectRatio = config.options.aspectRatio
+    return presetResolutions.map(preset => {
+      // Calculate dimensions that maintain the aspect ratio
+      if (aspectRatio > (preset.width / preset.height)) {
+        // Wider - use full width, adjust height
+        return {
+          ...preset,
+          width: preset.width,
+          height: Math.round(preset.width / aspectRatio)
+        }
+      } else {
+        // Taller - use full height, adjust width
+        return {
+          ...preset,
+          width: Math.round(preset.height * aspectRatio),
+          height: preset.height
+        }
+      }
+    })
+  }
+
+  const adjustedPresets = getPresetResolutions()
 
   const isChartReady = chartRef && chartRef.current
 
@@ -2000,13 +2144,15 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
               </svg>
               <div className="text-xs text-blue-300">
                 <strong>Seitenverhältnis aktiv:</strong> Die tatsächliche Export-Größe wird an das eingestellte Seitenverhältnis ({config.options.aspectRatio.toFixed(2)}) angepasst.
+                <br />
+                <strong>Tatsächliche Größe:</strong> {actualWidth} × {actualHeight}px
               </div>
             </div>
           </div>
         )}
         
         <div className="grid grid-cols-4 gap-2 mb-3">
-          {presetResolutions.map((preset) => (
+          {adjustedPresets.map((preset) => (
             <button
               key={preset.name}
               onClick={() => {
@@ -2020,6 +2166,9 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
               }`}
             >
               {preset.name}
+              <div className="text-[10px] opacity-75 mt-1">
+                {preset.width}×{preset.height}
+              </div>
             </button>
           ))}
         </div>
@@ -2075,33 +2224,61 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
         </div>
       )}
 
-      <button
-        onClick={onExport}
-        disabled={exporting || !chartType || !isChartReady}
-        className="w-full px-6 py-4 bg-gradient-to-r from-dark-accent1 to-dark-accent2 text-white font-semibold rounded-xl hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-      >
-        {exporting ? (
-          <>
-            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span>Exportiere...</span>
-          </>
-        ) : (
-          <>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            <span>Diagramm exportieren</span>
-          </>
-        )}
-      </button>
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={onPreview}
+          disabled={exporting || !chartType || !isChartReady}
+          className="px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:shadow-lg text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          <span>Vorschau</span>
+        </button>
+        
+        <button
+          onClick={onExport}
+          disabled={exporting || !chartType || !isChartReady}
+          className="px-6 py-4 bg-gradient-to-r from-dark-accent1 to-dark-accent2 hover:shadow-lg text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+        >
+          {exporting ? (
+            <>
+              <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Exportiere...</span>
+            </>
+          ) : (
+            <>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Direkt exportieren</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Export Preview Modal */}
+      <ExportPreviewModal
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        chartType={chartType}
+        config={config}
+        format={format}
+        transparent={transparent}
+        exportWidth={exportWidth}
+        exportHeight={exportHeight}
+        onExport={onExport}
+        chartRef={chartRef}
+      />
 
       <div className="text-xs text-dark-textGray text-center">
         {config.options?.aspectRatio && typeof config.options.aspectRatio === 'number' ? (
           <>
-            Das Diagramm wird als {format.toUpperCase()} exportiert (max. {exportWidth}×{exportHeight}px, angepasst an Seitenverhältnis {config.options.aspectRatio.toFixed(2)})
+            Das Diagramm wird als {format.toUpperCase()} exportiert (tatsächliche Größe: {actualWidth}×{actualHeight}px, angepasst an Seitenverhältnis {config.options.aspectRatio.toFixed(2)})
           </>
         ) : (
           <>

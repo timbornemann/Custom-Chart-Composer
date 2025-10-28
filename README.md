@@ -502,33 +502,6 @@ cd frontend
 npm test
 ```
 
-## 🤝 Mitwirken
-
-Beiträge sind willkommen! Bitte:
-
-1. Forken Sie das Repository
-2. Erstellen Sie einen Feature-Branch (`git checkout -b feature/AmazingFeature`)
-3. Committen Sie Ihre Änderungen (`git commit -m 'Add some AmazingFeature'`)
-4. Pushen Sie zum Branch (`git push origin feature/AmazingFeature`)
-5. Öffnen Sie einen Pull Request
-
 ## 📄 Lizenz
 
 Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe [LICENSE](LICENSE) Datei für Details.
-
-## 🙏 Danksagungen
-
-- [Chart.js](https://www.chartjs.org/) - Für die fantastische Chart-Library
-- [React](https://react.dev/) - Für das UI-Framework
-- [TailwindCSS](https://tailwindcss.com/) - Für das Styling-Framework
-- [Vite](https://vitejs.dev/) - Für das Build-Tool
-
-## 📞 Support
-
-Bei Fragen oder Problemen:
-- GitHub Issues öffnen
-- Dokumentation in `Guideline.md` lesen
-
----
-
-**Erstellt mit ❤️ für schöne Diagramme**

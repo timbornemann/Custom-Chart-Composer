@@ -9,6 +9,7 @@ import HeatmapEditor from './HeatmapEditor'
 import CalendarHeatmapEditor from './CalendarHeatmapEditor'
 import BubbleDatasetEditor from './BubbleDatasetEditor'
 import ScatterDatasetEditor from './ScatterDatasetEditor'
+import CoordinateDatasetEditor from './CoordinateDatasetEditor'
 import ConfirmModal from './ConfirmModal'
 import ColorPaletteSelector from './ColorPaletteSelector'
 import LabeledColorEditor from './LabeledColorEditor'
@@ -121,7 +122,8 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   const isHeatmapDataset = chartType?.id === 'heatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
   const isBubbleDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'r' in sampleDatasetEntry && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry
   const isScatterDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && !('r' in sampleDatasetEntry) && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry && !('v' in sampleDatasetEntry)
-  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isCalendarHeatmapDataset && !isBubbleDataset && !isScatterDataset
+  const isCoordinateDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'longitude' in sampleDatasetEntry && 'latitude' in sampleDatasetEntry
+  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isCalendarHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues
   const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
   const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
@@ -178,6 +180,15 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
     if (isScatterDataset) {
       return (
         <ScatterDatasetEditor
+          datasets={config.datasets || []}
+          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+        />
+      )
+    }
+
+    if (isCoordinateDataset) {
+      return (
+        <CoordinateDatasetEditor
           datasets={config.datasets || []}
           onDatasetsChange={(datasets) => onConfigChange({ datasets })}
         />
@@ -293,7 +304,7 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
     if (!valuesSchema) return null
 
     // Don't show values if using specialized dataset editors
-    if (isBubbleDataset || isScatterDataset || isRangeDataset || isHeatmapDataset || isCalendarHeatmapDataset) {
+    if (isBubbleDataset || isScatterDataset || isCoordinateDataset || isRangeDataset || isHeatmapDataset || isCalendarHeatmapDataset) {
       return null
     }
 

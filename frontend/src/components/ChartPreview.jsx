@@ -285,6 +285,7 @@ function getChartComponent(type) {
     heatmap: Scatter,
     matrix: Bubble,
     calendarHeatmap: Scatter,
+    coordinate: Scatter,
     // Neue spezielle Diagramme
     gauge: Doughnut,
     funnel: Bar,
@@ -416,6 +417,27 @@ function prepareChartData(chartType, config) {
             backgroundColor: ds.backgroundColor ? ds.backgroundColor + '80' : '#EC489980',
             borderColor: ds.backgroundColor || ds.borderColor || '#EC4899',
             borderWidth: config.options?.borderWidth || 2
+          }))
+        }
+      }
+      return { datasets: [] }
+
+    case 'coordinate':
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            data: ds.data ? ds.data.map(point => ({
+              x: point.longitude || 0,
+              y: point.latitude || 0,
+              label: point.label || ''
+            })) : [],
+            backgroundColor: ds.backgroundColor || ds.borderColor || '#3B82F6',
+            borderColor: ds.backgroundColor || ds.borderColor || '#3B82F6',
+            pointRadius: config.options?.pointRadius || 8,
+            pointStyle: config.options?.pointStyle || 'circle',
+            borderWidth: config.options?.borderWidth || 2,
+            pointHoverRadius: (config.options?.pointRadius || 8) + 2
           }))
         }
       }
@@ -978,6 +1000,106 @@ function prepareChartOptions(chartType, config) {
           text: config.options?.xAxisLabel || '',
           color: '#F8FAFC',
           font: { size: 13, family: 'Inter' }
+        }
+      }
+    }
+  }
+
+  // Coordinate Chart (Geographic coordinates)
+  if (chartType.id === 'coordinate') {
+    const aspectRatio = config.options?.aspectRatio || 'auto'
+    
+    baseOptions.scales = {
+      y: {
+        beginAtZero: false,
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: config.options?.gridColor || '#334155'
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 },
+          callback: function(value) {
+            return value.toFixed(2) + '°'
+          }
+        },
+        title: {
+          display: !!config.options?.yAxisLabel,
+          text: config.options?.yAxisLabel || 'Latitude (°)',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
+        }
+      },
+      x: {
+        beginAtZero: false,
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: config.options?.gridColor || '#334155'
+        },
+        ticks: {
+          color: '#CBD5E1',
+          font: { size: 12 },
+          callback: function(value) {
+            return value.toFixed(2) + '°'
+          }
+        },
+        title: {
+          display: !!config.options?.xAxisLabel,
+          text: config.options?.xAxisLabel || 'Longitude (°)',
+          color: '#F8FAFC',
+          font: { size: 13, family: 'Inter' }
+        }
+      }
+    }
+
+    // Apply aspect ratio setting
+    if (aspectRatio === 'equal') {
+      baseOptions.aspectRatio = 1
+      baseOptions.scales.y.min = baseOptions.scales.x.min
+      baseOptions.scales.y.max = baseOptions.scales.x.max
+    } else if (aspectRatio === 'mercator') {
+      // Simplified Mercator-like projection (not true Mercator, just aspect ratio adjustment)
+      baseOptions.aspectRatio = 1.5
+    }
+
+    // Custom tooltip for coordinates
+    baseOptions.plugins.tooltip.callbacks.label = function(context) {
+      const datasetLabel = context.dataset.label || 'Standort'
+      const raw = context.raw
+      
+      if (typeof raw === 'object' && raw !== null) {
+        const parts = []
+        
+        if (raw.label) {
+          parts.push(` ${raw.label}`)
+        } else {
+          parts.push(` ${datasetLabel}`)
+        }
+        
+        if ('x' in raw && 'y' in raw) {
+          parts.push(`Lon: ${raw.x.toFixed(4)}°`)
+          parts.push(`Lat: ${raw.y.toFixed(4)}°`)
+        }
+        
+        return parts.join(' | ')
+      }
+      
+      return `${datasetLabel}: ${context.formattedValue}`
+    }
+
+    // Show coordinate labels if enabled
+    if (config.options?.showCoordinateLabels !== false) {
+      baseOptions.plugins.customValueLabels = {
+        display: true,
+        layout: 'default',
+        offsetY: 10,
+        color: '#F8FAFC',
+        font: { size: 10, weight: '600' },
+        formatter: (value) => {
+          if (typeof value === 'object' && value.label) {
+            return value.label
+          }
+          return ''
         }
       }
     }

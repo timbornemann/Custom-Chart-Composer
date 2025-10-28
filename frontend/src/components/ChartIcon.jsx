@@ -70,6 +70,7 @@ function getColorPalette(chartType) {
     bubble: 'scatter',
     heatmap: 'scatter',
     matrix: 'scatter',
+    coordinate: 'scatter',
     
     radar: 'special',
     gauge: 'special',
@@ -115,6 +116,7 @@ function getChartComponent(type) {
     sunburst: Doughnut,
     heatmap: Scatter,
     matrix: Bubble,
+    coordinate: Scatter,
     gauge: Doughnut,
     funnel: Bar,
     treemap: Bar,
@@ -223,6 +225,25 @@ function prepareIconData(chartType, config) {
       return {
         datasets: [{
           data: (config.values || []).slice(0, 8),
+          backgroundColor: colorPalette[0],
+          borderColor: colorPalette[0],
+          pointRadius: 3.5,
+          pointStyle: 'circle'
+        }]
+      }
+
+    case 'coordinate':
+      return {
+        datasets: [{
+          data: [
+            { x: 10, y: 50 },
+            { x: 30, y: 70 },
+            { x: 50, y: 30 },
+            { x: 70, y: 60 },
+            { x: 40, y: 40 },
+            { x: 60, y: 75 },
+            { x: 25, y: 20 }
+          ],
           backgroundColor: colorPalette[0],
           borderColor: colorPalette[0],
           pointRadius: 3.5,
@@ -446,8 +467,8 @@ function prepareIconOptions(chartType) {
     }
   }
 
-  // Scatter & Bubble
-  if (['scatter', 'bubble', 'matrix'].includes(chartType.id)) {
+  // Scatter & Bubble & Coordinate
+  if (['scatter', 'bubble', 'matrix', 'coordinate'].includes(chartType.id)) {
     baseOptions.scales = {
       y: { 
         display: false, 

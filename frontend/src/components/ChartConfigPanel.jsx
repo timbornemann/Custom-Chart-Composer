@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import PropTypes from 'prop-types'
 import DatasetEditor from './DatasetEditor'
 import PointEditor from './PointEditor'
@@ -1891,6 +1891,8 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
   const [transparent, setTransparent] = useState(false)
   const [exportWidth, setExportWidth] = useState(1920)
   const [exportHeight, setExportHeight] = useState(1080)
+  const [scalePercent, setScalePercent] = useState(100)
+  const scaleBaseRef = useRef({ width: 1920, height: 1080 })
   const [importError, setImportError] = useState(null)
   const [showPreview, setShowPreview] = useState(false)
   const { handleExport, exporting, error } = useExport()
@@ -1898,7 +1900,6 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
   const formats = [
     { value: 'png', label: 'PNG', icon: '🖼️' },
     { value: 'jpeg', label: 'JPEG', icon: '📷' },
-    { value: 'svg', label: 'SVG', icon: '✨' },
     { value: 'html', label: 'HTML', icon: '🌐' }
   ]
 
@@ -1927,6 +1928,39 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
   }
 
   const { actualWidth, actualHeight } = calculateActualDimensions()
+
+  // Initialize baseline when tab mounts or when chart/aspect changes significantly
+  useEffect(() => {
+    // Use current actual dimensions as baseline
+    const baseW = actualWidth || exportWidth
+    const baseH = actualHeight || exportHeight
+    scaleBaseRef.current = { width: baseW, height: baseH }
+    setScalePercent(100)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartType?.id, config.options?.aspectRatio])
+
+  const onScaleChange = (value) => {
+    const v = Number(value)
+    setScalePercent(v)
+    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+    const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
+    const hasAspect = supportsAspectRatio && config.options?.aspectRatio && typeof config.options.aspectRatio === 'number'
+    const baseW = Math.max(1, scaleBaseRef.current.width)
+    const baseH = Math.max(1, scaleBaseRef.current.height)
+    const aspectRatio = hasAspect ? config.options.aspectRatio : (baseW / baseH)
+    const scale = Math.max(10, Math.min(300, v)) / 100 // clamp 10%..300%
+    if (hasAspect) {
+      const newW = Math.max(100, Math.round(baseW * scale))
+      const newH = Math.max(100, Math.round(newW / aspectRatio))
+      setExportWidth(Math.min(7680, newW))
+      setExportHeight(Math.min(7680, newH))
+    } else {
+      const newW = Math.max(100, Math.round(baseW * scale))
+      const newH = Math.max(100, Math.round(baseH * scale))
+      setExportWidth(Math.min(7680, newW))
+      setExportHeight(Math.min(7680, newH))
+    }
+  }
 
   const onExport = () => {
     if (!chartRef || !chartRef.current) {
@@ -2158,6 +2192,8 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
               onClick={() => {
                 setExportWidth(preset.width)
                 setExportHeight(preset.height)
+                scaleBaseRef.current = { width: preset.width, height: preset.height }
+                setScalePercent(100)
               }}
               className={`px-3 py-2 rounded-lg transition-all text-xs font-medium ${
                 exportWidth === preset.width && exportHeight === preset.height
@@ -2178,7 +2214,12 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
             <input
               type="number"
               value={exportWidth}
-              onChange={(e) => setExportWidth(Number(e.target.value))}
+              onChange={(e) => {
+                const val = Math.min(7680, Math.max(100, Number(e.target.value)))
+                setExportWidth(val)
+                scaleBaseRef.current = { width: val, height: exportHeight }
+                setScalePercent(100)
+              }}
               min="100"
               max="7680"
               className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
@@ -2189,16 +2230,40 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
             <input
               type="number"
               value={exportHeight}
-              onChange={(e) => setExportHeight(Number(e.target.value))}
+              onChange={(e) => {
+                const val = Math.min(7680, Math.max(100, Number(e.target.value)))
+                setExportHeight(val)
+                scaleBaseRef.current = { width: exportWidth, height: val }
+                setScalePercent(100)
+              }}
               min="100"
               max="7680"
               className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
             />
           </div>
         </div>
+
+        {/* Skalierungs-Slider (bewahrt Seitenverhältnis) */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-dark-textLight mb-2">
+            Skalierung ({scalePercent}%)
+          </label>
+          <input
+            type="range"
+            min="10"
+            max="300"
+            step="5"
+            value={scalePercent}
+            onChange={(e) => onScaleChange(e.target.value)}
+            className="w-full"
+          />
+          <div className="text-xs text-dark-textGray mt-2">
+            Ergebnis: {actualWidth ? Math.round(actualWidth * (scalePercent/100)) : exportWidth}×{actualHeight ? Math.round(actualHeight * (scalePercent/100)) : exportHeight} px (relativ zur aktuellen Einstellung)
+          </div>
+        </div>
       </div>
 
-      {(format === 'png' || format === 'svg') && (
+      {(format === 'png' || format === 'jpeg') && (
         <div className="flex items-center justify-between p-4 bg-dark-bg rounded-lg">
           <label className="text-sm font-medium text-dark-textLight">
             Transparenter Hintergrund

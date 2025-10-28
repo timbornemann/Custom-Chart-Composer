@@ -9,22 +9,33 @@ const isDev = !app.isPackaged;
 let backendServer;
 let backendPort;
 
+const resolveAppPath = (...segments) => {
+  if (isDev) {
+    return path.resolve(__dirname, '../../', ...segments);
+  }
+
+  return path.join(app.getAppPath(), 'app', ...segments);
+};
+
+const ensureBackendEnvironment = () => {
+  const backendRoot = resolveAppPath('backend');
+  process.env.BACKEND_ROOT = backendRoot;
+  process.env.BACKEND_MODULES_PATH = path.join(backendRoot, 'modules');
+};
+
 const resolveFrontendEntry = () => {
   if (isDev && process.env.ELECTRON_START_URL) {
     return { type: 'url', value: process.env.ELECTRON_START_URL };
   }
 
-  const baseDir = isDev
-    ? path.resolve(__dirname, '../../frontend/dist')
-    : path.join(app.getAppPath(), 'frontend', 'dist');
+  const baseDir = resolveAppPath('frontend', 'dist');
 
   return { type: 'file', value: path.join(baseDir, 'index.html') };
 };
 
 const loadBackendModule = async () => {
-  const backendEntry = isDev
-    ? path.resolve(__dirname, '../../backend/server.js')
-    : path.join(app.getAppPath(), 'backend', 'server.js');
+  ensureBackendEnvironment();
+  const backendEntry = resolveAppPath('backend', 'server.js');
 
   return import(pathToFileURL(backendEntry).href);
 };

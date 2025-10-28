@@ -10,8 +10,9 @@
     "dev": "ELECTRON_START_URL=http://127.0.0.1:5173 electron .",
     "start": "electron .",
     "build:frontend": "npm --prefix ../../frontend run build",
-    "build": "npm run build:frontend && electron-builder",
-    "build:win": "npm run build:frontend && electron-builder --win --x64"
+    "prepare:assets": "node scripts/prepare-assets.js",
+    "build": "npm run build:frontend && npm run prepare:assets && electron-builder",
+    "build:win": "npm run build:frontend && npm run prepare:assets && electron-builder --win --x64"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
@@ -32,12 +33,10 @@
       "main.js",
       "preload.js",
       "package.json",
-      "../../backend/**/*",
-      "!../../backend/node_modules/**",
-      "../../frontend/dist/**/*"
+      "app/**/*"
     ],
     "asarUnpack": [
-      "backend/modules/**"
+      "app/backend/modules/**"
     ],
     "win": {
       "target": [

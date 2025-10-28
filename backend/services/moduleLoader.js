@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
 
@@ -6,6 +6,51 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 let chartModules = [];
+
+const resolveModulesDirectory = () => {
+  const candidates = [];
+
+  if (process.env.BACKEND_MODULES_PATH) {
+    candidates.push(process.env.BACKEND_MODULES_PATH);
+  }
+
+  const localModules = join(__dirname, '../modules');
+  candidates.push(localModules);
+
+  if (process.resourcesPath) {
+    candidates.push(join(process.resourcesPath, 'app', 'backend', 'modules'));
+    candidates.push(join(process.resourcesPath, 'backend', 'modules'));
+  }
+
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return localModules;
+};
+
+const ensureModulesDirectory = modulesPath => {
+  if (fs.existsSync(modulesPath)) {
+    return modulesPath;
+  }
+
+  if (modulesPath.includes('.asar')) {
+    console.warn('Modules path is inside an ASAR archive and cannot be created:', modulesPath);
+    return modulesPath;
+  }
+
+  try {
+    fs.mkdirSync(modulesPath, { recursive: true });
+  } catch (error) {
+    if (error.code !== 'EEXIST') {
+      console.warn('Unable to create modules directory:', modulesPath, error.message);
+    }
+  }
+
+  return modulesPath;
+};
 
 const annotationOptionSchema = {
   type: 'annotations',
@@ -28,19 +73,14 @@ function ensureAnnotationSchema(moduleDefinition) {
 
 export const loadChartModules = async () => {
   chartModules = [];
-  const modulesPath = join(__dirname, '../modules');
-  
-  // Create modules directory if it doesn't exist
-  if (!fs.existsSync(modulesPath)) {
-    fs.mkdirSync(modulesPath, { recursive: true });
-  }
+  const modulesPath = ensureModulesDirectory(resolveModulesDirectory());
 
   const files = fs.readdirSync(modulesPath).filter(file => file.endsWith('.js'));
 
   for (const file of files) {
     try {
       const modulePath = join(modulesPath, file);
-      const module = await import(`file://${modulePath}?update=${Date.now()}`);
+      const module = await import(`${pathToFileURL(modulePath).href}?update=${Date.now()}`);
       ensureAnnotationSchema(module.default);
       chartModules.push(module.default);
       console.log(`✓ Loaded module: ${module.default.name}`);

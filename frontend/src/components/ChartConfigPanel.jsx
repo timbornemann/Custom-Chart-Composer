@@ -13,6 +13,7 @@ import CoordinateDatasetEditor from './CoordinateDatasetEditor'
 import ConfirmModal from './ConfirmModal'
 import ColorPaletteSelector from './ColorPaletteSelector'
 import LabeledColorEditor from './LabeledColorEditor'
+import BackgroundImageEditor from './BackgroundImageEditor'
 import { useExport } from '../hooks/useExport'
 
 export default function ChartConfigPanel({ chartType, config, onConfigChange, chartRef, onResetData, onClearData }) {
@@ -540,7 +541,7 @@ function StylingTab({ chartType, config, onConfigChange }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span>
-              Die Hintergrundfarbe wird beim Export des Diagramms verwendet.
+              Die Hintergrundfarbe wird beim Export des Diagramms verwendet und ist sichtbar, wenn das Hintergrundbild Lücken lässt.
             </span>
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -588,6 +589,12 @@ function StylingTab({ chartType, config, onConfigChange }) {
               </div>
             </div>
           </div>
+
+          {/* Background Image Editor */}
+          <BackgroundImageEditor
+            backgroundImage={config.backgroundImage}
+            onBackgroundImageChange={(backgroundImage) => onConfigChange({ backgroundImage })}
+          />
         </div>
       )}
     </div>
@@ -606,16 +613,104 @@ function OptionsTab({ chartType, config, onConfigChange }) {
 
   const schema = chartType.configSchema.options || {}
 
-  if (Object.keys(schema).length === 0) {
-    return (
-      <div className="text-sm text-dark-textGray bg-dark-bg rounded-lg p-4">
-        Für diesen Diagrammtyp sind keine speziellen Optionen verfügbar.
-      </div>
-    )
+  // Aspect Ratio Presets
+  const aspectRatioPresets = [
+    { label: '16:9 (Widescreen)', value: 16/9 },
+    { label: '4:3 (Standard)', value: 4/3 },
+    { label: '1:1 (Quadratisch)', value: 1 },
+    { label: '21:9 (Ultrawide)', value: 21/9 },
+    { label: '3:2', value: 3/2 },
+    { label: 'Automatisch', value: null }
+  ]
+
+  const getCurrentAspectRatio = () => {
+    return config.options?.aspectRatio ?? null
   }
+
+  const handleAspectRatioChange = (value) => {
+    handleOptionChange('aspectRatio', value === 'null' ? null : parseFloat(value))
+  }
+
+  // Chart types that don't support custom aspect ratio
+  const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+  const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
 
   return (
     <div className="space-y-4">
+      {/* Global Aspect Ratio Option */}
+      {supportsAspectRatio ? (
+        <div className="p-4 bg-dark-bg rounded-lg border border-gray-700">
+          <label className="block text-sm font-medium text-dark-textLight mb-2">
+            Seitenverhältnis
+          </label>
+          <p className="text-xs text-dark-textGray mb-3">
+            Bestimmt das Verhältnis von Breite zu Höhe des Diagramms
+          </p>
+        <select
+          value={getCurrentAspectRatio() === null ? 'null' : getCurrentAspectRatio()}
+          onChange={(e) => handleAspectRatioChange(e.target.value)}
+          className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+        >
+          {aspectRatioPresets.map((preset) => (
+            <option key={preset.label} value={preset.value === null ? 'null' : preset.value}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
+        
+        {/* Custom Aspect Ratio */}
+        {getCurrentAspectRatio() !== null && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs text-dark-textGray">Benutzerdefiniert</label>
+              <span className="text-xs font-mono text-dark-accent1">
+                {typeof getCurrentAspectRatio() === 'number' ? getCurrentAspectRatio().toFixed(2) : '1.00'}
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0.5"
+              max="3"
+              step="0.1"
+              value={getCurrentAspectRatio() || 1}
+              onChange={(e) => handleOptionChange('aspectRatio', parseFloat(e.target.value))}
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-dark-accent1"
+            />
+            <div className="flex justify-between text-xs text-dark-textGray mt-1">
+              <span>Hoch (0.5)</span>
+              <span>Breit (3.0)</span>
+            </div>
+          </div>
+        )}
+        </div>
+      ) : (
+        <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+          <div className="flex items-start space-x-2">
+            <svg className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <div className="text-sm font-medium text-yellow-300 mb-1">Seitenverhältnis nicht verfügbar</div>
+              <div className="text-xs text-yellow-200/80">
+                Dieses Diagramm verwendet radiale/polare Skalen und unterstützt keine benutzerdefinierten Seitenverhältnisse.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Separator if there are additional options */}
+      {Object.keys(schema).length > 0 && (
+        <div className="border-t border-gray-700 pt-4">
+          <h3 className="text-sm font-medium text-dark-textLight mb-4">Diagrammspezifische Optionen</h3>
+        </div>
+      )}
+
+      {Object.keys(schema).length === 0 && (
+        <div className="text-sm text-dark-textGray bg-dark-bg/50 rounded-lg p-4 text-center">
+          Keine weiteren diagrammspezifischen Optionen verfügbar.
+        </div>
+      )}
       {Object.entries(schema).map(([key, field]) => {
         // Boolean Toggle
         if (field.type === 'boolean') {
@@ -1089,6 +1184,20 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
         <label className="block text-sm font-medium text-dark-textLight mb-3">
           Export-Auflösung
         </label>
+        
+        {config.options?.aspectRatio && typeof config.options.aspectRatio === 'number' && (
+          <div className="mb-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <div className="flex items-start space-x-2">
+              <svg className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-xs text-blue-300">
+                <strong>Seitenverhältnis aktiv:</strong> Die tatsächliche Export-Größe wird an das eingestellte Seitenverhältnis ({config.options.aspectRatio.toFixed(2)}) angepasst.
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="grid grid-cols-4 gap-2 mb-3">
           {presetResolutions.map((preset) => (
             <button
@@ -1109,7 +1218,7 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-dark-textGray mb-1 block">Breite (px)</label>
+            <label className="text-xs text-dark-textGray mb-1 block">Max. Breite (px)</label>
             <input
               type="number"
               value={exportWidth}
@@ -1120,7 +1229,7 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
             />
           </div>
           <div>
-            <label className="text-xs text-dark-textGray mb-1 block">Höhe (px)</label>
+            <label className="text-xs text-dark-textGray mb-1 block">Max. Höhe (px)</label>
             <input
               type="number"
               value={exportHeight}
@@ -1183,7 +1292,15 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
       </button>
 
       <div className="text-xs text-dark-textGray text-center">
-        Das Diagramm wird als {format.toUpperCase()} mit {exportWidth}×{exportHeight}px exportiert
+        {config.options?.aspectRatio && typeof config.options.aspectRatio === 'number' ? (
+          <>
+            Das Diagramm wird als {format.toUpperCase()} exportiert (max. {exportWidth}×{exportHeight}px, angepasst an Seitenverhältnis {config.options.aspectRatio.toFixed(2)})
+          </>
+        ) : (
+          <>
+            Das Diagramm wird als {format.toUpperCase()} mit {exportWidth}×{exportHeight}px exportiert
+          </>
+        )}
       </div>
     </div>
   )

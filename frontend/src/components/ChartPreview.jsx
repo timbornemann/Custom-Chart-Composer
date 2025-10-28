@@ -29,8 +29,108 @@ ChartJS.register(
   Tooltip,
   Legend,
   Filler,
-  valueLabelPlugin()
+  valueLabelPlugin(),
+  backgroundImagePlugin()
 )
+
+function backgroundImagePlugin() {
+  return {
+    id: 'backgroundImage',
+    beforeDraw(chart, args, options) {
+      if (!options || !options.image || !options.settings) {
+        return
+      }
+
+      const { ctx, chartArea } = chart
+      if (!chartArea) return
+
+      const { left, top, right, bottom } = chartArea
+      const width = right - left
+      const height = bottom - top
+
+      const {
+        positionX = 50,
+        positionY = 50,
+        scale = 100,
+        flipHorizontal = false,
+        flipVertical = false,
+        rotation = 0,
+        opacity = 100,
+        blur = 0,
+        brightness = 100,
+        contrast = 100,
+        grayscale = 0
+      } = options.settings
+
+      const img = options.image
+
+      ctx.save()
+
+      // Clip to chart area only (where data is shown)
+      ctx.beginPath()
+      ctx.rect(left, top, width, height)
+      ctx.clip()
+
+      // Apply filters
+      const filters = []
+      if (opacity < 100) filters.push(`opacity(${opacity}%)`)
+      if (blur > 0) filters.push(`blur(${blur}px)`)
+      if (brightness !== 100) filters.push(`brightness(${brightness}%)`)
+      if (contrast !== 100) filters.push(`contrast(${contrast}%)`)
+      if (grayscale > 0) filters.push(`grayscale(${grayscale}%)`)
+      
+      if (filters.length > 0) {
+        ctx.filter = filters.join(' ')
+      }
+
+      // Calculate image dimensions maintaining aspect ratio
+      const imgAspectRatio = img.width / img.height
+      const chartAspectRatio = width / height
+      
+      let drawWidth, drawHeight
+      if (imgAspectRatio > chartAspectRatio) {
+        drawWidth = width
+        drawHeight = width / imgAspectRatio
+      } else {
+        drawHeight = height
+        drawWidth = height * imgAspectRatio
+      }
+
+      // Apply scale
+      const scaleValue = scale / 100
+      drawWidth *= scaleValue
+      drawHeight *= scaleValue
+
+      // Calculate position within chart area
+      const centerX = left + (width * positionX) / 100
+      const centerY = top + (height * positionY) / 100
+
+      // Move to center point for transformation
+      ctx.translate(centerX, centerY)
+
+      // Apply rotation
+      if (rotation !== 0) {
+        ctx.rotate((rotation * Math.PI) / 180)
+      }
+
+      // Apply flip
+      const flipX = flipHorizontal ? -1 : 1
+      const flipY = flipVertical ? -1 : 1
+      ctx.scale(flipX, flipY)
+
+      // Draw image centered at transformation point
+      ctx.drawImage(
+        img,
+        -drawWidth / 2,
+        -drawHeight / 2,
+        drawWidth,
+        drawHeight
+      )
+
+      ctx.restore()
+    }
+  }
+}
 
 function valueLabelPlugin() {
   return {
@@ -139,6 +239,17 @@ export default function ChartPreview({ chartType, config, chartRef }) {
   const [mountKey, setMountKey] = useState(0)
   const localChartRef = useRef(null)
 
+  // Helper function to load images
+  const loadImage = (src) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => resolve(img)
+      img.onerror = reject
+      img.src = src
+    })
+  }
+
   // Sync local ref with parent ref
   useEffect(() => {
     if (localChartRef.current && chartRef) {
@@ -187,10 +298,21 @@ export default function ChartPreview({ chartType, config, chartRef }) {
     setChartOptions(null)
 
     // Increment mount key to force complete unmount/remount
-    const timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(async () => {
       setMountKey(prev => prev + 1)
       const data = prepareChartData(chartType, config)
-      const options = prepareChartOptions(chartType, config)
+      
+      // Load background image if present
+      let backgroundImageObj = null
+      if (config.backgroundImage && config.backgroundImage.url) {
+        try {
+          backgroundImageObj = await loadImage(config.backgroundImage.url)
+        } catch (err) {
+          console.warn('Failed to load background image:', err)
+        }
+      }
+      
+      const options = prepareChartOptions(chartType, config, backgroundImageObj)
       
       setChartData(data)
       setChartOptions(options)
@@ -210,6 +332,38 @@ export default function ChartPreview({ chartType, config, chartRef }) {
   // Get background color from config, default to dark theme
   const backgroundColor = config.backgroundColor || '#0F172A'
   const isTransparent = backgroundColor === 'transparent'
+  
+  // Calculate preview dimensions based on aspect ratio
+  const getPreviewDimensions = () => {
+    // Chart types that don't support custom aspect ratio
+    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+    const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
+    
+    const aspectRatio = config.options?.aspectRatio
+    if (!aspectRatio || !supportsAspectRatio || typeof aspectRatio !== 'number') {
+      return { maxWidth: '600px', maxHeight: '450px' }
+    }
+    
+    const maxWidth = 600
+    const maxHeight = 450
+    
+    // Calculate dimensions based on aspect ratio
+    if (aspectRatio > (maxWidth / maxHeight)) {
+      // Wider than container - constrain by width
+      return {
+        maxWidth: `${maxWidth}px`,
+        maxHeight: `${maxWidth / aspectRatio}px`
+      }
+    } else {
+      // Taller than container - constrain by height
+      return {
+        maxWidth: `${maxHeight * aspectRatio}px`,
+        maxHeight: `${maxHeight}px`
+      }
+    }
+  }
+  
+  const previewDimensions = getPreviewDimensions()
 
   return (
     <div className="bg-dark-secondary rounded-2xl shadow-lg p-6 flex flex-col h-[600px]">
@@ -229,7 +383,13 @@ export default function ChartPreview({ chartType, config, chartRef }) {
         }}
       >
         {chartData && (
-          <div className="w-full h-full max-w-[600px] max-h-[450px] flex items-center justify-center">
+          <div 
+            className="w-full h-full flex items-center justify-center"
+            style={{
+              maxWidth: previewDimensions.maxWidth,
+              maxHeight: previewDimensions.maxHeight
+            }}
+          >
             <ChartErrorBoundary chartType={chartType}>
               <ChartWrapper
                 key={`${chartType.id}-${mountKey}`}
@@ -718,14 +878,29 @@ function prepareChartData(chartType, config) {
   }
 }
 
-function prepareChartOptions(chartType, config) {
+function prepareChartOptions(chartType, config, backgroundImageObj = null) {
+  // Chart types that should not use custom aspect ratio (they use radial/polar scales)
+  const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+  const shouldUseAspectRatio = !noAspectRatioCharts.includes(chartType.id) && 
+                                 config.options?.aspectRatio !== null && 
+                                 config.options?.aspectRatio !== undefined &&
+                                 typeof config.options.aspectRatio === 'number'
+  
   const baseOptions = {
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: shouldUseAspectRatio ? true : true,
+    aspectRatio: shouldUseAspectRatio ? config.options.aspectRatio : undefined,
     animation: {
       duration: config.options?.animation !== false ? (config.options?.animationDuration || 1000) : 0
     },
     plugins: {
+      backgroundImage: backgroundImageObj && config.backgroundImage ? {
+        image: backgroundImageObj,
+        settings: config.backgroundImage
+      } : {
+        image: null,
+        settings: null
+      },
       legend: {
         display: config.options?.showLegend !== false,
         position: config.options?.legendPosition || 'top',

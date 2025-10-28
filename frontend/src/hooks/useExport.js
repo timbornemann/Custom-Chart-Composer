@@ -57,12 +57,32 @@ export const useExport = () => {
         throw new Error('Chart nicht gefunden. Bitte warten Sie einen Moment und versuchen Sie es erneut.')
       }
 
+      // Adjust dimensions based on aspect ratio if set
+      let exportWidth = width
+      let exportHeight = height
+      
+      // Chart types that don't support custom aspect ratio
+      const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+      const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
+      
+      if (supportsAspectRatio && config.options?.aspectRatio && typeof config.options.aspectRatio === 'number') {
+        const aspectRatio = config.options.aspectRatio
+        // Maintain the specified aspect ratio while keeping within max dimensions
+        if (aspectRatio > (width / height)) {
+          // Wider - use full width, adjust height
+          exportHeight = Math.round(width / aspectRatio)
+        } else {
+          // Taller - use full height, adjust width
+          exportWidth = Math.round(height * aspectRatio)
+        }
+      }
+
       // Create a new high-resolution canvas
       const exportCanvas = document.createElement('canvas')
-      exportCanvas.width = width
-      exportCanvas.height = height
-      exportCanvas.style.width = width + 'px'
-      exportCanvas.style.height = height + 'px'
+      exportCanvas.width = exportWidth
+      exportCanvas.height = exportHeight
+      exportCanvas.style.width = exportWidth + 'px'
+      exportCanvas.style.height = exportHeight + 'px'
       
       // Set device pixel ratio to 2 for even sharper output
       const ctx = exportCanvas.getContext('2d')
@@ -70,7 +90,107 @@ export const useExport = () => {
       // Set background if not transparent
       if (!transparent && (format === 'png' || format === 'jpeg')) {
         ctx.fillStyle = config.backgroundColor || '#0F172A'
-        ctx.fillRect(0, 0, width, height)
+        ctx.fillRect(0, 0, exportWidth, exportHeight)
+      }
+
+      // Draw background image if present
+      if (config.backgroundImage && config.backgroundImage.url) {
+        try {
+          await new Promise((resolve, reject) => {
+            const img = new Image()
+            img.crossOrigin = 'anonymous'
+            
+            img.onload = () => {
+              const {
+                positionX = 50,
+                positionY = 50,
+                scale = 100,
+                flipHorizontal = false,
+                flipVertical = false,
+                rotation = 0,
+                opacity = 100,
+                blur = 0,
+                brightness = 100,
+                contrast = 100,
+                grayscale = 0
+              } = config.backgroundImage
+
+              // Save context state
+              ctx.save()
+
+              // Apply filters
+              const filters = []
+              if (opacity < 100) filters.push(`opacity(${opacity}%)`)
+              if (blur > 0) filters.push(`blur(${blur}px)`)
+              if (brightness !== 100) filters.push(`brightness(${brightness}%)`)
+              if (contrast !== 100) filters.push(`contrast(${contrast}%)`)
+              if (grayscale > 0) filters.push(`grayscale(${grayscale}%)`)
+              
+              if (filters.length > 0) {
+                ctx.filter = filters.join(' ')
+              }
+
+              // Calculate image dimensions and position
+              const imgAspectRatio = img.width / img.height
+              const canvasAspectRatio = exportWidth / exportHeight
+              
+              let drawWidth, drawHeight
+              if (imgAspectRatio > canvasAspectRatio) {
+                drawWidth = exportWidth
+                drawHeight = exportWidth / imgAspectRatio
+              } else {
+                drawHeight = exportHeight
+                drawWidth = exportHeight * imgAspectRatio
+              }
+
+              // Apply scale
+              const scaleValue = scale / 100
+              drawWidth *= scaleValue
+              drawHeight *= scaleValue
+
+              // Calculate position (center point for transformations)
+              const centerX = (exportWidth * positionX) / 100
+              const centerY = (exportHeight * positionY) / 100
+
+              // Move to center point for transformation
+              ctx.translate(centerX, centerY)
+
+              // Apply rotation
+              if (rotation !== 0) {
+                ctx.rotate((rotation * Math.PI) / 180)
+              }
+
+              // Apply flip
+              const flipX = flipHorizontal ? -1 : 1
+              const flipY = flipVertical ? -1 : 1
+              ctx.scale(flipX, flipY)
+
+              // Draw image centered at transformation point
+              ctx.drawImage(
+                img,
+                -drawWidth / 2,
+                -drawHeight / 2,
+                drawWidth,
+                drawHeight
+              )
+
+              // Restore context state
+              ctx.restore()
+              
+              resolve()
+            }
+            
+            img.onerror = () => {
+              console.warn('Failed to load background image for export')
+              resolve() // Continue without background image
+            }
+            
+            img.src = config.backgroundImage.url
+          })
+        } catch (err) {
+          console.warn('Error drawing background image:', err)
+          // Continue without background image
+        }
       }
 
       // Get the chart configuration from the original chart
@@ -82,7 +202,7 @@ export const useExport = () => {
 
       // Calculate scaling factor based on export size vs typical preview size (450px height)
       // We use 450 because that's the typical preview chart height
-      const scaleFactor = height / 450
+      const scaleFactor = exportHeight / 450
 
       // Scale ALL elements proportionally to maintain exact visual appearance
       const scaleValue = (value) => {

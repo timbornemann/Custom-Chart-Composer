@@ -6,6 +6,8 @@ import SimpleDataEditor from './SimpleDataEditor'
 import ColorListEditor from './ColorListEditor'
 import RangeBarEditor from './RangeBarEditor'
 import HeatmapEditor from './HeatmapEditor'
+import BubbleDatasetEditor from './BubbleDatasetEditor'
+import ScatterDatasetEditor from './ScatterDatasetEditor'
 import ConfirmModal from './ConfirmModal'
 import ColorPaletteSelector from './ColorPaletteSelector'
 import LabeledColorEditor from './LabeledColorEditor'
@@ -115,7 +117,9 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   const isBubbleValues = hasPointValues && !!((config.values?.[0] ?? sampleValue)?.r || (config.values?.[0] ?? sampleValue)?.v)
   const isRangeDataset = Array.isArray(sampleDatasetEntry)
   const isHeatmapDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
-  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset
+  const isBubbleDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'r' in sampleDatasetEntry && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry
+  const isScatterDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && !('r' in sampleDatasetEntry) && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry
+  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues
   const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
   const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
@@ -146,6 +150,24 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
           datasets={config.datasets || []}
           onLabelsChange={(labels) => onConfigChange({ labels })}
           onYLabelsChange={(yLabels) => onConfigChange({ yLabels })}
+          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+        />
+      )
+    }
+
+    if (isBubbleDataset) {
+      return (
+        <BubbleDatasetEditor
+          datasets={config.datasets || []}
+          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+        />
+      )
+    }
+
+    if (isScatterDataset) {
+      return (
+        <ScatterDatasetEditor
+          datasets={config.datasets || []}
           onDatasetsChange={(datasets) => onConfigChange({ datasets })}
         />
       )

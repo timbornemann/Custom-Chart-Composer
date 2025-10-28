@@ -374,29 +374,33 @@ function prepareChartData(chartType, config) {
       }
 
     case 'scatter':
-      return {
-        datasets: [{
-          label: config.labels?.[0] || 'Datenpunkt',
-          data: config.values || [],
-          backgroundColor: config.colors?.[0] || '#8B5CF6',
-          borderColor: config.colors?.[0] || '#8B5CF6',
-          pointRadius: config.options?.pointRadius || 8,
-          pointStyle: config.options?.pointStyle || 'circle',
-          borderWidth: config.options?.borderWidth || 2,
-          pointHoverRadius: (config.options?.pointRadius || 8) + 2
-        }]
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            backgroundColor: ds.backgroundColor || ds.borderColor || '#8B5CF6',
+            borderColor: ds.backgroundColor || ds.borderColor || '#8B5CF6',
+            pointRadius: config.options?.pointRadius || 8,
+            pointStyle: config.options?.pointStyle || 'circle',
+            borderWidth: config.options?.borderWidth || 2,
+            pointHoverRadius: (config.options?.pointRadius || 8) + 2
+          }))
+        }
       }
+      return { datasets: [] }
 
     case 'bubble':
-      return {
-        datasets: [{
-          label: config.labels?.[0] || 'Dataset 1',
-          data: config.values || [],
-          backgroundColor: (config.colors?.[0] || '#EC4899') + '80',
-          borderColor: config.colors?.[0] || '#EC4899',
-          borderWidth: 2
-        }]
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            backgroundColor: ds.backgroundColor ? ds.backgroundColor + '80' : '#EC489980',
+            borderColor: ds.backgroundColor || ds.borderColor || '#EC4899',
+            borderWidth: config.options?.borderWidth || 2
+          }))
+        }
       }
+      return { datasets: [] }
     
     case 'pie':
     case 'donut':
@@ -569,15 +573,17 @@ function prepareChartData(chartType, config) {
       return { datasets: [] }
 
     case 'matrix':
-      return {
-        datasets: [{
-          label: config.labels?.[0] || 'Dataset 1',
-          data: config.values || [],
-          backgroundColor: (config.colors?.[0] || '#3B82F6') + '80',
-          borderColor: config.colors?.[0] || '#3B82F6',
-          borderWidth: 2
-        }]
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            backgroundColor: ds.backgroundColor ? ds.backgroundColor + '80' : '#3B82F680',
+            borderColor: ds.backgroundColor || ds.borderColor || '#3B82F6',
+            borderWidth: config.options?.borderWidth || 2
+          }))
+        }
       }
+      return { datasets: [] }
 
     // Neue spezielle Diagramme
     case 'funnel':
@@ -689,6 +695,60 @@ function prepareChartOptions(chartType, config) {
         text: config.title || '',
         color: '#F8FAFC',
         font: { size: 20, family: 'Inter', weight: 'bold' }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+        titleColor: '#F8FAFC',
+        bodyColor: '#CBD5E1',
+        borderColor: '#475569',
+        borderWidth: 1,
+        padding: 12,
+        displayColors: true,
+        callbacks: {
+          title: function(context) {
+            // Custom label from point data
+            if (context[0]?.raw && typeof context[0].raw === 'object' && context[0].raw.label) {
+              return context[0].raw.label
+            }
+            // Standard label from X-axis
+            return context[0]?.label || context[0]?.dataset?.label || ''
+          },
+          label: function(context) {
+            const datasetLabel = context.dataset.label || 'Datensatz'
+            const raw = context.raw
+            
+            // For objects (bubble, scatter, heatmap)
+            if (typeof raw === 'object' && raw !== null) {
+              const parts = []
+              
+              // Show dataset name if point has custom label
+              if (raw.label) {
+                parts.push(`📊 ${datasetLabel}`)
+              }
+              
+              // Bubble/Scatter/Matrix coordinates
+              if ('x' in raw && 'y' in raw) {
+                parts.push(`X: ${raw.x}`)
+                parts.push(`Y: ${raw.y}`)
+              }
+              
+              // Bubble size
+              if ('r' in raw) {
+                parts.push(`Größe: ${raw.r}`)
+              }
+              
+              // Heatmap intensity
+              if ('v' in raw) {
+                parts.push(`Intensität: ${raw.v}`)
+              }
+              
+              return parts.length > 0 ? parts.join(' | ') : `${datasetLabel}`
+            }
+            
+            // Standard numeric values
+            return `${datasetLabel}: ${context.formattedValue}`
+          }
+        }
       }
     },
     // Explicitly set scales to undefined for charts that don't use them

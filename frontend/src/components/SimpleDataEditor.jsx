@@ -23,23 +23,23 @@ export default function SimpleDataEditor({ labels, values, onLabelsChange, onVal
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-2">
         <label className="text-sm font-medium text-dark-textLight">
-          Daten
+          Datenpunkte ({labels.length})
         </label>
         <button
           onClick={addEntry}
           className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-all"
         >
-          + Eintrag
+          + Datenpunkt
         </button>
       </div>
 
       <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
         {labels.map((label, idx) => (
           <div key={idx} className="bg-dark-bg rounded-lg p-3 border border-gray-700">
-            <div className="flex items-center space-x-2">
-              <div className="flex-1 grid grid-cols-2 gap-2">
+            <div className="flex items-start space-x-2">
+              <div className="flex-1 space-y-2">
                 <div>
                   <label className="text-xs text-dark-textGray mb-1 block">Beschriftung</label>
                   <input
@@ -47,7 +47,7 @@ export default function SimpleDataEditor({ labels, values, onLabelsChange, onVal
                     value={label}
                     onChange={(e) => updateLabel(idx, e.target.value)}
                     placeholder={`Label ${idx + 1}`}
-                    className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                    className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-medium"
                   />
                 </div>
                 <div>
@@ -56,13 +56,13 @@ export default function SimpleDataEditor({ labels, values, onLabelsChange, onVal
                     type="number"
                     value={values[idx] ?? 0}
                     onChange={(e) => updateValue(idx, e.target.value)}
-                    className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                    className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-semibold"
                   />
                 </div>
               </div>
               <button
                 onClick={() => removeEntry(idx)}
-                className="px-3 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded transition-all self-end"
+                className="px-2 py-1 bg-red-600/80 hover:bg-red-600 text-white rounded transition-all text-xs self-start"
               >
                 ✕
               </button>
@@ -70,14 +70,14 @@ export default function SimpleDataEditor({ labels, values, onLabelsChange, onVal
           </div>
         ))}
         {labels.length === 0 && (
-          <div className="text-center py-6 text-dark-textGray text-sm">
-            Noch keine Einträge. Klicke auf "+ Eintrag" um zu beginnen.
+          <div className="text-center py-6 text-dark-textGray text-sm bg-dark-secondary rounded border border-gray-700">
+            Noch keine Datenpunkte. Klicke auf "+ Datenpunkt" um zu beginnen.
           </div>
         )}
       </div>
 
-      <div className="text-xs text-dark-textGray bg-dark-bg rounded p-2">
-        💡 Füge beliebig viele Datenpunkte hinzu oder entferne sie
+      <div className="text-xs text-dark-textGray bg-dark-bg rounded p-3 border border-gray-700">
+        💡 <strong>Tipp:</strong> Jeder Datenpunkt hat eine Beschriftung (für die X-Achse) und einen Wert (für die Y-Achse).
       </div>
     </div>
   )

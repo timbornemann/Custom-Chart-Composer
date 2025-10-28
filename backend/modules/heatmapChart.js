@@ -23,15 +23,15 @@ export default {
         {
           label: "Aktivität",
           data: [
-            { x: "Mo", y: "06:00", v: 15 },
-            { x: "Mo", y: "12:00", v: 45 },
-            { x: "Mo", y: "18:00", v: 75 },
-            { x: "Di", y: "06:00", v: 20 },
-            { x: "Di", y: "12:00", v: 50 },
-            { x: "Di", y: "18:00", v: 80 },
-            { x: "Mi", y: "06:00", v: 18 },
-            { x: "Mi", y: "12:00", v: 55 },
-            { x: "Mi", y: "18:00", v: 85 }
+            { x: "Mo", y: "06:00", v: 15, label: "Morgen Montag" },
+            { x: "Mo", y: "12:00", v: 45, label: "Mittag Montag" },
+            { x: "Mo", y: "18:00", v: 75, label: "Abend Montag" },
+            { x: "Di", y: "06:00", v: 20, label: "Morgen Dienstag" },
+            { x: "Di", y: "12:00", v: 50, label: "Mittag Dienstag" },
+            { x: "Di", y: "18:00", v: 80, label: "Abend Dienstag" },
+            { x: "Mi", y: "06:00", v: 18, label: "Morgen Mittwoch" },
+            { x: "Mi", y: "12:00", v: 55, label: "Mittag Mittwoch" },
+            { x: "Mi", y: "18:00", v: 85, label: "Abend Mittwoch" }
           ],
           backgroundColor: "#3B82F6"
         }

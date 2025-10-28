@@ -9,27 +9,21 @@ export default {
       type: "string",
       default: ""
     },
-    labels: { 
-      type: "array", 
-      default: ["Preis vs. Qualität"] 
-    },
-    values: {
+    datasets: {
       type: "array",
       default: [
-        { x: 25, y: 80, r: 15 },
-        { x: 45, y: 60, r: 20 },
-        { x: 70, y: 90, r: 25 },
-        { x: 35, y: 45, r: 10 },
-        { x: 85, y: 75, r: 30 }
+        {
+          label: "Portfolio",
+          data: [
+            { x: 25, y: 80, r: 15, label: "Produkt A" },
+            { x: 45, y: 60, r: 20, label: "Produkt B" },
+            { x: 70, y: 90, r: 25, label: "Produkt C" },
+            { x: 35, y: 45, r: 10, label: "Produkt D" },
+            { x: 85, y: 75, r: 30, label: "Produkt E" }
+          ],
+          backgroundColor: "#3B82F6"
+        }
       ]
-    },
-    datasetLabel: {
-      type: "string",
-      default: "Datensatz"
-    },
-    colors: {
-      type: "array",
-      default: ["#3B82F6"]
     },
     backgroundColor: {
       type: "string",

@@ -9,29 +9,23 @@ export default {
       type: "string",
       default: ""
     },
-    labels: { 
-      type: "array", 
-      default: ["Datenpunkt"] 
-    },
-    values: { 
-      type: "array", 
+    datasets: {
+      type: "array",
       default: [
-        { x: 10, y: 20 },
-        { x: 15, y: 35 },
-        { x: 20, y: 30 },
-        { x: 25, y: 45 },
-        { x: 30, y: 40 },
-        { x: 35, y: 55 },
-        { x: 40, y: 50 }
+        {
+          label: "Datenpunkte",
+          data: [
+            { x: 10, y: 20, label: "Punkt A" },
+            { x: 15, y: 35, label: "Punkt B" },
+            { x: 20, y: 30, label: "Punkt C" },
+            { x: 25, y: 45, label: "Punkt D" },
+            { x: 30, y: 40, label: "Punkt E" },
+            { x: 35, y: 55, label: "Punkt F" },
+            { x: 40, y: 50, label: "Punkt G" }
+          ],
+          backgroundColor: "#8B5CF6"
+        }
       ]
-    },
-    datasetLabel: {
-      type: "string",
-      default: "Datensatz"
-    },
-    colors: { 
-      type: "array", 
-      default: ["#8B5CF6"] 
     },
     backgroundColor: {
       type: "string",

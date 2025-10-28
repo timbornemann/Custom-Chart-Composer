@@ -9,28 +9,22 @@ export default {
       type: "string",
       default: ""
     },
-    labels: { 
-      type: "array", 
-      default: ["Dataset 1"] 
-    },
-    values: { 
-      type: "array", 
+    datasets: {
+      type: "array",
       default: [
-        { x: 20, y: 30, r: 15 },
-        { x: 40, y: 10, r: 10 },
-        { x: 30, y: 40, r: 20 },
-        { x: 50, y: 25, r: 12 },
-        { x: 15, y: 45, r: 18 },
-        { x: 45, y: 35, r: 8 }
+        {
+          label: "Dataset 1",
+          data: [
+            { x: 20, y: 30, r: 15, label: "Produkt A" },
+            { x: 40, y: 10, r: 10, label: "Produkt B" },
+            { x: 30, y: 40, r: 20, label: "Produkt C" },
+            { x: 50, y: 25, r: 12, label: "Produkt D" },
+            { x: 15, y: 45, r: 18, label: "Produkt E" },
+            { x: 45, y: 35, r: 8, label: "Produkt F" }
+          ],
+          backgroundColor: "#EC4899"
+        }
       ]
-    },
-    datasetLabel: {
-      type: "string",
-      default: "Datensatz"
-    },
-    colors: { 
-      type: "array", 
-      default: ["#EC4899"] 
     },
     backgroundColor: {
       type: "string",

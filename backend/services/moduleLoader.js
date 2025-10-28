@@ -7,6 +7,25 @@ const __dirname = dirname(__filename);
 
 let chartModules = [];
 
+const annotationOptionSchema = {
+  type: 'annotations',
+  default: [],
+  description: 'Annotationen wie Linien, Boxen oder Labels, die im Diagramm angezeigt werden.'
+};
+
+function ensureAnnotationSchema(moduleDefinition) {
+  if (!moduleDefinition || moduleDefinition.library !== 'chartjs') {
+    return;
+  }
+
+  moduleDefinition.configSchema = moduleDefinition.configSchema || {};
+  moduleDefinition.configSchema.options = moduleDefinition.configSchema.options || {};
+
+  if (!moduleDefinition.configSchema.options.annotations) {
+    moduleDefinition.configSchema.options.annotations = { ...annotationOptionSchema };
+  }
+}
+
 export const loadChartModules = async () => {
   chartModules = [];
   const modulesPath = join(__dirname, '../modules');
@@ -22,6 +41,7 @@ export const loadChartModules = async () => {
     try {
       const modulePath = join(modulesPath, file);
       const module = await import(`file://${modulePath}?update=${Date.now()}`);
+      ensureAnnotationSchema(module.default);
       chartModules.push(module.default);
       console.log(`✓ Loaded module: ${module.default.name}`);
     } catch (error) {

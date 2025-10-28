@@ -14,6 +14,7 @@ import {
   Legend,
   Filler
 } from 'chart.js'
+import annotationPlugin from 'chartjs-plugin-annotation'
 import { Bar, Line, Pie, Doughnut, Radar, PolarArea, Scatter, Bubble } from 'react-chartjs-2'
 import ChartErrorBoundary from './ChartErrorBoundary'
 
@@ -29,6 +30,7 @@ ChartJS.register(
   Tooltip,
   Legend,
   Filler,
+  annotationPlugin,
   valueLabelPlugin(),
   backgroundImagePlugin()
 )
@@ -878,6 +880,188 @@ function prepareChartData(chartType, config) {
   }
 }
 
+function normalizeAnnotationValue(value) {
+  if (value === null || value === undefined || value === '') {
+    return undefined
+  }
+
+  if (typeof value === 'number') {
+    return value
+  }
+
+  const numeric = Number(value)
+  return Number.isNaN(numeric) ? value : numeric
+}
+
+function transformLineAnnotation(annotation) {
+  const scaleID = annotation.scaleID || (annotation.orientation === 'horizontal' ? 'y' : 'x')
+  const value = normalizeAnnotationValue(annotation.value)
+
+  if (!scaleID || value === undefined) {
+    return null
+  }
+
+  const borderWidth = Number(annotation.borderWidth)
+  const result = {
+    type: 'line',
+    scaleID,
+    value,
+    borderColor: annotation.borderColor || '#F97316',
+    borderWidth: Number.isNaN(borderWidth) ? 2 : borderWidth,
+    display: annotation.display !== false
+  }
+
+  if (annotation.endValue !== undefined && annotation.endValue !== '') {
+    const endValue = normalizeAnnotationValue(annotation.endValue)
+    if (endValue !== undefined) {
+      result.endValue = endValue
+    }
+  }
+
+  if (Array.isArray(annotation.borderDash) && annotation.borderDash.length > 0) {
+    result.borderDash = annotation.borderDash.map(segment => Number(segment) || 0)
+  }
+
+  if (annotation.labelEnabled && annotation.labelContent) {
+    const labelFontSize = Number(annotation.labelFontSize)
+    result.label = {
+      display: true,
+      content: annotation.labelContent,
+      position: annotation.labelPosition || 'center',
+      backgroundColor: annotation.labelBackgroundColor || 'rgba(15, 23, 42, 0.75)',
+      color: annotation.labelColor || '#F8FAFC',
+      font: {
+        size: Number.isNaN(labelFontSize) ? 12 : labelFontSize,
+        weight: annotation.labelFontWeight || '600',
+        family: annotation.labelFontFamily || 'Inter'
+      },
+      padding: annotation.labelPadding ?? 6
+    }
+  }
+
+  return result
+}
+
+function transformBoxAnnotation(annotation) {
+  const result = {
+    type: 'box',
+    backgroundColor: annotation.backgroundColor || 'rgba(59, 130, 246, 0.15)',
+    borderColor: annotation.borderColor || '#3B82F6',
+    borderWidth: Number(annotation.borderWidth) || 1,
+    display: annotation.display !== false
+  }
+
+  const xMin = normalizeAnnotationValue(annotation.xMin)
+  const xMax = normalizeAnnotationValue(annotation.xMax)
+  const yMin = normalizeAnnotationValue(annotation.yMin)
+  const yMax = normalizeAnnotationValue(annotation.yMax)
+
+  if (xMin !== undefined) result.xMin = xMin
+  if (xMax !== undefined) result.xMax = xMax
+  if (yMin !== undefined) result.yMin = yMin
+  if (yMax !== undefined) result.yMax = yMax
+
+  if (!('xMin' in result) && !('xMax' in result) && !('yMin' in result) && !('yMax' in result)) {
+    return null
+  }
+
+  if (annotation.labelEnabled && annotation.labelContent) {
+    const labelFontSize = Number(annotation.labelFontSize)
+    result.label = {
+      display: true,
+      content: annotation.labelContent,
+      position: annotation.labelPosition || 'center',
+      color: annotation.labelColor || '#F8FAFC',
+      backgroundColor: annotation.labelBackgroundColor || 'rgba(15, 23, 42, 0.8)',
+      font: {
+        size: Number.isNaN(labelFontSize) ? 12 : labelFontSize,
+        weight: annotation.labelFontWeight || '600',
+        family: annotation.labelFontFamily || 'Inter'
+      },
+      padding: annotation.labelPadding ?? 6
+    }
+  }
+
+  return result
+}
+
+function transformLabelAnnotation(annotation) {
+  const xValue = normalizeAnnotationValue(annotation.xValue)
+  const yValue = normalizeAnnotationValue(annotation.yValue)
+
+  if (xValue === undefined || yValue === undefined || !annotation.content) {
+    return null
+  }
+
+  const fontSize = Number(annotation.fontSize)
+  const result = {
+    type: 'label',
+    xValue,
+    yValue,
+    content: annotation.content,
+    color: annotation.color || '#F8FAFC',
+    backgroundColor: annotation.backgroundColor || 'rgba(15, 23, 42, 0.8)',
+    font: {
+      size: Number.isNaN(fontSize) ? 12 : fontSize,
+      weight: annotation.fontWeight || '600',
+      family: annotation.fontFamily || 'Inter'
+    },
+    padding: annotation.padding ?? 6,
+    textAlign: annotation.textAlign || 'center',
+    display: annotation.display !== false
+  }
+
+  if (annotation.borderRadius !== undefined && annotation.borderRadius !== null) {
+    result.borderRadius = Number(annotation.borderRadius) || 0
+  }
+
+  if (annotation.xAdjust !== undefined && annotation.xAdjust !== null && annotation.xAdjust !== '') {
+    result.xAdjust = Number(annotation.xAdjust) || 0
+  }
+
+  if (annotation.yAdjust !== undefined && annotation.yAdjust !== null && annotation.yAdjust !== '') {
+    result.yAdjust = Number(annotation.yAdjust) || 0
+  }
+
+  return result
+}
+
+function buildAnnotationConfig(annotations = []) {
+  if (!Array.isArray(annotations) || annotations.length === 0) {
+    return null
+  }
+
+  const entries = {}
+
+  annotations.forEach((annotation, index) => {
+    if (!annotation || typeof annotation !== 'object') {
+      return
+    }
+
+    const id = annotation.id || `annotation_${index + 1}`
+    let parsed = null
+
+    switch (annotation.type) {
+      case 'box':
+        parsed = transformBoxAnnotation(annotation)
+        break
+      case 'label':
+        parsed = transformLabelAnnotation(annotation)
+        break
+      case 'line':
+      default:
+        parsed = transformLineAnnotation(annotation)
+        break
+    }
+
+    if (parsed) {
+      entries[id] = parsed
+    }
+  })
+
+  return Object.keys(entries).length > 0 ? entries : null
+}
+
 function prepareChartOptions(chartType, config, backgroundImageObj = null) {
   // Chart types that should not use custom aspect ratio (they use radial/polar scales)
   const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
@@ -973,6 +1157,11 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     // Explicitly set scales to undefined for charts that don't use them
     scales: undefined
   }
+
+  const annotationConfig = buildAnnotationConfig(config.options?.annotations)
+  baseOptions.plugins.annotation = annotationConfig
+    ? { annotations: annotationConfig }
+    : { annotations: {} }
 
   // Bar charts
   if (['bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'boxPlot', 'violin', 'candlestick', 'sankey'].includes(chartType.id)) {

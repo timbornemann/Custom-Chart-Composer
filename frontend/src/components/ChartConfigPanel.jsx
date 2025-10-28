@@ -612,6 +612,8 @@ function OptionsTab({ chartType, config, onConfigChange }) {
   }
 
   const schema = chartType.configSchema.options || {}
+  const annotationSchema = schema.annotations
+  const schemaEntries = Object.entries(schema).filter(([key]) => key !== 'annotations')
 
   // Aspect Ratio Presets
   const aspectRatioPresets = [
@@ -634,6 +636,7 @@ function OptionsTab({ chartType, config, onConfigChange }) {
   // Chart types that don't support custom aspect ratio
   const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
   const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
+  const hasOptionFields = schemaEntries.length > 0
 
   return (
     <div className="space-y-4">
@@ -699,19 +702,30 @@ function OptionsTab({ chartType, config, onConfigChange }) {
         </div>
       )}
 
+      {annotationSchema && (
+        <AnnotationEditor
+          annotations={Array.isArray(config.options?.annotations)
+            ? config.options.annotations
+            : Array.isArray(annotationSchema.default)
+              ? [...annotationSchema.default]
+              : []}
+          onChange={(value) => handleOptionChange('annotations', value)}
+        />
+      )}
+
       {/* Separator if there are additional options */}
-      {Object.keys(schema).length > 0 && (
+      {hasOptionFields && (
         <div className="border-t border-gray-700 pt-4">
           <h3 className="text-sm font-medium text-dark-textLight mb-4">Diagrammspezifische Optionen</h3>
         </div>
       )}
 
-      {Object.keys(schema).length === 0 && (
+      {!hasOptionFields && !annotationSchema && (
         <div className="text-sm text-dark-textGray bg-dark-bg/50 rounded-lg p-4 text-center">
           Keine weiteren diagrammspezifischen Optionen verfügbar.
         </div>
       )}
-      {Object.entries(schema).map(([key, field]) => {
+      {schemaEntries.map(([key, field]) => {
         // Boolean Toggle
         if (field.type === 'boolean') {
           return (
@@ -867,6 +881,799 @@ function OptionsTab({ chartType, config, onConfigChange }) {
       })}
     </div>
   )
+}
+
+function AnnotationEditor({ annotations, onChange }) {
+  const normalizedAnnotations = Array.isArray(annotations)
+    ? annotations.map((annotation, index) => {
+        if (annotation && typeof annotation === 'object' && !annotation.id) {
+          return { ...annotation, id: `annotation-${index + 1}` }
+        }
+        return annotation
+      })
+    : []
+
+  const handleAdd = (type) => {
+    const newAnnotation = createDefaultAnnotation(type)
+    onChange([...normalizedAnnotations, newAnnotation])
+  }
+
+  const handleUpdate = (targetId, patch) => {
+    const updated = normalizedAnnotations.map((annotation, index) => {
+      const id = annotation?.id || `annotation-${index + 1}`
+      if (id !== targetId) {
+        return annotation
+      }
+      return { ...annotation, ...patch, id }
+    })
+    onChange(updated)
+  }
+
+  const handleRemove = (targetId) => {
+    onChange(normalizedAnnotations.filter((annotation, index) => {
+      const id = annotation?.id || `annotation-${index + 1}`
+      return id !== targetId
+    }))
+  }
+
+  const handleTypeChange = (targetId, type) => {
+    const updated = normalizedAnnotations.map((annotation, index) => {
+      const id = annotation?.id || `annotation-${index + 1}`
+      if (id !== targetId) {
+        return annotation
+      }
+      const base = createDefaultAnnotation(type, id)
+      return {
+        ...base,
+        display: annotation?.display !== undefined ? annotation.display : base.display
+      }
+    })
+    onChange(updated)
+  }
+
+  return (
+    <div className="p-4 bg-dark-bg rounded-lg border border-gray-700">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between md:space-x-4 space-y-3 md:space-y-0">
+        <div>
+          <h3 className="text-sm font-medium text-dark-textLight">Annotationen</h3>
+          <p className="text-xs text-dark-textGray mt-1">
+            Füge Linien, Boxen oder Labels hinzu, um wichtige Bereiche im Diagramm hervorzuheben.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleAdd('line')}
+            className="px-3 py-1.5 text-xs font-medium text-dark-textLight bg-dark-secondary border border-gray-700 rounded hover:border-dark-accent1 transition-colors"
+          >
+            + Linie
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAdd('box')}
+            className="px-3 py-1.5 text-xs font-medium text-dark-textLight bg-dark-secondary border border-gray-700 rounded hover:border-dark-accent1 transition-colors"
+          >
+            + Box
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAdd('label')}
+            className="px-3 py-1.5 text-xs font-medium text-dark-textLight bg-dark-secondary border border-gray-700 rounded hover:border-dark-accent1 transition-colors"
+          >
+            + Label
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {normalizedAnnotations.length === 0 && (
+          <div className="text-xs text-dark-textGray bg-dark-secondary/40 border border-dashed border-gray-700 rounded-lg p-4 text-center">
+            Noch keine Annotationen hinzugefügt.
+          </div>
+        )}
+
+        {normalizedAnnotations.map((annotation, index) => {
+          const id = annotation?.id || `annotation-${index + 1}`
+          const type = annotation?.type || 'line'
+          const isActive = annotation?.display !== false
+
+          return (
+            <div key={id} className="bg-dark-secondary/40 border border-gray-700 rounded-lg">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between px-4 py-3 border-b border-gray-700 space-y-3 md:space-y-0">
+                <div>
+                  <div className="text-sm font-medium text-dark-textLight">
+                    Annotation {index + 1}
+                  </div>
+                  <div className="text-xs text-dark-textGray">
+                    Typ: {formatAnnotationType(type)}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center space-x-2 text-xs text-dark-textGray">
+                    <input
+                      type="checkbox"
+                      checked={isActive}
+                      onChange={(e) => handleUpdate(id, { display: e.target.checked })}
+                      className="w-4 h-4 text-dark-accent1 bg-dark-bg border-gray-600 rounded focus:ring-dark-accent1"
+                    />
+                    <span>Aktiv</span>
+                  </label>
+                  <select
+                    value={type}
+                    onChange={(e) => handleTypeChange(id, e.target.value)}
+                    className="px-3 py-1.5 bg-dark-bg text-dark-textLight border border-gray-700 rounded text-xs focus:border-dark-accent1 focus:outline-none"
+                  >
+                    <option value="line">Linie</option>
+                    <option value="box">Box</option>
+                    <option value="label">Label</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(id)}
+                    className="px-2.5 py-1.5 text-xs text-red-300 border border-red-500/40 rounded hover:bg-red-500/10 transition-colors"
+                  >
+                    Entfernen
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {type === 'line' && (
+                  <LineAnnotationForm
+                    annotation={annotation}
+                    onUpdate={(patch) => handleUpdate(id, patch)}
+                  />
+                )}
+                {type === 'box' && (
+                  <BoxAnnotationForm
+                    annotation={annotation}
+                    onUpdate={(patch) => handleUpdate(id, patch)}
+                  />
+                )}
+                {type === 'label' && (
+                  <LabelAnnotationForm
+                    annotation={annotation}
+                    onUpdate={(patch) => handleUpdate(id, patch)}
+                  />
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function LineAnnotationForm({ annotation, onUpdate }) {
+  const orientation = annotation.orientation || 'vertical'
+  const positionHelpText = orientation === 'horizontal'
+    ? 'Gib den numerischen Y-Wert an, an dem die Linie erscheinen soll.'
+    : 'Gib den X-Wert oder die Bezeichnung an, an der die Linie erscheinen soll.'
+  const borderColorValue = typeof annotation.borderColor === 'string' && annotation.borderColor.startsWith('#')
+    ? annotation.borderColor
+    : '#F97316'
+  const labelBackgroundColorValue = typeof annotation.labelBackgroundColor === 'string' && annotation.labelBackgroundColor.startsWith('#')
+    ? annotation.labelBackgroundColor
+    : '#0F172A'
+  const labelColorValue = typeof annotation.labelColor === 'string' && annotation.labelColor.startsWith('#')
+    ? annotation.labelColor
+    : '#F8FAFC'
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Ausrichtung</label>
+          <select
+            value={orientation}
+            onChange={(e) => {
+              const newOrientation = e.target.value
+              onUpdate({
+                orientation: newOrientation,
+                scaleID: newOrientation === 'horizontal' ? 'y' : 'x'
+              })
+            }}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          >
+            <option value="vertical">Vertikal (X-Achse)</option>
+            <option value="horizontal">Horizontal (Y-Achse)</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Linienfarbe</label>
+          <div className="flex items-center space-x-3">
+            <input
+              type="color"
+              value={borderColorValue}
+              onChange={(e) => onUpdate({ borderColor: e.target.value })}
+              className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
+            />
+            <input
+              type="text"
+              value={annotation.borderColor || '#F97316'}
+              onChange={(e) => onUpdate({ borderColor: e.target.value })}
+              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Position (Wert)</label>
+          <input
+            type="text"
+            value={annotation.value ?? ''}
+            onChange={(e) => onUpdate({ value: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+          <p className="text-[11px] text-dark-textGray mt-1">{positionHelpText}</p>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Endwert (optional)</label>
+          <input
+            type="text"
+            value={annotation.endValue ?? ''}
+            onChange={(e) => onUpdate({ endValue: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+          <p className="text-[11px] text-dark-textGray mt-1">
+            Definiert ein optionales Ende, um nur einen bestimmten Abschnitt zu markieren.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Linienstärke</label>
+          <input
+            type="number"
+            min="1"
+            max="10"
+            step="1"
+            value={annotation.borderWidth ?? 2}
+            onChange={(e) => onUpdate({ borderWidth: Number(e.target.value) })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+        <div className="flex items-center space-x-2 mt-4 md:mt-6">
+          <input
+            id={`line-label-toggle-${annotation.id}`}
+            type="checkbox"
+            checked={annotation.labelEnabled || false}
+            onChange={(e) => onUpdate({ labelEnabled: e.target.checked })}
+            className="w-4 h-4 text-dark-accent1 bg-dark-bg border-gray-600 rounded focus:ring-dark-accent1"
+          />
+          <label htmlFor={`line-label-toggle-${annotation.id}`} className="text-xs text-dark-textGray">
+            Label anzeigen
+          </label>
+        </div>
+      </div>
+
+      {annotation.labelEnabled && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Text</label>
+            <input
+              type="text"
+              value={annotation.labelContent ?? ''}
+              onChange={(e) => onUpdate({ labelContent: e.target.value })}
+              className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Position</label>
+            <select
+              value={annotation.labelPosition || 'center'}
+              onChange={(e) => onUpdate({ labelPosition: e.target.value })}
+              className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            >
+              <option value="start">Start</option>
+              <option value="center">Mitte</option>
+              <option value="end">Ende</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Hintergrund</label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="color"
+                value={labelBackgroundColorValue}
+                onChange={(e) => onUpdate({ labelBackgroundColor: e.target.value })}
+                className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
+              />
+              <input
+                type="text"
+                value={annotation.labelBackgroundColor || '#0F172A'}
+                onChange={(e) => onUpdate({ labelBackgroundColor: e.target.value })}
+                className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Schriftfarbe</label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="color"
+                value={labelColorValue}
+                onChange={(e) => onUpdate({ labelColor: e.target.value })}
+                className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
+              />
+              <input
+                type="text"
+                value={annotation.labelColor || '#F8FAFC'}
+                onChange={(e) => onUpdate({ labelColor: e.target.value })}
+                className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Schriftgröße</label>
+            <input
+              type="number"
+              min="8"
+              max="32"
+              step="1"
+              value={annotation.labelFontSize ?? 12}
+              onChange={(e) => onUpdate({ labelFontSize: Number(e.target.value) })}
+              className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Innenabstand</label>
+            <input
+              type="number"
+              min="0"
+              max="32"
+              step="1"
+              value={annotation.labelPadding ?? 6}
+              onChange={(e) => onUpdate({ labelPadding: Number(e.target.value) })}
+              className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BoxAnnotationForm({ annotation, onUpdate }) {
+  const backgroundColorValue = typeof annotation.backgroundColor === 'string' && annotation.backgroundColor.startsWith('#')
+    ? annotation.backgroundColor
+    : '#3B82F6'
+  const borderColorValue = typeof annotation.borderColor === 'string' && annotation.borderColor.startsWith('#')
+    ? annotation.borderColor
+    : '#3B82F6'
+  const labelBackgroundColorValue = typeof annotation.labelBackgroundColor === 'string' && annotation.labelBackgroundColor.startsWith('#')
+    ? annotation.labelBackgroundColor
+    : '#0F172A'
+  const labelColorValue = typeof annotation.labelColor === 'string' && annotation.labelColor.startsWith('#')
+    ? annotation.labelColor
+    : '#F8FAFC'
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">X-Minimum</label>
+          <input
+            type="text"
+            value={annotation.xMin ?? ''}
+            onChange={(e) => onUpdate({ xMin: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">X-Maximum</label>
+          <input
+            type="text"
+            value={annotation.xMax ?? ''}
+            onChange={(e) => onUpdate({ xMax: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Y-Minimum</label>
+          <input
+            type="text"
+            value={annotation.yMin ?? ''}
+            onChange={(e) => onUpdate({ yMin: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Y-Maximum</label>
+          <input
+            type="text"
+            value={annotation.yMax ?? ''}
+            onChange={(e) => onUpdate({ yMax: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Füllfarbe</label>
+          <div className="flex items-center space-x-3">
+            <input
+              type="color"
+              value={backgroundColorValue}
+              onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+              className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
+            />
+            <input
+              type="text"
+              value={annotation.backgroundColor || '#3B82F6'}
+              onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Rahmenfarbe</label>
+          <div className="flex items-center space-x-3">
+            <input
+              type="color"
+              value={borderColorValue}
+              onChange={(e) => onUpdate({ borderColor: e.target.value })}
+              className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
+            />
+            <input
+              type="text"
+              value={annotation.borderColor || '#3B82F6'}
+              onChange={(e) => onUpdate({ borderColor: e.target.value })}
+              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Rahmenbreite</label>
+          <input
+            type="number"
+            min="0"
+            max="10"
+            step="1"
+            value={annotation.borderWidth ?? 1}
+            onChange={(e) => onUpdate({ borderWidth: Number(e.target.value) })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+        <div className="flex items-center space-x-2 mt-4 md:mt-6">
+          <input
+            id={`box-label-toggle-${annotation.id}`}
+            type="checkbox"
+            checked={annotation.labelEnabled || false}
+            onChange={(e) => onUpdate({ labelEnabled: e.target.checked })}
+            className="w-4 h-4 text-dark-accent1 bg-dark-bg border-gray-600 rounded focus:ring-dark-accent1"
+          />
+          <label htmlFor={`box-label-toggle-${annotation.id}`} className="text-xs text-dark-textGray">
+            Label anzeigen
+          </label>
+        </div>
+      </div>
+
+      {annotation.labelEnabled && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Text</label>
+            <input
+              type="text"
+              value={annotation.labelContent ?? ''}
+              onChange={(e) => onUpdate({ labelContent: e.target.value })}
+              className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Position</label>
+            <select
+              value={annotation.labelPosition || 'center'}
+              onChange={(e) => onUpdate({ labelPosition: e.target.value })}
+              className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            >
+              <option value="center">Mitte</option>
+              <option value="start">Start</option>
+              <option value="end">Ende</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Hintergrund</label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="color"
+                value={labelBackgroundColorValue}
+                onChange={(e) => onUpdate({ labelBackgroundColor: e.target.value })}
+                className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
+              />
+              <input
+                type="text"
+                value={annotation.labelBackgroundColor || '#0F172A'}
+                onChange={(e) => onUpdate({ labelBackgroundColor: e.target.value })}
+                className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Schriftfarbe</label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="color"
+                value={labelColorValue}
+                onChange={(e) => onUpdate({ labelColor: e.target.value })}
+                className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
+              />
+              <input
+                type="text"
+                value={annotation.labelColor || '#F8FAFC'}
+                onChange={(e) => onUpdate({ labelColor: e.target.value })}
+                className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Schriftgröße</label>
+            <input
+              type="number"
+              min="8"
+              max="32"
+              step="1"
+              value={annotation.labelFontSize ?? 12}
+              onChange={(e) => onUpdate({ labelFontSize: Number(e.target.value) })}
+              className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Innenabstand</label>
+            <input
+              type="number"
+              min="0"
+              max="32"
+              step="1"
+              value={annotation.labelPadding ?? 6}
+              onChange={(e) => onUpdate({ labelPadding: Number(e.target.value) })}
+              className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LabelAnnotationForm({ annotation, onUpdate }) {
+  const backgroundColorValue = typeof annotation.backgroundColor === 'string' && annotation.backgroundColor.startsWith('#')
+    ? annotation.backgroundColor
+    : '#0F172A'
+  const textColorValue = typeof annotation.color === 'string' && annotation.color.startsWith('#')
+    ? annotation.color
+    : '#F8FAFC'
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Text</label>
+          <input
+            type="text"
+            value={annotation.content ?? ''}
+            onChange={(e) => onUpdate({ content: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Ausrichtung</label>
+          <select
+            value={annotation.textAlign || 'center'}
+            onChange={(e) => onUpdate({ textAlign: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          >
+            <option value="start">Links</option>
+            <option value="center">Zentriert</option>
+            <option value="end">Rechts</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">X-Wert</label>
+          <input
+            type="text"
+            value={annotation.xValue ?? ''}
+            onChange={(e) => onUpdate({ xValue: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+          <p className="text-[11px] text-dark-textGray mt-1">Label-Position entlang der X-Achse.</p>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Y-Wert</label>
+          <input
+            type="text"
+            value={annotation.yValue ?? ''}
+            onChange={(e) => onUpdate({ yValue: e.target.value })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+          <p className="text-[11px] text-dark-textGray mt-1">Label-Position entlang der Y-Achse.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Hintergrundfarbe</label>
+          <div className="flex items-center space-x-3">
+            <input
+              type="color"
+              value={backgroundColorValue}
+              onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+              className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
+            />
+            <input
+              type="text"
+              value={annotation.backgroundColor || '#0F172A'}
+              onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
+              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Schriftfarbe</label>
+          <div className="flex items-center space-x-3">
+            <input
+              type="color"
+              value={textColorValue}
+              onChange={(e) => onUpdate({ color: e.target.value })}
+              className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
+            />
+            <input
+              type="text"
+              value={annotation.color || '#F8FAFC'}
+              onChange={(e) => onUpdate({ color: e.target.value })}
+              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Schriftgröße</label>
+          <input
+            type="number"
+            min="8"
+            max="48"
+            step="1"
+            value={annotation.fontSize ?? 14}
+            onChange={(e) => onUpdate({ fontSize: Number(e.target.value) })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Innenabstand</label>
+          <input
+            type="number"
+            min="0"
+            max="32"
+            step="1"
+            value={annotation.padding ?? 6}
+            onChange={(e) => onUpdate({ padding: Number(e.target.value) })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Eckenradius</label>
+          <input
+            type="number"
+            min="0"
+            max="30"
+            step="1"
+            value={annotation.borderRadius ?? 8}
+            onChange={(e) => onUpdate({ borderRadius: Number(e.target.value) })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">X-Verschiebung</label>
+          <input
+            type="number"
+            value={annotation.xAdjust ?? 0}
+            onChange={(e) => onUpdate({ xAdjust: Number(e.target.value) })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Y-Verschiebung</label>
+          <input
+            type="number"
+            value={annotation.yAdjust ?? 0}
+            onChange={(e) => onUpdate({ yAdjust: Number(e.target.value) })}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function createDefaultAnnotation(type, idOverride) {
+  const base = {
+    id: idOverride || `annotation-${Math.random().toString(36).slice(2, 10)}`,
+    type,
+    display: true
+  }
+
+  if (type === 'box') {
+    return {
+      ...base,
+      xMin: '',
+      xMax: '',
+      yMin: '',
+      yMax: '',
+      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+      borderColor: '#3B82F6',
+      borderWidth: 1,
+      labelEnabled: false,
+      labelContent: '',
+      labelPosition: 'center',
+      labelColor: '#F8FAFC',
+      labelBackgroundColor: 'rgba(15, 23, 42, 0.8)',
+      labelFontSize: 12,
+      labelPadding: 6
+    }
+  }
+
+  if (type === 'label') {
+    return {
+      ...base,
+      content: 'Neues Label',
+      xValue: '',
+      yValue: '',
+      backgroundColor: 'rgba(15, 23, 42, 0.85)',
+      color: '#F8FAFC',
+      fontSize: 14,
+      fontWeight: '600',
+      padding: 6,
+      borderRadius: 8,
+      xAdjust: 0,
+      yAdjust: 0,
+      textAlign: 'center'
+    }
+  }
+
+  return {
+    ...base,
+    orientation: 'vertical',
+    scaleID: 'x',
+    value: '',
+    endValue: '',
+    borderColor: '#F97316',
+    borderWidth: 2,
+    labelEnabled: false,
+    labelContent: '',
+    labelPosition: 'center',
+    labelColor: '#F8FAFC',
+    labelBackgroundColor: 'rgba(15, 23, 42, 0.75)',
+    labelFontSize: 12,
+    labelPadding: 6
+  }
+}
+
+function formatAnnotationType(type) {
+  switch (type) {
+    case 'box':
+      return 'Box'
+    case 'label':
+      return 'Label'
+    case 'line':
+    default:
+      return 'Linie'
+  }
 }
 
 function ArrayFieldEditor({ label, values, onChange, itemType = 'string', description }) {

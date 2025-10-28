@@ -11,6 +11,7 @@ import BubbleDatasetEditor from './BubbleDatasetEditor'
 import ScatterDatasetEditor from './ScatterDatasetEditor'
 import CoordinateDatasetEditor from './CoordinateDatasetEditor'
 import ConfirmModal from './ConfirmModal'
+import DataImportModal from './DataImportModal'
 import ColorPaletteSelector from './ColorPaletteSelector'
 import LabeledColorEditor from './LabeledColorEditor'
 import BackgroundImageEditor from './BackgroundImageEditor'
@@ -119,6 +120,7 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange, ch
 function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }) {
   const [showClearModal, setShowClearModal] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   
   const schema = chartType?.configSchema || {}
 
@@ -146,6 +148,31 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues
   const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
   const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
+
+  const supportsDataImport = usesSimpleEditor || usesDatasetEditor
+
+  const handleImportedData = (result) => {
+    if (!result) return
+
+    const payload = {
+      labels: Array.isArray(result.labels) ? result.labels : [],
+      values: Array.isArray(result.values) ? result.values : [],
+      datasets: Array.isArray(result.datasets) ? result.datasets : []
+    }
+
+    if (datasetLabelSchema) {
+      let datasetLabelValue = ''
+      if (usesSimpleEditor && result.meta?.valueColumns?.[0]) {
+        datasetLabelValue = result.meta.valueColumns[0]
+      } else if (!usesSimpleEditor && payload.datasets.length === 1) {
+        datasetLabelValue = payload.datasets[0]?.label || result.meta?.valueColumns?.[0] || ''
+      }
+      payload.datasetLabel = datasetLabelValue
+    }
+
+    onConfigChange(payload)
+    setShowImportModal(false)
+  }
 
   const handleFieldChange = (key, value) => {
     onConfigChange({ [key]: value })
@@ -390,6 +417,16 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
         variant="info"
       />
 
+      {supportsDataImport && (
+        <DataImportModal
+          isOpen={showImportModal}
+          onClose={() => setShowImportModal(false)}
+          onImport={handleImportedData}
+          allowMultipleValueColumns={usesDatasetEditor}
+          requireDatasets={usesDatasetEditor}
+        />
+      )}
+
       {schema.title && (
         <div>
           <label className="block text-sm font-medium text-dark-textLight mb-2">
@@ -406,27 +443,43 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
       )}
 
       <div className="pb-4 mb-4 border-b border-gray-700">
-        <div className="flex items-center justify-end space-x-2">
-          <button
-            onClick={() => setShowResetModal(true)}
-            className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-md transition-all flex items-center space-x-1.5 border border-gray-700"
-            title="Beispieldaten laden"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>Beispieldaten</span>
-          </button>
-          <button
-            onClick={() => setShowClearModal(true)}
-            className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-dark-bg hover:bg-red-950 rounded-md transition-all flex items-center space-x-1.5 border border-red-900 hover:border-red-800"
-            title="Alle Daten löschen"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            <span>Alle löschen</span>
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {supportsDataImport && (
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="flex items-center space-x-1.5 rounded-md border border-dark-accent1/60 bg-dark-bg px-3 py-1.5 text-xs font-medium text-dark-accent1 transition-all hover:bg-dark-accent1/10"
+                title="CSV- oder Excel-Datei importieren"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>CSV/Excel importieren</span>
+              </button>
+            )}
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setShowResetModal(true)}
+              className="flex items-center space-x-1.5 rounded-md border border-gray-700 bg-dark-bg px-3 py-1.5 text-xs font-medium text-dark-textGray transition-all hover:bg-gray-800 hover:text-dark-textLight"
+              title="Beispieldaten laden"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Beispieldaten</span>
+            </button>
+            <button
+              onClick={() => setShowClearModal(true)}
+              className="flex items-center space-x-1.5 rounded-md border border-red-900 bg-dark-bg px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:border-red-800 hover:bg-red-950 hover:text-red-300"
+              title="Alle Daten löschen"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span>Alle löschen</span>
+            </button>
+          </div>
         </div>
       </div>
 

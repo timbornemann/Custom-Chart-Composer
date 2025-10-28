@@ -1,7 +1,9 @@
 import axios from 'axios'
 
+const runtimeApiUrl = typeof window !== 'undefined' && window.__CCC_API_URL__
+
 // In dev, prefer Vite's proxy by default to avoid localhost issues on LAN
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+const API_BASE_URL = runtimeApiUrl || import.meta.env.VITE_API_URL || '/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -32,11 +34,11 @@ export const renderChart = async (chartType, config) => {
 
 export const exportChart = async (chartType, config, format = 'png', transparent = false) => {
   try {
-    const response = await api.post('/export', { 
-      chartType, 
-      config, 
+    const response = await api.post('/export', {
+      chartType,
+      config,
       format,
-      transparent 
+      transparent
     })
     return response.data.data
   } catch (error) {
@@ -46,4 +48,3 @@ export const exportChart = async (chartType, config, format = 'png', transparent
 }
 
 export default api
-

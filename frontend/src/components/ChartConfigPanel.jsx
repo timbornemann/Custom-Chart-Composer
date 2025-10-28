@@ -6,6 +6,7 @@ import SimpleDataEditor from './SimpleDataEditor'
 import ColorListEditor from './ColorListEditor'
 import RangeBarEditor from './RangeBarEditor'
 import HeatmapEditor from './HeatmapEditor'
+import CalendarHeatmapEditor from './CalendarHeatmapEditor'
 import BubbleDatasetEditor from './BubbleDatasetEditor'
 import ScatterDatasetEditor from './ScatterDatasetEditor'
 import ConfirmModal from './ConfirmModal'
@@ -116,10 +117,11 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   const hasPointValues = Array.isArray(defaultValues) && typeof sampleValue === 'object' && sampleValue !== null
   const isBubbleValues = hasPointValues && !!((config.values?.[0] ?? sampleValue)?.r || (config.values?.[0] ?? sampleValue)?.v)
   const isRangeDataset = Array.isArray(sampleDatasetEntry)
-  const isHeatmapDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
+  const isCalendarHeatmapDataset = chartType?.id === 'calendarHeatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
+  const isHeatmapDataset = chartType?.id === 'heatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
   const isBubbleDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'r' in sampleDatasetEntry && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry
-  const isScatterDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && !('r' in sampleDatasetEntry) && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry
-  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset
+  const isScatterDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && !('r' in sampleDatasetEntry) && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry && !('v' in sampleDatasetEntry)
+  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isCalendarHeatmapDataset && !isBubbleDataset && !isScatterDataset
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues
   const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
   const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
@@ -150,6 +152,15 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
           datasets={config.datasets || []}
           onLabelsChange={(labels) => onConfigChange({ labels })}
           onYLabelsChange={(yLabels) => onConfigChange({ yLabels })}
+          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+        />
+      )
+    }
+
+    if (isCalendarHeatmapDataset) {
+      return (
+        <CalendarHeatmapEditor
+          datasets={config.datasets || []}
           onDatasetsChange={(datasets) => onConfigChange({ datasets })}
         />
       )
@@ -281,6 +292,11 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   const renderValueFields = () => {
     if (!valuesSchema) return null
 
+    // Don't show values if using specialized dataset editors
+    if (isBubbleDataset || isScatterDataset || isRangeDataset || isHeatmapDataset || isCalendarHeatmapDataset) {
+      return null
+    }
+
     if (hasPointValues) {
       return (
         <PointEditor
@@ -312,31 +328,12 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   }
 
   const renderLabelFields = () => {
-    if (!labelsSchema) return null
-
-    if (usesDatasetEditor || usesSimpleEditor) {
-      return null
-    }
-
-    if (hasPointValues) {
-      return (
-        <ArrayFieldEditor
-          label="Labels"
-          values={config.labels || []}
-          onChange={(labels) => onConfigChange({ labels })}
-          itemType="string"
-        />
-      )
-    }
-
-    return (
-      <ArrayFieldEditor
-        label="Labels"
-        values={config.labels || []}
-        onChange={(labels) => onConfigChange({ labels })}
-        itemType="string"
-      />
-    )
+    // Never show labels separately - they are managed within the editors
+    // Labels are either:
+    // 1. In SimpleDataEditor (for single dataset charts)
+    // 2. In DatasetEditor (for multi-dataset charts)
+    // 3. In specialized editors (Bubble, Scatter, Range, Heatmap)
+    return null
   }
 
   return (

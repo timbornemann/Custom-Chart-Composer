@@ -13,17 +13,16 @@ export default {
       type: "array", 
       default: ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"] 
     },
-    values: { 
-      type: "array", 
-      default: [20, 20, 35, 35, 50] 
-    },
-    datasetLabel: {
-      type: "string",
-      default: "Datensatz"
-    },
-    colors: { 
-      type: "array", 
-      default: ["#8B5CF6"] 
+    datasets: {
+      type: "array",
+      default: [
+        {
+          label: "Serie 1",
+          data: [20, 20, 35, 35, 50],
+          borderColor: "#8B5CF6",
+          backgroundColor: "#8B5CF6"
+        }
+      ]
     },
     backgroundColor: {
       type: "string",

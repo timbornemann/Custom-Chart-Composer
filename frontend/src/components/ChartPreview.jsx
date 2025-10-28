@@ -315,7 +315,6 @@ function prepareChartData(chartType, config) {
       }
 
     case 'line':
-    case 'verticalLine':
       return {
         labels: config.labels || [],
         datasets: [{
@@ -333,6 +332,25 @@ function prepareChartData(chartType, config) {
           pointBorderWidth: 2
         }]
       }
+
+    case 'verticalLine':
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          labels: config.labels || [],
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            borderWidth: ds.borderWidth || config.options?.lineWidth || 3,
+            tension: config.options?.smooth ? (config.options?.tension || 0.4) : 0,
+            fill: config.options?.fill || false,
+            pointRadius: config.options?.showPoints !== false ? (config.options?.pointRadius || 5) : 0,
+            pointStyle: config.options?.pointStyle || 'circle',
+            pointBackgroundColor: ds.borderColor || ds.backgroundColor,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+          }))
+        }
+      }
+      return { labels: [], datasets: [] }
 
     case 'area':
       const areaOpacity = config.options?.fillOpacity !== undefined ? Math.round(config.options.fillOpacity * 2.55).toString(16).padStart(2, '0') : '60'
@@ -354,24 +372,25 @@ function prepareChartData(chartType, config) {
       }
 
     case 'steppedLine':
-      const steppedOpacity = config.options?.fillOpacity !== undefined ? Math.round(config.options.fillOpacity * 2.55).toString(16).padStart(2, '0') : '40'
-      return {
-        labels: config.labels || [],
-        datasets: [{
-          label: config.datasetLabel || 'Datensatz',
-          data: config.values || [],
-          backgroundColor: config.options?.fill ? (config.colors?.[0] || '#8B5CF6') + steppedOpacity : 'transparent',
-          borderColor: config.colors?.[0] || '#8B5CF6',
-          borderWidth: config.options?.lineWidth || 3,
-          stepped: true,
-          fill: config.options?.fill || false,
-          pointRadius: config.options?.showPoints !== false ? (config.options?.pointRadius || 5) : 0,
-          pointStyle: config.options?.pointStyle || 'circle',
-          pointBackgroundColor: config.colors?.[0] || '#8B5CF6',
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2
-        }]
+      if (config.datasets && Array.isArray(config.datasets)) {
+        const steppedOpacity = config.options?.fillOpacity !== undefined ? Math.round(config.options.fillOpacity * 2.55).toString(16).padStart(2, '0') : '40'
+        return {
+          labels: config.labels || [],
+          datasets: config.datasets.map(ds => ({
+            ...ds,
+            borderWidth: ds.borderWidth || config.options?.lineWidth || 3,
+            stepped: true,
+            fill: config.options?.fill || false,
+            backgroundColor: config.options?.fill ? (ds.borderColor || ds.backgroundColor || '#8B5CF6') + steppedOpacity : 'transparent',
+            pointRadius: config.options?.showPoints !== false ? (config.options?.pointRadius || 5) : 0,
+            pointStyle: config.options?.pointStyle || 'circle',
+            pointBackgroundColor: ds.borderColor || ds.backgroundColor,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+          }))
+        }
       }
+      return { labels: [], datasets: [] }
 
     case 'scatter':
       if (config.datasets && Array.isArray(config.datasets)) {
@@ -633,22 +652,25 @@ function prepareChartData(chartType, config) {
       }
 
     case 'calendarHeatmap':
-      return {
-        datasets: [{
-          label: config.datasetLabel || 'Aktivität',
-          data: config.values || [],
-          backgroundColor: function(context) {
-            const value = context.raw?.v || 0
-            const colorScale = config.colors || ['#0F172A', '#1E3A5F', '#2563EB', '#3B82F6', '#60A5FA']
-            const index = Math.min(Math.floor((value / 5) * (colorScale.length - 1)), colorScale.length - 1)
-            return colorScale[index]
-          },
-          borderWidth: 2,
-          borderColor: '#0F172A',
-          pointRadius: config.options?.cellSize || 12,
-          pointStyle: 'rect'
-        }]
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          datasets: config.datasets.map(ds => ({
+            label: ds.label || 'Aktivität',
+            data: ds.data || [],
+            backgroundColor: function(context) {
+              const value = context.raw?.v || 0
+              const colorScale = config.colors || ['#0F172A', '#1E3A5F', '#2563EB', '#3B82F6', '#60A5FA']
+              const index = Math.min(Math.floor((value / 5) * (colorScale.length - 1)), colorScale.length - 1)
+              return colorScale[index]
+            },
+            borderWidth: 2,
+            borderColor: '#0F172A',
+            pointRadius: config.options?.cellSize || 12,
+            pointStyle: 'rect'
+          }))
+        }
       }
+      return { datasets: [] }
 
     case 'streamGraph':
       if (config.datasets && Array.isArray(config.datasets)) {
@@ -723,7 +745,7 @@ function prepareChartOptions(chartType, config) {
               
               // Show dataset name if point has custom label
               if (raw.label) {
-                parts.push(`📊 ${datasetLabel}`)
+                parts.push(` ${datasetLabel}`)
               }
               
               // Bubble/Scatter/Matrix coordinates

@@ -13,17 +13,16 @@ export default {
       type: "array", 
       default: ["0°", "45°", "90°", "135°", "180°", "225°", "270°", "315°"] 
     },
-    values: { 
-      type: "array", 
-      default: [0, 70, 100, 70, 0, -70, -100, -70] 
-    },
-    datasetLabel: {
-      type: "string",
-      default: "Datensatz"
-    },
-    colors: { 
-      type: "array", 
-      default: ["#06B6D4"] 
+    datasets: {
+      type: "array",
+      default: [
+        {
+          label: "Sinus-Welle",
+          data: [0, 70, 100, 70, 0, -70, -100, -70],
+          borderColor: "#06B6D4",
+          backgroundColor: "#06B6D4"
+        }
+      ]
     },
     backgroundColor: {
       type: "string",

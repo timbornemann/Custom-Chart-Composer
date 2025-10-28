@@ -9,22 +9,20 @@ export default {
       type: "string",
       default: "Aktivitätskalender"
     },
-    labels: {
-      type: "array",
-      default: ["Woche 1", "Woche 2", "Woche 3", "Woche 4", "Woche 5", "Woche 6", "Woche 7", "Woche 8"]
-    },
-    values: {
+    datasets: {
       type: "array",
       default: [
-        { x: 0, y: 0, v: 5, label: "Woche 1 - Tag 1" }, { x: 1, y: 0, v: 8, label: "Woche 2 - Tag 1" }, { x: 2, y: 0, v: 12, label: "Woche 3 - Tag 1" },
-        { x: 0, y: 1, v: 3, label: "Woche 1 - Tag 2" }, { x: 1, y: 1, v: 15, label: "Woche 2 - Tag 2" }, { x: 2, y: 1, v: 7, label: "Woche 3 - Tag 2" },
-        { x: 0, y: 2, v: 20, label: "Woche 1 - Tag 3" }, { x: 1, y: 2, v: 10, label: "Woche 2 - Tag 3" }, { x: 2, y: 2, v: 18, label: "Woche 3 - Tag 3" },
-        { x: 0, y: 3, v: 14, label: "Woche 1 - Tag 4" }, { x: 1, y: 3, v: 9, label: "Woche 2 - Tag 4" }, { x: 2, y: 3, v: 22, label: "Woche 3 - Tag 4" }
+        {
+          label: "Aktivität",
+          data: [
+            { x: 0, y: 0, v: 5, label: "Woche 1 - Tag 1" }, { x: 1, y: 0, v: 8, label: "Woche 2 - Tag 1" }, { x: 2, y: 0, v: 12, label: "Woche 3 - Tag 1" },
+            { x: 0, y: 1, v: 3, label: "Woche 1 - Tag 2" }, { x: 1, y: 1, v: 15, label: "Woche 2 - Tag 2" }, { x: 2, y: 1, v: 7, label: "Woche 3 - Tag 2" },
+            { x: 0, y: 2, v: 20, label: "Woche 1 - Tag 3" }, { x: 1, y: 2, v: 10, label: "Woche 2 - Tag 3" }, { x: 2, y: 2, v: 18, label: "Woche 3 - Tag 3" },
+            { x: 0, y: 3, v: 14, label: "Woche 1 - Tag 4" }, { x: 1, y: 3, v: 9, label: "Woche 2 - Tag 4" }, { x: 2, y: 3, v: 22, label: "Woche 3 - Tag 4" }
+          ],
+          backgroundColor: "#3B82F6"
+        }
       ]
-    },
-    datasetLabel: {
-      type: "string",
-      default: "Aktivität"
     },
     colors: {
       type: "array",

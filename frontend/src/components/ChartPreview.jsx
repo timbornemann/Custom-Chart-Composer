@@ -931,7 +931,7 @@ function transformLineAnnotation(annotation, chartType) {
   if (annotation.labelEnabled && annotation.labelContent) {
     const labelFontSize = Number(annotation.labelFontSize)
     result.label = {
-      display: true,
+      display: annotation.labelDisplay !== 'legend', // Hide line label if only legend is selected
       content: annotation.labelContent,
       position: annotation.labelPosition || 'center',
       backgroundColor: annotation.labelBackgroundColor || 'rgba(15, 23, 42, 0.75)',
@@ -1073,6 +1073,7 @@ function buildAnnotationConfig(annotations = [], chartType) {
   }
 
   const entries = {}
+  const legendEntries = []
 
   annotations.forEach((annotation, index) => {
     if (!annotation || typeof annotation !== 'object') {
@@ -1097,10 +1098,43 @@ function buildAnnotationConfig(annotations = [], chartType) {
 
     if (parsed) {
       entries[id] = parsed
+      
+      // Handle legend entries for annotations
+      if (annotation.legendEntry && annotation.legendEntry.enabled) {
+        legendEntries.push({
+          text: annotation.legendEntry.label,
+          fillStyle: annotation.borderColor || annotation.color || '#F97316',
+          strokeStyle: annotation.borderColor || annotation.color || '#F97316',
+          lineWidth: annotation.borderWidth || 2,
+          lineDash: annotation.borderDash || [5, 5],
+          hidden: !annotation.display
+        })
+      }
+      
+      // Handle labelDisplay option for line annotations
+      if (annotation.type === 'line' && annotation.labelDisplay) {
+        if (annotation.labelDisplay === 'legend' || annotation.labelDisplay === 'both') {
+          legendEntries.push({
+            text: annotation.label?.content || 'Annotation',
+            fillStyle: annotation.borderColor || '#F97316',
+            strokeStyle: annotation.borderColor || '#F97316',
+            lineWidth: annotation.borderWidth || 2,
+            lineDash: annotation.borderDash || [5, 5],
+            hidden: !annotation.display
+          })
+        }
+      }
     }
   })
 
-  return Object.keys(entries).length > 0 ? entries : null
+  const result = Object.keys(entries).length > 0 ? entries : null
+  
+  // Add legend entries to the result if any exist
+  if (result && legendEntries.length > 0) {
+    result._legendEntries = legendEntries
+  }
+
+  return result
 }
 
 function prepareChartOptions(chartType, config, backgroundImageObj = null) {
@@ -1203,6 +1237,42 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
   baseOptions.plugins.annotation = annotationConfig
     ? { annotations: annotationConfig }
     : { annotations: {} }
+
+  // Handle legend entries from annotations
+  if (annotationConfig && annotationConfig._legendEntries) {
+    const legendEntries = annotationConfig._legendEntries
+    delete annotationConfig._legendEntries // Remove from annotation config
+    
+    // Extend the legend with annotation entries
+    if (!baseOptions.plugins.legend) {
+      baseOptions.plugins.legend = {}
+    }
+    
+    // Add custom legend labels for annotations
+    baseOptions.plugins.legend.labels = {
+      ...baseOptions.plugins.legend.labels,
+      generateLabels: function(chart) {
+        const original = ChartJS.defaults.plugins.legend.labels.generateLabels
+        const labels = original.call(this, chart)
+        
+        // Add annotation legend entries
+        legendEntries.forEach(entry => {
+          labels.push({
+            text: entry.text,
+            fillStyle: entry.fillStyle,
+            strokeStyle: entry.strokeStyle,
+            lineWidth: entry.lineWidth,
+            lineDash: entry.lineDash,
+            hidden: entry.hidden,
+            datasetIndex: -1, // Mark as annotation
+            index: -1
+          })
+        })
+        
+        return labels
+      }
+    }
+  }
 
   // Bar charts
   if (['bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'boxPlot', 'violin', 'candlestick', 'sankey'].includes(chartType.id)) {

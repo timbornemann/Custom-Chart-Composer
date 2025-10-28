@@ -718,6 +718,7 @@ function OptionsTab({ chartType, config, onConfigChange }) {
               : []}
           onChange={(value) => handleOptionChange('annotations', value)}
           chartType={chartType}
+          config={config}
         />
       )}
 
@@ -891,7 +892,9 @@ function OptionsTab({ chartType, config, onConfigChange }) {
   )
 }
 
-function AnnotationEditor({ annotations, onChange, chartType }) {
+function AnnotationEditor({ annotations, onChange, chartType, config }) {
+  const [showAutoAnnotations, setShowAutoAnnotations] = useState(false)
+  
   const normalizedAnnotations = Array.isArray(annotations)
     ? annotations.map((annotation, index) => {
         if (annotation && typeof annotation === 'object' && !annotation.id) {
@@ -970,11 +973,26 @@ function AnnotationEditor({ annotations, onChange, chartType }) {
           >
             + Label
           </button>
+          <button
+            type="button"
+            onClick={() => setShowAutoAnnotations(!showAutoAnnotations)}
+            className="px-3 py-1.5 text-xs font-medium text-dark-textLight bg-blue-600/20 border border-blue-500/40 rounded hover:border-blue-500 transition-colors"
+          >
+            📊 Auto-Statistiken
+          </button>
         </div>
       </div>
 
+      {showAutoAnnotations && (
+        <AutoAnnotationPanel 
+          onAddAnnotations={(newAnnotations) => onChange([...normalizedAnnotations, ...newAnnotations])}
+          chartType={chartType}
+          config={config}
+        />
+      )}
+
       <div className="mt-4 space-y-3">
-        {normalizedAnnotations.length === 0 && (
+        {normalizedAnnotations.length === 0 && !showAutoAnnotations && (
           <div className="text-xs text-dark-textGray bg-dark-secondary/40 border border-dashed border-gray-700 rounded-lg p-4 text-center">
             Noch keine Annotationen hinzugefügt.
           </div>
@@ -1183,6 +1201,23 @@ function LineAnnotationForm({ annotation, onUpdate }) {
               <option value="center">Mitte</option>
               <option value="end">Ende</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Anzeige</label>
+            <select
+              value={annotation.labelDisplay || 'line'}
+              onChange={(e) => onUpdate({ labelDisplay: e.target.value })}
+              className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            >
+              <option value="line">Nur an der Linie</option>
+              <option value="legend">Nur in der Legende</option>
+              <option value="both">An der Linie und in der Legende</option>
+            </select>
+            <p className="text-[11px] text-dark-textGray mt-1">
+              {annotation.labelDisplay === 'line' && 'Label wird nur direkt an der Linie angezeigt'}
+              {annotation.labelDisplay === 'legend' && 'Label wird nur in der Chart-Legende angezeigt'}
+              {annotation.labelDisplay === 'both' && 'Label wird sowohl an der Linie als auch in der Legende angezeigt'}
+            </p>
           </div>
           <div>
             <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Hintergrund</label>
@@ -2379,6 +2414,401 @@ function formatLabel(key) {
     yAxisLabel: 'Y-Achsen-Label'
   }
   return labels[key] || key
+}
+
+// AutoAnnotationPanel Component
+function AutoAnnotationPanel({ onAddAnnotations, chartType, config }) {
+  const [selectedDataset, setSelectedDataset] = useState('')
+  const [selectedStatistic, setSelectedStatistic] = useState('mean')
+  const [color, setColor] = useState('#F97316')
+  const [multipleAnnotations, setMultipleAnnotations] = useState([])
+
+  // Extract numeric data from various chart data formats
+  const extractNumericData = (chartType, config) => {
+    if (!config) return []
+
+    const datasets = []
+
+    // Handle different chart data formats
+    switch (chartType.id) {
+      case 'bar':
+      case 'horizontalBar':
+      case 'line':
+      case 'area':
+      case 'pie':
+      case 'donut':
+      case 'radar':
+      case 'polarArea':
+      case 'semiCircle':
+      case 'gauge':
+      case 'sunburst':
+        // Simple format: config.values + config.datasetLabel
+        if (config.values && Array.isArray(config.values)) {
+          datasets.push({
+            label: config.datasetLabel || 'Datensatz',
+            data: config.values.filter(val => typeof val === 'number' && !isNaN(val))
+          })
+        }
+        break
+
+      case 'stackedBar':
+      case 'groupedBar':
+      case 'percentageBar':
+      case 'segmentedBar':
+      case 'multiLine':
+      case 'mixed':
+      case 'smoothLine':
+      case 'dashedLine':
+      case 'curvedArea':
+      case 'steppedLine':
+      case 'verticalLine':
+      case 'streamGraph':
+      case 'nestedDonut':
+        // Multi-dataset format: config.datasets
+        if (config.datasets && Array.isArray(config.datasets)) {
+          config.datasets.forEach((ds, index) => {
+            if (ds.data && Array.isArray(ds.data)) {
+              datasets.push({
+                label: ds.label || `Dataset ${index + 1}`,
+                data: ds.data.filter(val => typeof val === 'number' && !isNaN(val))
+              })
+            }
+          })
+        }
+        break
+
+      case 'scatter':
+      case 'bubble':
+      case 'heatmap':
+      case 'matrix':
+      case 'coordinate':
+        // Scatter format: config.datasets with x,y coordinates
+        if (config.datasets && Array.isArray(config.datasets)) {
+          config.datasets.forEach((ds, index) => {
+            if (ds.data && Array.isArray(ds.data)) {
+              // Extract y-values from scatter data
+              const yValues = ds.data.map(point => {
+                if (typeof point === 'object' && point !== null) {
+                  return point.y || point.v || point.value
+                }
+                return point
+              }).filter(val => typeof val === 'number' && !isNaN(val))
+              
+              if (yValues.length > 0) {
+                datasets.push({
+                  label: ds.label || `Dataset ${index + 1}`,
+                  data: yValues
+                })
+              }
+            }
+          })
+        }
+        break
+
+      case 'boxPlot':
+      case 'violin':
+        // Box plot format: config.datasets with statistical data
+        if (config.datasets && Array.isArray(config.datasets)) {
+          config.datasets.forEach((ds, index) => {
+            if (ds.data && Array.isArray(ds.data)) {
+              // Extract median values from box plot data
+              const medianValues = ds.data.map(box => {
+                if (typeof box === 'object' && box !== null) {
+                  return box.median || box.q2 || box.middle
+                }
+                return box
+              }).filter(val => typeof val === 'number' && !isNaN(val))
+              
+              if (medianValues.length > 0) {
+                datasets.push({
+                  label: ds.label || `Dataset ${index + 1}`,
+                  data: medianValues
+                })
+              }
+            }
+          })
+        }
+        break
+
+      default:
+        // Fallback: try to find any numeric data
+        if (config.values && Array.isArray(config.values)) {
+          datasets.push({
+            label: config.datasetLabel || 'Datensatz',
+            data: config.values.filter(val => typeof val === 'number' && !isNaN(val))
+          })
+        }
+        if (config.datasets && Array.isArray(config.datasets)) {
+          config.datasets.forEach((ds, index) => {
+            if (ds.data && Array.isArray(ds.data)) {
+              datasets.push({
+                label: ds.label || `Dataset ${index + 1}`,
+                data: ds.data.filter(val => typeof val === 'number' && !isNaN(val))
+              })
+            }
+          })
+        }
+    }
+
+    return datasets
+  }
+
+  // Get current chart data from the config
+  const getChartData = () => {
+    const datasets = extractNumericData(chartType, config)
+    return { labels: config.labels || [], datasets }
+  }
+
+  const calculateStatistic = (data, statistic) => {
+    if (!Array.isArray(data) || data.length === 0) return null
+    
+    const numericData = data.filter(val => typeof val === 'number' && !isNaN(val))
+    if (numericData.length === 0) return null
+
+    switch (statistic) {
+      case 'mean':
+        return numericData.reduce((sum, val) => sum + val, 0) / numericData.length
+      case 'median':
+        const sorted = [...numericData].sort((a, b) => a - b)
+        const mid = Math.floor(sorted.length / 2)
+        return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+      case 'min':
+        return Math.min(...numericData)
+      case 'max':
+        return Math.max(...numericData)
+      case 'sum':
+        return numericData.reduce((sum, val) => sum + val, 0)
+      case 'std':
+        const mean = numericData.reduce((sum, val) => sum + val, 0) / numericData.length
+        const variance = numericData.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / numericData.length
+        return Math.sqrt(variance)
+      default:
+        return null
+    }
+  }
+
+  const handleAddStatisticLine = () => {
+    const chartData = getChartData()
+    const dataset = chartData.datasets.find(ds => ds.label === selectedDataset)
+    
+    if (!dataset || !Array.isArray(dataset.data)) {
+      alert('Bitte wählen Sie ein gültiges Dataset aus.')
+      return
+    }
+
+    const value = calculateStatistic(dataset.data, selectedStatistic)
+    if (value === null) {
+      alert('Keine gültigen numerischen Daten gefunden.')
+      return
+    }
+
+    const statisticNames = {
+      mean: 'Durchschnitt',
+      median: 'Median',
+      min: 'Minimum',
+      max: 'Maximum',
+      sum: 'Summe',
+      std: 'Standardabweichung'
+    }
+
+    const annotation = {
+      id: `auto-${selectedStatistic}-${Date.now()}`,
+      type: 'line',
+      display: true,
+      orientation: 'horizontal',
+      scaleID: 'y',
+      value: value,
+      borderColor: color,
+      borderWidth: 2,
+      borderDash: [5, 5],
+      label: {
+        content: `${statisticNames[selectedStatistic]}: ${value.toFixed(2)}`,
+        enabled: true,
+        position: 'end',
+        backgroundColor: color,
+        color: '#FFFFFF',
+        font: {
+          size: 12,
+          weight: 'bold'
+        }
+      }
+    }
+
+    // Add to multiple annotations list
+    const newAnnotation = {
+      ...annotation,
+      datasetLabel: selectedDataset,
+      statisticType: selectedStatistic,
+      color: color
+    }
+    
+    setMultipleAnnotations(prev => [...prev, newAnnotation])
+  }
+
+  const handleAddAllAnnotations = () => {
+    if (multipleAnnotations.length === 0) {
+      alert('Keine Annotationen zum Hinzufügen vorhanden.')
+      return
+    }
+
+    const annotationsToAdd = multipleAnnotations.map(annotation => ({
+      id: annotation.id,
+      type: annotation.type,
+      display: annotation.display,
+      orientation: annotation.orientation,
+      scaleID: annotation.scaleID,
+      value: annotation.value,
+      borderColor: annotation.borderColor,
+      borderWidth: annotation.borderWidth,
+      borderDash: annotation.borderDash,
+      label: annotation.label
+    }))
+
+    onAddAnnotations(annotationsToAdd)
+    setMultipleAnnotations([])
+    setSelectedDataset('')
+  }
+
+  const handleRemoveFromMultiple = (annotationId) => {
+    setMultipleAnnotations(prev => prev.filter(ann => ann.id !== annotationId))
+  }
+
+  const handleClearAll = () => {
+    setMultipleAnnotations([])
+  }
+
+  const statistics = [
+    { value: 'mean', label: 'Durchschnitt (Mean)', description: 'Arithmetisches Mittel aller Werte' },
+    { value: 'median', label: 'Median', description: 'Mittlerer Wert der sortierten Daten' },
+    { value: 'min', label: 'Minimum', description: 'Kleinster Wert' },
+    { value: 'max', label: 'Maximum', description: 'Größter Wert' },
+    { value: 'sum', label: 'Summe', description: 'Summe aller Werte' },
+    { value: 'std', label: 'Standardabweichung', description: 'Streuung der Daten' }
+  ]
+
+  return (
+    <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+      <h4 className="text-sm font-medium text-blue-300 mb-3">📊 Automatische Statistiken</h4>
+      <p className="text-xs text-blue-200 mb-4">
+        Erstelle automatisch Linien für wichtige statistische Werte basierend auf Ihren Daten.
+      </p>
+
+      <div className="space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-blue-300 mb-1">Dataset</label>
+          <select
+            value={selectedDataset}
+            onChange={(e) => setSelectedDataset(e.target.value)}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
+          >
+            <option value="">Dataset auswählen...</option>
+            {getChartData().datasets.map((dataset, index) => (
+              <option key={index} value={dataset.label}>
+                {dataset.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-blue-300 mb-1">Statistik</label>
+          <select
+            value={selectedStatistic}
+            onChange={(e) => setSelectedStatistic(e.target.value)}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
+          >
+            {statistics.map((stat) => (
+              <option key={stat.value} value={stat.value}>
+                {stat.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-blue-200 mt-1">
+            {statistics.find(s => s.value === selectedStatistic)?.description}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-blue-300 mb-1">Farbe</label>
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="w-full h-10 bg-dark-bg border border-gray-700 rounded focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+          <div className="flex items-end">
+            <p className="text-xs text-blue-200">
+              Label-Text wird automatisch generiert. Position kann später in der Annotation-Bearbeitung angepasst werden.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={handleAddStatisticLine}
+          disabled={!selectedDataset}
+          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
+        >
+          📈 Statistik-Linie hinzufügen
+        </button>
+
+        {/* Multiple Annotations Preview */}
+        {multipleAnnotations.length > 0 && (
+          <div className="mt-4 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-sm font-medium text-blue-300">
+                Vorschau ({multipleAnnotations.length} Annotationen)
+              </h5>
+              <button
+                onClick={handleClearAll}
+                className="text-xs text-red-400 hover:text-red-300"
+              >
+                Alle löschen
+              </button>
+            </div>
+            
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {multipleAnnotations.map((annotation, index) => (
+                <div key={annotation.id} className="flex items-center justify-between bg-blue-500/10 rounded p-2">
+                  <div className="flex items-center space-x-2">
+                    <div 
+                      className="w-3 h-3 rounded-full border-2"
+                      style={{ borderColor: annotation.color }}
+                    />
+                    <span className="text-xs text-blue-200">
+                      {annotation.datasetLabel}: {annotation.statisticType} = {annotation.value.toFixed(2)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveFromMultiple(annotation.id)}
+                    className="text-xs text-red-400 hover:text-red-300"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            
+            <div className="flex space-x-2 mt-3">
+              <button
+                onClick={handleAddAllAnnotations}
+                className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors text-sm"
+              >
+                ✅ Alle hinzufügen ({multipleAnnotations.length})
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+AutoAnnotationPanel.propTypes = {
+  onAddAnnotations: PropTypes.func.isRequired,
+  chartType: PropTypes.object,
+  config: PropTypes.object.isRequired
 }
 
 const chartTypeShape = PropTypes.shape({

@@ -34,9 +34,49 @@ Ein modernes, webbasiertes Tool zur einfachen Erstellung ästhetisch ansprechend
 - Docker & Docker Compose (für Container-Deployment)
 - npm oder yarn
 
-## 🚀 Schnellstart
+## 🚀 Schnellstart - Schritt für Schritt
 
-### Option 1: Docker (Empfohlen)
+### Option 1: Automatisch (Empfohlen)
+
+**Windows:**
+```cmd
+# Doppelklick auf start-dev.bat
+# oder im Terminal:
+start-dev.bat
+```
+
+**Linux/Mac:**
+```bash
+# Ausführbar machen
+chmod +x start-dev.sh
+
+# Starten
+./start-dev.sh
+```
+
+### Option 2: Manuell - Schritt für Schritt
+
+**Schritt 1: Backend starten**
+```powershell
+cd backend
+npm install
+npm run dev
+```
+*Warten Sie bis "Server running on port 3003" angezeigt wird*
+
+**Schritt 2: Frontend starten (neues Terminal)**
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+*Warten Sie bis "Local: http://localhost:5173" angezeigt wird*
+
+**Schritt 3: Anwendung öffnen**
+- Öffnen Sie http://localhost:5173 in Ihrem Browser
+- Die Anwendung ist jetzt bereit!
+
+### Option 3: Docker (Empfohlen für Production)
 
 ```bash
 # Repository klonen
@@ -49,71 +89,107 @@ docker-compose up --build
 # App öffnen unter http://localhost:3003
 ```
 
-### Option 2: Lokale Entwicklung
-
-#### Windows
-
-```bash
-# Doppelklick auf start-dev.bat
-# oder im Terminal:
-start-dev.bat
-```
-
-#### Linux/Mac
-
-```bash
-# Ausführbar machen
-chmod +x start-dev.sh
-
-# Starten
-./start-dev.sh
-```
-
-#### Manuell
-
-```bash
-# Backend starten
-cd backend
-npm install
-npm run dev
-
-# In einem neuen Terminal: Frontend starten
-cd frontend
-npm install
-npm run dev
-```
-
 **Frontend**: http://localhost:5173
 **Backend API**: http://localhost:3003
+
+## 🔧 Troubleshooting
+
+### Häufige Probleme
+
+**Problem: "&&" ist kein gültiges Anweisungstrennzeichen**
+- **Lösung**: Verwenden Sie PowerShell oder CMD-Befehle einzeln, nicht mit `&&`
+
+**Problem: Port bereits belegt**
+- **Lösung**: Beenden Sie andere Anwendungen auf Port 3003 oder 5173, oder ändern Sie die Ports in den Konfigurationsdateien
+
+**Problem: npm install schlägt fehl**
+- **Lösung**: 
+  ```powershell
+  npm cache clean --force
+  npm install
+  ```
+
+**Problem: Frontend lädt nicht**
+- **Lösung**: Stellen Sie sicher, dass das Backend auf Port 3003 läuft
+
+**Problem: Electron Build schlägt fehl**
+- **Lösung**: 
+  ```powershell
+  cd desktop/electron
+  npm install
+  npm run build:frontend
+  npm run build:win
+  ```
 
 ## 🖥️ Electron Desktop (Windows)
 
 Die Desktop-Variante nutzt denselben Express-Server und das gebaute Vite-Frontend wie die Docker- bzw. Web-Version. Alle Änderungen an Backend, Frontend oder den Modulen wirken sich somit automatisch auch auf die Electron-App aus. Der Docker-Workflow bleibt unverändert funktionsfähig.
 
-### Vorbereitung
+### Vorbereitung (PowerShell)
 
-```bash
+```powershell
 # Abhängigkeiten installieren
-cd backend && npm install && cd ..
-cd frontend && npm install && cd ..
+cd backend
+npm install
+cd ..
+
+cd frontend
+npm install
+cd ..
 
 # Electron-Hülle installieren
 cd desktop/electron
 npm install
 ```
 
-### Windows-Build erstellen
+### Vorbereitung (CMD)
 
-```bash
+```cmd
+# Abhängigkeiten installieren
+cd backend
+npm install
+cd ..
+
+cd frontend
+npm install
+cd ..
+
+# Electron-Hülle installieren
 cd desktop/electron
-npm run build:win        # erzeugt frontend/dist und erstellt einen signierfreien NSIS-Installer in desktop/electron/dist
+npm install
+```
+
+### Windows-Build erstellen (PowerShell)
+
+```powershell
+cd desktop/electron
+npm run build:win
+```
+
+### Windows-Build erstellen (CMD)
+
+```cmd
+cd desktop/electron
+npm run build:win
 ```
 
 Der fertige Installer befindet sich im Verzeichnis `desktop/electron/dist`. Für andere Plattformen kann `npm run build` mit zusätzlichen Targets aus `electron-builder` verwendet werden.
 
-### Entwicklung im Desktop-Kontext
+### Entwicklung im Desktop-Kontext (PowerShell)
 
-```bash
+```powershell
+# Frontend-Dev-Server starten
+cd frontend
+npm run dev
+
+# In einem zweiten Terminal das Electron-Fenster öffnen (verwendet denselben Dev-Server)
+cd ../desktop/electron
+npm run dev
+```
+
+### Entwicklung im Desktop-Kontext (CMD)
+
+```cmd
 # Frontend-Dev-Server starten
 cd frontend
 npm run dev
@@ -447,25 +523,53 @@ docker-compose down
 
 ## 🛠️ Entwicklung
 
-### Backend Development
+### Backend Development (PowerShell)
 
-```bash
+```powershell
 cd backend
 npm install
 npm run dev  # mit Nodemon (Hot-Reload)
 ```
 
-### Frontend Development
+### Frontend Development (PowerShell)
 
-```bash
+```powershell
 cd frontend
 npm install
 npm run dev  # Vite Dev Server
 ```
 
-### Build für Production
+### Build für Production (PowerShell)
 
-```bash
+```powershell
+# Frontend
+cd frontend
+npm run build
+
+# Backend (keine Build erforderlich)
+cd backend
+npm install --production
+```
+
+### Backend Development (CMD)
+
+```cmd
+cd backend
+npm install
+npm run dev  # mit Nodemon (Hot-Reload)
+```
+
+### Frontend Development (CMD)
+
+```cmd
+cd frontend
+npm install
+npm run dev  # Vite Dev Server
+```
+
+### Build für Production (CMD)
+
+```cmd
 # Frontend
 cd frontend
 npm run build

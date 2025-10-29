@@ -1,3 +1,5 @@
+import EnhancedColorPicker from './EnhancedColorPicker'
+
 export default function ColorListEditor({ colors, onColorsChange }) {
   const addColor = () => {
     const defaultColors = [
@@ -35,19 +37,15 @@ export default function ColorListEditor({ colors, onColorsChange }) {
       <div className="space-y-2">
         {(colors || []).map((color, idx) => (
           <div key={idx} className="flex items-center space-x-2">
-            <input
-              type="color"
-              value={color}
-              onChange={(e) => updateColor(idx, e.target.value)}
-              className="w-12 h-10 rounded border border-gray-700 cursor-pointer"
-            />
-            <input
-              type="text"
-              value={color}
-              onChange={(e) => updateColor(idx, e.target.value)}
-              placeholder="#FF0000"
-              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
-            />
+            <div className="flex-1">
+              <EnhancedColorPicker
+                value={color}
+                onChange={(newColor) => updateColor(idx, newColor)}
+                label={`Farbe ${idx + 1}`}
+                size="md"
+                showLabel={false}
+              />
+            </div>
             <button
               onClick={() => removeColor(idx)}
               className="px-3 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded transition-all"

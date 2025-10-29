@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import EnhancedColorPicker from './EnhancedColorPicker'
 
 function getRandomColor() {
   const colors = [
@@ -106,11 +107,11 @@ export default function ScatterDatasetEditor({ datasets, onDatasetsChange }) {
                       className="flex-1 px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-medium"
                     />
                     <div className="flex items-center space-x-2">
-                      <input
-                        type="color"
+                      <EnhancedColorPicker
                         value={dataset.backgroundColor || '#8B5CF6'}
-                        onChange={(e) => updateDataset(dsIdx, 'backgroundColor', e.target.value)}
-                        className="w-10 h-10 rounded border border-gray-700 cursor-pointer"
+                        onChange={(newColor) => updateDataset(dsIdx, 'backgroundColor', newColor)}
+                        showLabel={false}
+                        size="sm"
                       />
                       <button
                         onClick={() => setExpandedDataset(expandedDataset === dsIdx ? -1 : dsIdx)}

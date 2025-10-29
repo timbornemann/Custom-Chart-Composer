@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import EnhancedColorPicker from './EnhancedColorPicker'
 
 export default function DatasetEditor({ datasets, labels, onDatasetsChange, onLabelsChange }) {
   const [expandedDataset, setExpandedDataset] = useState(0)
@@ -191,24 +192,18 @@ export default function DatasetEditor({ datasets, labels, onDatasetsChange, onLa
                 
                 {/* Compact Styling Controls */}
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-dark-textGray mb-1 block">Füllfarbe</label>
-                    <input
-                      type="color"
-                      value={dataset.backgroundColor || '#3B82F6'}
-                      onChange={(e) => updateDataset(dsIdx, 'backgroundColor', e.target.value)}
-                      className="w-full h-10 rounded border border-gray-700 cursor-pointer"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-dark-textGray mb-1 block">Randfarbe</label>
-                    <input
-                      type="color"
-                      value={dataset.borderColor || dataset.backgroundColor || '#3B82F6'}
-                      onChange={(e) => updateDataset(dsIdx, 'borderColor', e.target.value)}
-                      className="w-full h-10 rounded border border-gray-700 cursor-pointer"
-                    />
-                  </div>
+                  <EnhancedColorPicker
+                    value={dataset.backgroundColor || '#3B82F6'}
+                    onChange={(newColor) => updateDataset(dsIdx, 'backgroundColor', newColor)}
+                    label="Füllfarbe"
+                    size="sm"
+                  />
+                  <EnhancedColorPicker
+                    value={dataset.borderColor || dataset.backgroundColor || '#3B82F6'}
+                    onChange={(newColor) => updateDataset(dsIdx, 'borderColor', newColor)}
+                    label="Randfarbe"
+                    size="sm"
+                  />
                 </div>
               </div>
 

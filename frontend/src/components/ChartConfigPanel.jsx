@@ -15,6 +15,7 @@ import DataImportModal from './DataImportModal'
 import ColorPaletteSelector from './ColorPaletteSelector'
 import LabeledColorEditor from './LabeledColorEditor'
 import BackgroundImageEditor from './BackgroundImageEditor'
+import EnhancedColorPicker from './EnhancedColorPicker'
 import { useExport } from '../hooks/useExport'
 import ExportPreviewModal from './ExportPreviewModal'
 
@@ -780,22 +781,12 @@ function StylingTab({ chartType, config, onConfigChange }) {
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-dark-textGray mb-1 block">Schriftfarbe</label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="color"
-                      value={getFontStyle('title', 'color', '#F8FAFC')}
-                      onChange={(e) => handleFontStyleChange('title', 'color', e.target.value)}
-                      className="w-12 h-10 rounded border border-gray-700 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={getFontStyle('title', 'color', '#F8FAFC')}
-                      onChange={(e) => handleFontStyleChange('title', 'color', e.target.value)}
-                      className="flex-1 px-2 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-xs font-mono"
-                      placeholder="#F8FAFC"
-                    />
-                  </div>
+                  <EnhancedColorPicker
+                    value={getFontStyle('title', 'color', '#F8FAFC')}
+                    onChange={(newColor) => handleFontStyleChange('title', 'color', newColor)}
+                    label="Schriftfarbe"
+                    size="sm"
+                  />
                 </div>
                 <div>
                   <label className="text-xs text-dark-textGray mb-1 block">Schriftart</label>
@@ -821,22 +812,12 @@ function StylingTab({ chartType, config, onConfigChange }) {
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-dark-textGray mb-1 block">Schriftfarbe</label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="color"
-                      value={getFontStyle('legend', 'color', '#F8FAFC')}
-                      onChange={(e) => handleFontStyleChange('legend', 'color', e.target.value)}
-                      className="w-12 h-10 rounded border border-gray-700 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={getFontStyle('legend', 'color', '#F8FAFC')}
-                      onChange={(e) => handleFontStyleChange('legend', 'color', e.target.value)}
-                      className="flex-1 px-2 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-xs font-mono"
-                      placeholder="#F8FAFC"
-                    />
-                  </div>
+                  <EnhancedColorPicker
+                    value={getFontStyle('legend', 'color', '#F8FAFC')}
+                    onChange={(newColor) => handleFontStyleChange('legend', 'color', newColor)}
+                    label="Schriftfarbe"
+                    size="sm"
+                  />
                 </div>
                 <div>
                   <label className="text-xs text-dark-textGray mb-1 block">Schriftart</label>
@@ -865,22 +846,12 @@ function StylingTab({ chartType, config, onConfigChange }) {
                   <label className="text-xs text-dark-textGray mb-1 block">X-Achse ({config.options.xAxisLabel})</label>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-dark-textGray mb-1 block">Schriftfarbe</label>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="color"
-                          value={getFontStyle('xAxis', 'color', '#F8FAFC')}
-                          onChange={(e) => handleFontStyleChange('xAxis', 'color', e.target.value)}
-                          className="w-12 h-10 rounded border border-gray-700 cursor-pointer"
-                        />
-                        <input
-                          type="text"
-                          value={getFontStyle('xAxis', 'color', '#F8FAFC')}
-                          onChange={(e) => handleFontStyleChange('xAxis', 'color', e.target.value)}
-                          className="flex-1 px-2 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-xs font-mono"
-                          placeholder="#F8FAFC"
-                        />
-                      </div>
+                      <EnhancedColorPicker
+                        value={getFontStyle('xAxis', 'color', '#F8FAFC')}
+                        onChange={(newColor) => handleFontStyleChange('xAxis', 'color', newColor)}
+                        label="Schriftfarbe"
+                        size="sm"
+                      />
                     </div>
                     <div>
                       <label className="text-xs text-dark-textGray mb-1 block">Schriftart</label>
@@ -902,22 +873,12 @@ function StylingTab({ chartType, config, onConfigChange }) {
                   <label className="text-xs text-dark-textGray mb-1 block">Y-Achse ({config.options.yAxisLabel})</label>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-dark-textGray mb-1 block">Schriftfarbe</label>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="color"
-                          value={getFontStyle('yAxis', 'color', '#F8FAFC')}
-                          onChange={(e) => handleFontStyleChange('yAxis', 'color', e.target.value)}
-                          className="w-12 h-10 rounded border border-gray-700 cursor-pointer"
-                        />
-                        <input
-                          type="text"
-                          value={getFontStyle('yAxis', 'color', '#F8FAFC')}
-                          onChange={(e) => handleFontStyleChange('yAxis', 'color', e.target.value)}
-                          className="flex-1 px-2 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-xs font-mono"
-                          placeholder="#F8FAFC"
-                        />
-                      </div>
+                      <EnhancedColorPicker
+                        value={getFontStyle('yAxis', 'color', '#F8FAFC')}
+                        onChange={(newColor) => handleFontStyleChange('yAxis', 'color', newColor)}
+                        label="Schriftfarbe"
+                        size="sm"
+                      />
                     </div>
                     <div>
                       <label className="text-xs text-dark-textGray mb-1 block">Schriftart</label>
@@ -945,22 +906,12 @@ function StylingTab({ chartType, config, onConfigChange }) {
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-dark-textGray mb-1 block">Schriftfarbe</label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="color"
-                      value={getFontStyle('valueLabels', 'color', '#F8FAFC')}
-                      onChange={(e) => handleFontStyleChange('valueLabels', 'color', e.target.value)}
-                      className="w-12 h-10 rounded border border-gray-700 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={getFontStyle('valueLabels', 'color', '#F8FAFC')}
-                      onChange={(e) => handleFontStyleChange('valueLabels', 'color', e.target.value)}
-                      className="flex-1 px-2 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-xs font-mono"
-                      placeholder="#F8FAFC"
-                    />
-                  </div>
+                  <EnhancedColorPicker
+                    value={getFontStyle('valueLabels', 'color', '#F8FAFC')}
+                    onChange={(newColor) => handleFontStyleChange('valueLabels', 'color', newColor)}
+                    label="Schriftfarbe"
+                    size="sm"
+                  />
                 </div>
                 <div>
                   <label className="text-xs text-dark-textGray mb-1 block">Schriftart</label>
@@ -985,22 +936,12 @@ function StylingTab({ chartType, config, onConfigChange }) {
             </label>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-dark-textGray mb-1 block">Schriftfarbe</label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="color"
-                    value={getFontStyle('ticks', 'color', '#CBD5E1')}
-                    onChange={(e) => handleFontStyleChange('ticks', 'color', e.target.value)}
-                    className="w-12 h-10 rounded border border-gray-700 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={getFontStyle('ticks', 'color', '#CBD5E1')}
-                    onChange={(e) => handleFontStyleChange('ticks', 'color', e.target.value)}
-                    className="flex-1 px-2 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-xs font-mono"
-                    placeholder="#CBD5E1"
-                  />
-                </div>
+                <EnhancedColorPicker
+                  value={getFontStyle('ticks', 'color', '#CBD5E1')}
+                  onChange={(newColor) => handleFontStyleChange('ticks', 'color', newColor)}
+                  label="Schriftfarbe"
+                  size="sm"
+                />
               </div>
               <div>
                 <label className="text-xs text-dark-textGray mb-1 block">Schriftart</label>
@@ -1303,28 +1244,15 @@ function OptionsTab({ chartType, config, onConfigChange }) {
         if (field.type === 'color') {
           return (
             <div key={key} className="p-3 bg-dark-bg rounded-lg border border-gray-700">
-              <label className="block text-sm font-medium text-dark-textLight mb-2">
-                {formatLabel(key)}
-              </label>
+              <EnhancedColorPicker
+                value={config.options?.[key] ?? field.default ?? '#3B82F6'}
+                onChange={(newColor) => handleOptionChange(key, newColor)}
+                label={formatLabel(key)}
+                size="lg"
+              />
               {field.description && (
-                <p className="text-xs text-dark-textGray mb-2">{field.description}</p>
+                <p className="text-xs text-dark-textGray mt-2">{field.description}</p>
               )}
-              <div className="flex items-center space-x-3">
-                <input
-                  type="color"
-                  value={config.options?.[key] ?? field.default ?? '#3B82F6'}
-                  onChange={(e) => handleOptionChange(key, e.target.value)}
-                  className="w-16 h-16 rounded cursor-pointer border-2 border-gray-600 hover:border-dark-accent1 transition-all"
-                />
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={config.options?.[key] ?? field.default ?? '#3B82F6'}
-                    onChange={(e) => handleOptionChange(key, e.target.value)}
-                    className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
-                  />
-                </div>
-              </div>
             </div>
           )
         }
@@ -1551,23 +1479,12 @@ function LineAnnotationForm({ annotation, onUpdate }) {
             <option value="horizontal">Horizontal (Y-Achse)</option>
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-dark-textLight mb-1">Linienfarbe</label>
-          <div className="flex items-center space-x-3">
-            <input
-              type="color"
-              value={borderColorValue}
-              onChange={(e) => onUpdate({ borderColor: e.target.value })}
-              className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
-            />
-            <input
-              type="text"
-              value={annotation.borderColor || '#F97316'}
-              onChange={(e) => onUpdate({ borderColor: e.target.value })}
-              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
-            />
-          </div>
-        </div>
+        <EnhancedColorPicker
+          value={annotation.borderColor || '#F97316'}
+          onChange={(newColor) => onUpdate({ borderColor: newColor })}
+          label="Linienfarbe"
+          size="md"
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1662,40 +1579,18 @@ function LineAnnotationForm({ annotation, onUpdate }) {
               {annotation.labelDisplay === 'both' && 'Label wird sowohl an der Linie als auch in der Legende angezeigt'}
             </p>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Hintergrund</label>
-            <div className="flex items-center space-x-3">
-              <input
-                type="color"
-                value={labelBackgroundColorValue}
-                onChange={(e) => onUpdate({ labelBackgroundColor: e.target.value })}
-                className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
-              />
-              <input
-                type="text"
-                value={annotation.labelBackgroundColor || '#0F172A'}
-                onChange={(e) => onUpdate({ labelBackgroundColor: e.target.value })}
-                className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Schriftfarbe</label>
-            <div className="flex items-center space-x-3">
-              <input
-                type="color"
-                value={labelColorValue}
-                onChange={(e) => onUpdate({ labelColor: e.target.value })}
-                className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
-              />
-              <input
-                type="text"
-                value={annotation.labelColor || '#F8FAFC'}
-                onChange={(e) => onUpdate({ labelColor: e.target.value })}
-                className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
-              />
-            </div>
-          </div>
+          <EnhancedColorPicker
+            value={annotation.labelBackgroundColor || '#0F172A'}
+            onChange={(newColor) => onUpdate({ labelBackgroundColor: newColor })}
+            label="Label-Hintergrund"
+            size="md"
+          />
+          <EnhancedColorPicker
+            value={annotation.labelColor || '#F8FAFC'}
+            onChange={(newColor) => onUpdate({ labelColor: newColor })}
+            label="Label-Schriftfarbe"
+            size="md"
+          />
           <div>
             <label className="block text-xs font-medium text-dark-textLight mb-1">Schriftgröße</label>
             <input
@@ -1812,40 +1707,18 @@ function BoxAnnotationForm({ annotation, onUpdate, chartType }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-dark-textLight mb-1">Füllfarbe</label>
-          <div className="flex items-center space-x-3">
-            <input
-              type="color"
-              value={backgroundColorValue}
-              onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
-              className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
-            />
-            <input
-              type="text"
-              value={annotation.backgroundColor || '#3B82F6'}
-              onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
-              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-dark-textLight mb-1">Rahmenfarbe</label>
-          <div className="flex items-center space-x-3">
-            <input
-              type="color"
-              value={borderColorValue}
-              onChange={(e) => onUpdate({ borderColor: e.target.value })}
-              className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
-            />
-            <input
-              type="text"
-              value={annotation.borderColor || '#3B82F6'}
-              onChange={(e) => onUpdate({ borderColor: e.target.value })}
-              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
-            />
-          </div>
-        </div>
+        <EnhancedColorPicker
+          value={annotation.backgroundColor || '#3B82F6'}
+          onChange={(newColor) => onUpdate({ backgroundColor: newColor })}
+          label="Füllfarbe"
+          size="md"
+        />
+        <EnhancedColorPicker
+          value={annotation.borderColor || '#3B82F6'}
+          onChange={(newColor) => onUpdate({ borderColor: newColor })}
+          label="Rahmenfarbe"
+          size="md"
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1898,40 +1771,18 @@ function BoxAnnotationForm({ annotation, onUpdate, chartType }) {
               <option value="end">Ende</option>
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Hintergrund</label>
-            <div className="flex items-center space-x-3">
-              <input
-                type="color"
-                value={labelBackgroundColorValue}
-                onChange={(e) => onUpdate({ labelBackgroundColor: e.target.value })}
-                className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
-              />
-              <input
-                type="text"
-                value={annotation.labelBackgroundColor || '#0F172A'}
-                onChange={(e) => onUpdate({ labelBackgroundColor: e.target.value })}
-                className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-dark-textLight mb-1">Label-Schriftfarbe</label>
-            <div className="flex items-center space-x-3">
-              <input
-                type="color"
-                value={labelColorValue}
-                onChange={(e) => onUpdate({ labelColor: e.target.value })}
-                className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
-              />
-              <input
-                type="text"
-                value={annotation.labelColor || '#F8FAFC'}
-                onChange={(e) => onUpdate({ labelColor: e.target.value })}
-                className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
-              />
-            </div>
-          </div>
+          <EnhancedColorPicker
+            value={annotation.labelBackgroundColor || '#0F172A'}
+            onChange={(newColor) => onUpdate({ labelBackgroundColor: newColor })}
+            label="Label-Hintergrund"
+            size="md"
+          />
+          <EnhancedColorPicker
+            value={annotation.labelColor || '#F8FAFC'}
+            onChange={(newColor) => onUpdate({ labelColor: newColor })}
+            label="Label-Schriftfarbe"
+            size="md"
+          />
           <div>
             <label className="block text-xs font-medium text-dark-textLight mb-1">Schriftgröße</label>
             <input
@@ -2050,40 +1901,18 @@ function LabelAnnotationForm({ annotation, onUpdate, chartType }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-dark-textLight mb-1">Hintergrundfarbe</label>
-          <div className="flex items-center space-x-3">
-            <input
-              type="color"
-              value={backgroundColorValue}
-              onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
-              className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
-            />
-            <input
-              type="text"
-              value={annotation.backgroundColor || '#0F172A'}
-              onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
-              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-dark-textLight mb-1">Schriftfarbe</label>
-          <div className="flex items-center space-x-3">
-            <input
-              type="color"
-              value={textColorValue}
-              onChange={(e) => onUpdate({ color: e.target.value })}
-              className="w-12 h-12 rounded border border-gray-600 cursor-pointer"
-            />
-            <input
-              type="text"
-              value={annotation.color || '#F8FAFC'}
-              onChange={(e) => onUpdate({ color: e.target.value })}
-              className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
-            />
-          </div>
-        </div>
+        <EnhancedColorPicker
+          value={annotation.backgroundColor || '#0F172A'}
+          onChange={(newColor) => onUpdate({ backgroundColor: newColor })}
+          label="Hintergrundfarbe"
+          size="md"
+        />
+        <EnhancedColorPicker
+          value={annotation.color || '#F8FAFC'}
+          onChange={(newColor) => onUpdate({ color: newColor })}
+          label="Schriftfarbe"
+          size="md"
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

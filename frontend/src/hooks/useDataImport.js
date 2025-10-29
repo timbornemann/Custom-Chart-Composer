@@ -862,7 +862,7 @@ const buildLongDatasetResult = (sourceRows, labelKey, valueKey, datasetLabelKey)
   return { labels, datasets: datasetList, rowWarnings }
 }
 
-export default function useDataImport({ allowMultipleValueColumns = true, requireDatasets = false } = {}) {
+export default function useDataImport({ allowMultipleValueColumns = true, requireDatasets = false, initialData = null } = {}) {
   const [fileName, setFileName] = useState('')
   const [rows, setRows] = useState([])
   const [columns, setColumns] = useState([])
@@ -873,6 +873,27 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [validationErrors, setValidationErrors] = useState([])
   const [analysisWarnings, setAnalysisWarnings] = useState([])
   const [resultWarnings, setResultWarnings] = useState([])
+
+  // Load initial data when provided
+  useEffect(() => {
+    if (initialData && initialData.rows && initialData.columns) {
+      setFileName(initialData.fileName || '')
+      setRows(initialData.rows || [])
+      setColumns(initialData.columns || [])
+      setMapping(initialData.mapping || defaultMapping)
+      setTransformations(initialData.transformations || createDefaultTransformations())
+      
+      if (initialData.columns && initialData.columns.length > 0) {
+        const analyzed = initialData.columns.map(col => ({
+          key: col.key,
+          type: col.type || 'string',
+          filledCount: col.filledCount || 0,
+          emptyCount: col.emptyCount || 0
+        }))
+        setAnalysisWarnings(summarizeColumnWarnings(analyzed))
+      }
+    }
+  }, [initialData])
 
   const reset = useCallback(() => {
     setFileName('')
@@ -1119,6 +1140,16 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     }
   }, [rows, mapping, transformations, requireDatasets, columns])
 
+  const getImportState = useCallback(() => {
+    return {
+      fileName,
+      rows,
+      columns,
+      mapping,
+      transformations
+    }
+  }, [fileName, rows, columns, mapping, transformations])
+
   return {
     fileName,
     columns,
@@ -1141,6 +1172,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     warnings,
     allowMultipleValueColumns,
     requireDatasets,
-    getImportResult
+    getImportResult,
+    getImportState
   }
 }

@@ -50,7 +50,8 @@ export default function DataImportModal({
   onClose,
   onImport,
   allowMultipleValueColumns = true,
-  requireDatasets = false
+  requireDatasets = false,
+  initialData = null
 }) {
   const [activeTab, setActiveTab] = useState('mapping')
 
@@ -74,15 +75,19 @@ export default function DataImportModal({
     parseError,
     validationErrors,
     warnings,
-    getImportResult
-  } = useDataImport({ allowMultipleValueColumns, requireDatasets })
+    getImportResult,
+    getImportState
+  } = useDataImport({ allowMultipleValueColumns, requireDatasets, initialData })
 
   useEffect(() => {
     if (!isOpen) {
       setActiveTab('mapping')
-      reset()
+      // Don't reset when closing - keep state for next open
+    } else if (isOpen && initialData) {
+      // When opening with initial data, ensure we're on the mapping tab to show the data
+      setActiveTab('mapping')
     }
-  }, [isOpen, reset])
+  }, [isOpen, initialData])
 
   // Ensure all hooks above are always called before any early return
 
@@ -103,8 +108,13 @@ export default function DataImportModal({
     if (!result) {
       return
     }
-    onImport(result)
-    reset()
+    // Include import state in result so it can be saved
+    const importState = getImportState()
+    onImport({
+      ...result,
+      importState
+    })
+    // Don't reset here - allow user to keep editing
   }
 
   const availableDatasetColumns = columns.filter(
@@ -1149,6 +1159,7 @@ DataImportModal.propTypes = {
   onClose: PropTypes.func.isRequired,
   onImport: PropTypes.func.isRequired,
   allowMultipleValueColumns: PropTypes.bool,
-  requireDatasets: PropTypes.bool
+  requireDatasets: PropTypes.bool,
+  initialData: PropTypes.object
 }
 

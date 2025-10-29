@@ -224,6 +224,11 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
       payload.datasetLabel = datasetLabelValue
     }
 
+    // Save import metadata for later editing
+    if (result.importState) {
+      payload._importData = result.importState
+    }
+
     onConfigChange(payload)
     setShowImportModal(false)
   }
@@ -478,6 +483,7 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
           onImport={handleImportedData}
           allowMultipleValueColumns={usesDatasetEditor}
           requireDatasets={usesDatasetEditor}
+          initialData={config._importData || null}
         />
       )}
 
@@ -503,12 +509,16 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
               <button
                 onClick={() => setShowImportModal(true)}
                 className="flex items-center space-x-1.5 rounded-md border border-dark-accent1/60 bg-dark-bg px-3 py-1.5 text-xs font-medium text-dark-accent1 transition-all hover:bg-dark-accent1/10"
-                title="CSV- oder Excel-Datei importieren"
+                title={config._importData ? "Import-Einstellungen bearbeiten" : "CSV- oder Excel-Datei importieren"}
               >
                 <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  {config._importData ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  )}
                 </svg>
-                <span>CSV/Excel importieren</span>
+                <span>{config._importData ? "Import bearbeiten" : "CSV/Excel importieren"}</span>
               </button>
             )}
           </div>

@@ -180,7 +180,87 @@ const cleanRows = (rows) =>
     })
     .filter((row) => Object.values(row).some((value) => !isEmptyValue(value)))
 
-const computeAggregateValue = (metrics, operation) => {
+const evaluateCriteria = (value, criteria) => {
+  if (!criteria) return false
+  const operator = criteria.operator || 'greaterThan'
+
+  // Type/emptiness checks
+  if (operator === 'isEmpty') {
+    return isEmptyValue(value)
+  }
+  if (operator === 'isNotEmpty') {
+    return !isEmptyValue(value)
+  }
+  if (operator === 'isNumber') {
+    return toNumber(value) !== null
+  }
+  if (operator === 'isText') {
+    return !isEmptyValue(value) && toNumber(value) === null
+  }
+
+  // Text-based operators
+  if (
+    operator === 'equalsText' ||
+    operator === 'notEqualsText' ||
+    operator === 'containsText' ||
+    operator === 'notContainsText' ||
+    operator === 'matchesRegex' ||
+    operator === 'notMatchesRegex'
+  ) {
+    const text = normalizeLabel(value)
+    if (operator === 'equalsText') {
+      return criteria.value ? text.toLowerCase() === String(criteria.value).trim().toLowerCase() : false
+    }
+    if (operator === 'notEqualsText') {
+      return criteria.value ? text.toLowerCase() !== String(criteria.value).trim().toLowerCase() : false
+    }
+    if (operator === 'containsText') {
+      return criteria.value ? text.toLowerCase().includes(String(criteria.value).trim().toLowerCase()) : false
+    }
+    if (operator === 'notContainsText') {
+      return criteria.value ? !text.toLowerCase().includes(String(criteria.value).trim().toLowerCase()) : false
+    }
+    if (operator === 'matchesRegex' || operator === 'notMatchesRegex') {
+      try {
+        if (!criteria.value) return false
+        const regex = new RegExp(String(criteria.value), String(criteria.flags || ''))
+        const match = regex.test(text)
+        return operator === 'matchesRegex' ? match : !match
+      } catch (_e) {
+        return false
+      }
+    }
+  }
+
+  // Numeric operators (fallback)
+  const numValue = toNumber(value)
+  if (numValue === null) return false
+
+  const criteriaValue = Number.parseFloat(criteria.value)
+  const minValue = Number.parseFloat(criteria.minValue)
+  const maxValue = Number.parseFloat(criteria.maxValue)
+
+  switch (operator) {
+    case 'greaterThan':
+      return Number.isFinite(criteriaValue) && numValue > criteriaValue
+    case 'greaterThanOrEqual':
+      return Number.isFinite(criteriaValue) && numValue >= criteriaValue
+    case 'lessThan':
+      return Number.isFinite(criteriaValue) && numValue < criteriaValue
+    case 'lessThanOrEqual':
+      return Number.isFinite(criteriaValue) && numValue <= criteriaValue
+    case 'equals':
+      return Number.isFinite(criteriaValue) && numValue === criteriaValue
+    case 'notEquals':
+      return Number.isFinite(criteriaValue) && numValue !== criteriaValue
+    case 'between':
+      return Number.isFinite(minValue) && Number.isFinite(maxValue) && numValue >= minValue && numValue <= maxValue
+    default:
+      return false
+  }
+}
+
+const computeAggregateValue = (metrics, operation, criteria = null) => {
   if (!metrics) return null
   const op = operation || 'sum'
   
@@ -195,6 +275,12 @@ const computeAggregateValue = (metrics, operation) => {
       return metrics.count
     case 'countRows':
       return metrics.rowCount || 0
+    case 'countValid': {
+      if (!criteria) return metrics.count
+      // Verwende allValues statt values, um auch nicht-numerische Werte zu prüfen
+      const valuesToCheck = metrics.allValues || metrics.values || []
+      return valuesToCheck.filter(val => evaluateCriteria(val, criteria)).length
+    }
     case 'sum':
       return metrics.count > 0 ? metrics.sum : null
     case 'median': {
@@ -292,6 +378,12 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
     return perColumn[column] || defaultOperation
   }
 
+  const resolveCriteria = (column) => {
+    const operation = resolveOperation(column)
+    if (operation !== 'countValid') return null
+    return aggregations?.criteria?.[column] || aggregations?.defaultCriteria || null
+  }
+
   if (!groupColumn) {
     return {
       rows: rows.map((row) => ({ ...row })),
@@ -335,7 +427,8 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
             max: null,
             first: null,
             last: null,
-            values: []
+            values: [],
+            allValues: []
           }
         })
       }
@@ -343,6 +436,11 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
       const entry = datasetMap.get(datasetLabelValue)
       // Zähle jeden Datenpunkt (auch ohne gültigen Wert)
       entry.metrics.rowCount += 1
+      
+      // Speichere ALLE Werte (auch nicht-numerische) für countValid
+      const rawValue = row[valueKey]
+      entry.metrics.allValues = entry.metrics.allValues || []
+      entry.metrics.allValues.push(rawValue)
       
       const numeric = toNumber(row[valueKey])
       if (numeric !== null) {
@@ -361,7 +459,9 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
     const aggregatedRows = []
     groups.forEach((datasetMap, groupLabel) => {
       datasetMap.forEach((entry, datasetLabelValue) => {
-        const aggregatedValue = computeAggregateValue(entry.metrics, resolveOperation(valueColumns[0]))
+        const operation = resolveOperation(valueColumns[0])
+        const criteria = resolveCriteria(valueColumns[0])
+        const aggregatedValue = computeAggregateValue(entry.metrics, operation, criteria)
         aggregatedRows.push({
           [labelKey]: groupLabel,
           [datasetKey]: datasetLabelValue,
@@ -417,12 +517,17 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
           max: null,
           first: null,
           last: null,
-          values: []
+          values: [],
+          allValues: []
         }
       }
       const metric = entry.metrics[column]
       // Zähle jeden Datenpunkt (auch ohne gültigen Wert)
       metric.rowCount += 1
+      
+      // Speichere ALLE Werte (auch nicht-numerische) für countValid
+      const rawValue = row[column]
+      metric.allValues.push(rawValue)
       
       const numeric = toNumber(row[column])
       if (numeric !== null) {
@@ -443,7 +548,9 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
   groups.forEach((entry) => {
     const aggregatedRow = { ...entry.row }
     valueColumns.forEach((column) => {
-      aggregatedRow[column] = computeAggregateValue(entry.metrics[column], resolveOperation(column))
+      const operation = resolveOperation(column)
+      const criteria = resolveCriteria(column)
+      aggregatedRow[column] = computeAggregateValue(entry.metrics[column], operation, criteria)
     })
     aggregatedRows.push(aggregatedRow)
   })

@@ -28,6 +28,7 @@ const AGGREGATION_OPTIONS = [
   { value: 'max', label: 'Maximum' },
   { value: 'count', label: 'Anzahl gültiger Werte' },
   { value: 'countRows', label: 'Anzahl Datenpunkte' },
+  { value: 'countValid', label: 'Anzahl Werte (nach Kriterien)' },
   { value: 'median', label: 'Median' },
   { value: 'stdDev', label: 'Standardabweichung' },
   { value: 'variance', label: 'Varianz' },
@@ -265,7 +266,11 @@ export default function DataImportModal({
         aggregations: {
           ...prev.aggregations,
           defaultOperation: operation,
-          perColumn: updatedPerColumn
+          perColumn: updatedPerColumn,
+          // Initialisiere defaultCriteria wenn countValid gewählt wird
+          defaultCriteria: operation === 'countValid' 
+            ? (prev.aggregations?.defaultCriteria || { operator: 'greaterThan', value: '' })
+            : prev.aggregations?.defaultCriteria
         }
       }
     })
@@ -279,6 +284,28 @@ export default function DataImportModal({
         perColumn: {
           ...(prev.aggregations?.perColumn || {}),
           [column]: operation
+        },
+        // Entferne Kriterien, wenn die Aggregation geändert wird (außer countValid bleibt)
+        criteria: operation === 'countValid' 
+          ? { ...(prev.aggregations?.criteria || {}), [column]: prev.aggregations?.criteria?.[column] || { operator: 'greaterThan', value: '' } }
+          : Object.fromEntries(
+              Object.entries(prev.aggregations?.criteria || {}).filter(([key]) => key !== column)
+            )
+      }
+    }))
+  }
+
+  const handleCriteriaChange = (column, changes) => {
+    updateTransformations((prev) => ({
+      ...prev,
+      aggregations: {
+        ...prev.aggregations,
+        criteria: {
+          ...(prev.aggregations?.criteria || {}),
+          [column]: {
+            ...(prev.aggregations?.criteria?.[column] || { operator: 'greaterThan', value: '' }),
+            ...changes
+          }
         }
       }
     }))
@@ -773,6 +800,122 @@ export default function DataImportModal({
                           <p className="mt-1 text-[11px] text-dark-textGray">
                             Wird verwendet, wenn für eine Werte-Spalte keine eigene Auswahl getroffen wird.
                           </p>
+                          {aggregations.defaultOperation === 'countValid' && (
+                            <div className="mt-3 rounded-md border border-gray-700 bg-dark-bg/50 p-3 space-y-2">
+                              <label className="block text-xs font-medium text-dark-textLight">
+                                Standard-Kriterien für gültige Werte:
+                              </label>
+                              <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                                <select
+                                  value={aggregations.defaultCriteria?.operator || 'greaterThan'}
+                                  onChange={(e) => updateTransformations((prev) => ({
+                                    ...prev,
+                                    aggregations: {
+                                      ...prev.aggregations,
+                                      defaultCriteria: {
+                                        ...(prev.aggregations?.defaultCriteria || {}),
+                                        operator: e.target.value
+                                      }
+                                    }
+                                  }))}
+                                  className="rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                >
+                                  <option value="greaterThan">größer als</option>
+                                  <option value="greaterThanOrEqual">größer oder gleich</option>
+                                  <option value="lessThan">kleiner als</option>
+                                  <option value="lessThanOrEqual">kleiner oder gleich</option>
+                                  <option value="equals">ist gleich</option>
+                                  <option value="notEquals">ist ungleich</option>
+                                  <option value="between">zwischen</option>
+                                  <option value="isNumber">nur Zahlen</option>
+                                  <option value="isText">nur Text</option>
+                                  <option value="isEmpty">ist leer</option>
+                                  <option value="isNotEmpty">ist nicht leer</option>
+                                  <option value="equalsText">Text ist gleich</option>
+                                  <option value="notEqualsText">Text ist ungleich</option>
+                                  <option value="containsText">Text enthält</option>
+                                  <option value="notContainsText">Text enthält nicht</option>
+                                  <option value="matchesRegex">passt auf Regex</option>
+                                  <option value="notMatchesRegex">passt nicht auf Regex</option>
+                                </select>
+                                {aggregations.defaultCriteria?.operator === 'between' ? (
+                                  <>
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={aggregations.defaultCriteria?.minValue || ''}
+                                      onChange={(e) => updateTransformations((prev) => ({
+                                        ...prev,
+                                        aggregations: {
+                                          ...prev.aggregations,
+                                          defaultCriteria: {
+                                            ...(prev.aggregations?.defaultCriteria || {}),
+                                            minValue: e.target.value
+                                          }
+                                        }
+                                      }))}
+                                      placeholder="Min"
+                                      className="rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                    />
+                                    <span className="text-xs text-dark-textGray text-center">und</span>
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={aggregations.defaultCriteria?.maxValue || ''}
+                                      onChange={(e) => updateTransformations((prev) => ({
+                                        ...prev,
+                                        aggregations: {
+                                          ...prev.aggregations,
+                                          defaultCriteria: {
+                                            ...(prev.aggregations?.defaultCriteria || {}),
+                                            maxValue: e.target.value
+                                          }
+                                        }
+                                      }))}
+                                      placeholder="Max"
+                                      className="rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                    />
+                                  </>
+                                ) : (
+                                  <input
+                                    type={['equalsText','notEqualsText','containsText','notContainsText','matchesRegex','notMatchesRegex'].includes(aggregations.defaultCriteria?.operator) ? 'text' : 'number'}
+                                    step={['equalsText','notEqualsText','containsText','notContainsText','matchesRegex','notMatchesRegex'].includes(aggregations.defaultCriteria?.operator) ? undefined : 'any'}
+                                    value={aggregations.defaultCriteria?.value || ''}
+                                    onChange={(e) => updateTransformations((prev) => ({
+                                      ...prev,
+                                      aggregations: {
+                                        ...prev.aggregations,
+                                        defaultCriteria: {
+                                          ...(prev.aggregations?.defaultCriteria || {}),
+                                          value: e.target.value
+                                        }
+                                      }
+                                    }))}
+                                    placeholder={['equalsText','notEqualsText','containsText','notContainsText'].includes(aggregations.defaultCriteria?.operator) ? 'Text' : (['matchesRegex','notMatchesRegex'].includes(aggregations.defaultCriteria?.operator) ? 'Regex Muster' : 'Wert')}
+                                    className="rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none col-span-2"
+                                  />
+                                )}
+                                {['matchesRegex','notMatchesRegex'].includes(aggregations.defaultCriteria?.operator) && (
+                                  <input
+                                    type="text"
+                                    value={aggregations.defaultCriteria?.flags || ''}
+                                    onChange={(e) => updateTransformations((prev) => ({
+                                      ...prev,
+                                      aggregations: {
+                                        ...prev.aggregations,
+                                        defaultCriteria: {
+                                          ...(prev.aggregations?.defaultCriteria || {}),
+                                          flags: e.target.value
+                                        }
+                                      }
+                                    }))}
+                                    placeholder="Regex Flags (z. B. i, g)"
+                                    className="rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                       {mapping.valueColumns.length === 0 ? (
@@ -780,23 +923,105 @@ export default function DataImportModal({
                           Bitte wählen Sie zunächst mindestens eine Werte-Spalte aus.
                         </p>
                       ) : (
-                        <div className="space-y-2">
-                          {mapping.valueColumns.map((column) => (
-                            <div key={column} className="grid items-center gap-2 md:grid-cols-2">
-                              <span className="text-sm text-dark-textLight">{column}</span>
-                              <select
-                                value={aggregations.perColumn?.[column] || aggregations.defaultOperation || 'sum'}
-                                onChange={(event) => handleAggregationChange(column, event.target.value)}
-                                className="rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                              >
-                                {AGGREGATION_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          ))}
+                        <div className="space-y-3">
+                          {mapping.valueColumns.map((column) => {
+                            const currentOperation = aggregations.perColumn?.[column] || aggregations.defaultOperation || 'sum'
+                            const isCountValid = currentOperation === 'countValid'
+                            const criteria = aggregations.criteria?.[column] || aggregations.defaultCriteria || { operator: 'greaterThan', value: '' }
+                            
+                            return (
+                              <div key={column} className="space-y-2">
+                                <div className="grid items-center gap-2 md:grid-cols-2">
+                                  <span className="text-sm text-dark-textLight">{column}</span>
+                                  <select
+                                    value={currentOperation}
+                                    onChange={(event) => handleAggregationChange(column, event.target.value)}
+                                    className="rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                  >
+                                    {AGGREGATION_OPTIONS.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                {isCountValid && (
+                                  <div className="ml-0 md:ml-[calc(50%+0.5rem)] rounded-md border border-gray-700 bg-dark-bg/50 p-3 space-y-2">
+                                    <label className="block text-xs font-medium text-dark-textLight">
+                                      Kriterien für gültige Werte:
+                                    </label>
+                                    <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                                      <select
+                                        value={criteria.operator || 'greaterThan'}
+                                        onChange={(e) => handleCriteriaChange(column, { operator: e.target.value })}
+                                        className="rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                      >
+                                        <option value="greaterThan">größer als</option>
+                                        <option value="greaterThanOrEqual">größer oder gleich</option>
+                                        <option value="lessThan">kleiner als</option>
+                                        <option value="lessThanOrEqual">kleiner oder gleich</option>
+                                        <option value="equals">ist gleich</option>
+                                        <option value="notEquals">ist ungleich</option>
+                                        <option value="between">zwischen</option>
+                                        <option value="isNumber">nur Zahlen</option>
+                                        <option value="isText">nur Text</option>
+                                        <option value="isEmpty">ist leer</option>
+                                        <option value="isNotEmpty">ist nicht leer</option>
+                                        <option value="equalsText">Text ist gleich</option>
+                                        <option value="notEqualsText">Text ist ungleich</option>
+                                        <option value="containsText">Text enthält</option>
+                                        <option value="notContainsText">Text enthält nicht</option>
+                                        <option value="matchesRegex">passt auf Regex</option>
+                                        <option value="notMatchesRegex">passt nicht auf Regex</option>
+                                      </select>
+                                      {criteria.operator === 'between' ? (
+                                        <>
+                                          <input
+                                            type="number"
+                                            step="any"
+                                            value={criteria.minValue || ''}
+                                            onChange={(e) => handleCriteriaChange(column, { minValue: e.target.value })}
+                                            placeholder="Min"
+                                            className="rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                          />
+                                          <span className="text-xs text-dark-textGray text-center">und</span>
+                                          <input
+                                            type="number"
+                                            step="any"
+                                            value={criteria.maxValue || ''}
+                                            onChange={(e) => handleCriteriaChange(column, { maxValue: e.target.value })}
+                                            placeholder="Max"
+                                            className="rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                          />
+                                        </>
+                                      ) : (
+                                        <input
+                                          type={['equalsText','notEqualsText','containsText','notContainsText','matchesRegex','notMatchesRegex'].includes(criteria.operator) ? 'text' : 'number'}
+                                          step={['equalsText','notEqualsText','containsText','notContainsText','matchesRegex','notMatchesRegex'].includes(criteria.operator) ? undefined : 'any'}
+                                          value={criteria.value || ''}
+                                          onChange={(e) => handleCriteriaChange(column, { value: e.target.value })}
+                                          placeholder={['equalsText','notEqualsText','containsText','notContainsText'].includes(criteria.operator) ? 'Text' : (['matchesRegex','notMatchesRegex'].includes(criteria.operator) ? 'Regex Muster' : 'Wert')}
+                                          className="rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none col-span-2"
+                                        />
+                                      )}
+                                      {['matchesRegex','notMatchesRegex'].includes(criteria.operator) && (
+                                        <input
+                                          type="text"
+                                          value={criteria.flags || ''}
+                                          onChange={(e) => handleCriteriaChange(column, { flags: e.target.value })}
+                                          placeholder="Regex Flags (z. B. i, g)"
+                                          className="rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                        />
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-dark-textGray">
+                                      Es werden nur Werte gezählt, die diesen Kriterien entsprechen.
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
                     </div>

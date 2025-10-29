@@ -2,6 +2,8 @@ import PropTypes from 'prop-types'
 import AppLogo from '../../Custom-Chart-Composer-Icon.png'
 
 export default function Header({ onNewChart, hasUnsavedChanges = false }) {
+  const runtimeVersion = (typeof window !== 'undefined' && (window.desktopConfig?.version || window.__CCC_APP_VERSION__)) || undefined
+  const displayVersion = import.meta?.env?.VITE_APP_VERSION || runtimeVersion || 'dev'
   return (
     <header className="bg-dark-secondary border-b border-gray-700 px-6 py-4">
       <div className="flex items-center justify-between">
@@ -40,9 +42,7 @@ export default function Header({ onNewChart, hasUnsavedChanges = false }) {
             </svg>
             <span>Neues Diagramm</span>
           </button>
-          <div className="text-sm text-dark-textGray">
-            Version 1.0.0
-          </div>
+          <div className="text-sm text-dark-textGray">Version {displayVersion}</div>
         </div>
       </div>
     </header>

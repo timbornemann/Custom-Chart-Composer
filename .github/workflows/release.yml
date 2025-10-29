@@ -1,0 +1,110 @@
+# This workflow runs when a GitHub Release is published.
+# It builds and pushes a Docker image to GHCR and builds the Electron installer,
+# injecting the release version into the app UI.
+
+name: release-builds
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE_NAME: custom-chart-composer
+
+jobs:
+  docker:
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from release tag
+        id: vars
+        run: |
+          RAW_TAG="${{ github.event.release.tag_name }}"
+          VERSION="${RAW_TAG#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+          build-args: |
+            VITE_APP_VERSION=${{ steps.vars.outputs.version }}
+
+  electron:
+    name: Build Electron installer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Extract version from release tag
+        id: vars
+        shell: bash
+        run: |
+          RAW_TAG="${{ github.event.release.tag_name }}"
+          VERSION="${RAW_TAG#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies (frontend)
+        run: npm ci
+        working-directory: frontend
+
+      - name: Install dependencies (electron)
+        run: npm ci
+        working-directory: desktop/electron
+
+      - name: Bump package versions for build (electron/frontend/backend)
+        shell: bash
+        run: |
+          V="${{ steps.vars.outputs.version }}"
+          npm version "$V" --no-git-tag-version
+          npm version "$V" --no-git-tag-version
+        working-directory: desktop/electron
+
+      - name: Build Electron (Windows x64)
+        run: |
+          set VITE_APP_VERSION=${{ steps.vars.outputs.version }}
+          npm run build:win
+        working-directory: desktop/electron
+        shell: cmd
+
+      - name: Upload installer to release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            desktop/electron/dist/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installer as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-installer-${{ steps.vars.outputs.version }}
+          path: desktop/electron/dist/*.exe

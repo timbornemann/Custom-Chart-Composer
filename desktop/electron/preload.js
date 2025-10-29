@@ -1,7 +1,7 @@
 // CommonJS preload to avoid ESM issues in sandbox
 const { contextBridge, ipcRenderer } = require('electron');
 
-const state = { apiBaseUrl: undefined };
+const state = { apiBaseUrl: undefined, appVersion: undefined };
 
 function findApiBaseUrlArgument() {
   const args = Array.isArray(process.argv) ? [...process.argv] : [];
@@ -10,6 +10,17 @@ function findApiBaseUrlArgument() {
     if (typeof a !== 'string') continue;
     if (a.startsWith('--apiBaseUrl=')) return a.slice('--apiBaseUrl='.length);
     if (a === '--apiBaseUrl' && typeof args[i + 1] === 'string') return args[i + 1];
+  }
+  return undefined;
+}
+
+function findAppVersionArgument() {
+  const args = Array.isArray(process.argv) ? [...process.argv] : [];
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (typeof a !== 'string') continue;
+    if (a.startsWith('--appVersion=')) return a.slice('--appVersion='.length);
+    if (a === '--appVersion' && typeof args[i + 1] === 'string') return args[i + 1];
   }
   return undefined;
 }
@@ -44,10 +55,21 @@ function applyApiBaseUrl(rawValue) {
 }
 
 applyApiBaseUrl(findApiBaseUrlArgument());
+state.appVersion = findAppVersionArgument();
+if (state.appVersion && typeof window !== 'undefined') {
+  try { window.__CCC_APP_VERSION__ = state.appVersion; } catch (e) {}
+  safeExpose('__CCC_APP_VERSION__', state.appVersion);
+  safeExpose('desktopConfig', { ...(typeof window.desktopConfig === 'object' && window.desktopConfig ? window.desktopConfig : {}), version: state.appVersion, apiBaseUrl: state.apiBaseUrl });
+}
 
 ipcRenderer.on('ccc:config', (_event, payload) => {
   if (payload && typeof payload.apiBaseUrl === 'string') {
     applyApiBaseUrl(payload.apiBaseUrl);
+  }
+  if (payload && typeof payload.version === 'string' && !state.appVersion) {
+    state.appVersion = payload.version;
+    try { window.__CCC_APP_VERSION__ = state.appVersion; } catch (e) {}
+    safeExpose('__CCC_APP_VERSION__', state.appVersion);
   }
 });
 

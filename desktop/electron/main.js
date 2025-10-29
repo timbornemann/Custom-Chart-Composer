@@ -91,6 +91,7 @@ const startBackend = async () => {
 const createWindow = async () => {
   const port = await startBackend();
   const apiBaseUrl = `http://127.0.0.1:${port}/api`;
+  const appVersion = app.getVersion();
 
   const resolveWindowIcon = () => {
     if (isDev) {
@@ -105,7 +106,7 @@ const createWindow = async () => {
     webPreferences: {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      additionalArguments: [`--apiBaseUrl=${apiBaseUrl}`]
+      additionalArguments: [`--apiBaseUrl=${apiBaseUrl}`, `--appVersion=${appVersion}`]
     },
     icon: resolveWindowIcon()
   });
@@ -119,7 +120,7 @@ const createWindow = async () => {
   }
 
   window.webContents.once('did-finish-load', () => {
-    window.webContents.send('ccc:config', { apiBaseUrl });
+    window.webContents.send('ccc:config', { apiBaseUrl, version: appVersion });
   });
 
   if (isDev) {

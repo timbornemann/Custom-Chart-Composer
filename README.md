@@ -57,10 +57,7 @@ docker pull ghcr.io/timbornemann/custom-chart-composer:latest
 
 **Container starten:**
 ```bash
-docker run -d \
-  --name custom-chart-composer \
-  -p 3003:3003 \
-  ghcr.io/timbornemann/custom-chart-composer:latest
+docker run -d --name custom-chart-composer -p 3003:3003 ghcr.io/timbornemann/custom-chart-composer:latest
 ```
 
 **Zugriff:**
@@ -69,19 +66,19 @@ docker run -d \
 
 **Bestimmte Version verwenden:**
 ```bash
-docker run -d \
-  --name custom-chart-composer \
-  -p 3003:3003 \
-  ghcr.io/timbornemann/custom-chart-composer:1.0.2
+docker run -d --name custom-chart-composer -p 3003:3003 ghcr.io/timbornemann/custom-chart-composer:1.0.2
 ```
 
 **Eigene Chart-Module hinzufügen:**
+
+**Linux/Mac:**
 ```bash
-docker run -d \
-  --name custom-chart-composer \
-  -p 3003:3003 \
-  -v $(pwd)/modules:/app/backend/modules \
-  ghcr.io/timbornemann/custom-chart-composer:latest
+docker run -d --name custom-chart-composer -p 3003:3003 -v $(pwd)/modules:/app/backend/modules ghcr.io/timbornemann/custom-chart-composer:latest
+```
+
+**Windows (PowerShell/CMD):**
+```bash
+docker run -d --name custom-chart-composer -p 3003:3003 -v %cd%\modules:/app/backend/modules ghcr.io/timbornemann/custom-chart-composer:latest
 ```
 
 **Weitere Informationen:**
@@ -240,26 +237,17 @@ Damit dein Container automatisch aktualisiert wird, kannst du Watchtower verwend
 
 **Alle Container überwachen:**
 ```bash
-docker run -d --name watchtower --restart unless-stopped \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  containrrr/watchtower \
-  --interval 3600
+docker run -d --name watchtower --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --interval 3600
 ```
 
 **Nur diesen Container aktualisieren:**
 ```bash
-docker run -d --name watchtower --restart unless-stopped \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  containrrr/watchtower custom-chart-composer \
-  --interval 3600
+docker run -d --name watchtower --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower custom-chart-composer --interval 3600
 ```
 
 **Einmalige Prüfung (danach endet der Watchtower-Container):**
 ```bash
-docker run --rm \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  containrrr/watchtower custom-chart-composer \
-  --run-once
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower custom-chart-composer --run-once
 ```
 
 > Tipp: Benenne deinen Container genau `custom-chart-composer`, damit die obigen Befehle 1:1 funktionieren.

@@ -80,13 +80,31 @@ jobs:
         run: npm ci
         working-directory: desktop/electron
 
-      - name: Bump package versions for build (electron/frontend/backend)
+      - name: Bump package versions if needed (root/backend/frontend/electron)
         shell: bash
         run: |
+          set -e
           V="${{ steps.vars.outputs.version }}"
-          npm version "$V" --no-git-tag-version
-          npm version "$V" --no-git-tag-version
-        working-directory: desktop/electron
+
+          bump_if_needed () {
+            DIR="$1"
+            pushd "$DIR" >/dev/null || exit 0
+            if [ -f package.json ]; then
+              CURRENT=$(node -p "require('./package.json').version" 2>/dev/null || echo "")
+              echo "[$DIR] current=$CURRENT target=$V"
+              if [ "$CURRENT" != "$V" ]; then
+                npm version "$V" --no-git-tag-version
+              else
+                echo "[$DIR] skip (already $V)"
+              fi
+            fi
+            popd >/dev/null || true
+          }
+
+          bump_if_needed .
+          bump_if_needed backend
+          bump_if_needed frontend
+          bump_if_needed desktop/electron
 
       - name: Build Electron (Windows x64)
         run: |

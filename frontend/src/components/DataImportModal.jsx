@@ -22,11 +22,18 @@ const FILTER_OPERATORS = [
 ]
 
 const AGGREGATION_OPTIONS = [
-  { value: 'sum', label: 'Summe' },
+  { value: 'sum', label: 'Summe (Gesamte Werte)' },
   { value: 'average', label: 'Durchschnitt' },
   { value: 'min', label: 'Minimum' },
   { value: 'max', label: 'Maximum' },
-  { value: 'count', label: 'Anzahl gültiger Werte' }
+  { value: 'count', label: 'Anzahl gültiger Werte' },
+  { value: 'countRows', label: 'Anzahl Datenpunkte' },
+  { value: 'median', label: 'Median' },
+  { value: 'stdDev', label: 'Standardabweichung' },
+  { value: 'variance', label: 'Varianz' },
+  { value: 'product', label: 'Produkt' },
+  { value: 'first', label: 'Erster Wert' },
+  { value: 'last', label: 'Letzter Wert' }
 ]
 
 const createUniqueId = (prefix) => {

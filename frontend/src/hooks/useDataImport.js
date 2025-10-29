@@ -183,6 +183,7 @@ const cleanRows = (rows) =>
 const computeAggregateValue = (metrics, operation) => {
   if (!metrics) return null
   const op = operation || 'sum'
+  
   switch (op) {
     case 'average':
       return metrics.count > 0 ? metrics.sum / metrics.count : null
@@ -192,7 +193,44 @@ const computeAggregateValue = (metrics, operation) => {
       return metrics.max === null ? null : metrics.max
     case 'count':
       return metrics.count
+    case 'countRows':
+      return metrics.rowCount || 0
     case 'sum':
+      return metrics.count > 0 ? metrics.sum : null
+    case 'median': {
+      if (!metrics.values || metrics.values.length === 0) return null
+      const sorted = [...metrics.values].sort((a, b) => a - b)
+      const mid = Math.floor(sorted.length / 2)
+      return sorted.length % 2 === 0
+        ? (sorted[mid - 1] + sorted[mid]) / 2
+        : sorted[mid]
+    }
+    case 'stdDev': {
+      if (!metrics.values || metrics.values.length < 2) return null
+      const mean = metrics.sum / metrics.count
+      const sumSquaredDiffs = metrics.values.reduce((sum, val) => {
+        const diff = val - mean
+        return sum + diff * diff
+      }, 0)
+      return Math.sqrt(sumSquaredDiffs / metrics.count)
+    }
+    case 'variance': {
+      if (!metrics.values || metrics.values.length < 2) return null
+      const mean = metrics.sum / metrics.count
+      const sumSquaredDiffs = metrics.values.reduce((sum, val) => {
+        const diff = val - mean
+        return sum + diff * diff
+      }, 0)
+      return sumSquaredDiffs / metrics.count
+    }
+    case 'product': {
+      if (!metrics.values || metrics.values.length === 0) return null
+      return metrics.values.reduce((product, val) => product * val, 1)
+    }
+    case 'first':
+      return metrics.first === null ? null : metrics.first
+    case 'last':
+      return metrics.last === null ? null : metrics.last
     default:
       return metrics.count > 0 ? metrics.sum : null
   }
@@ -292,19 +330,31 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
           metrics: {
             sum: 0,
             count: 0,
+            rowCount: 0,
             min: null,
-            max: null
+            max: null,
+            first: null,
+            last: null,
+            values: []
           }
         })
       }
 
       const entry = datasetMap.get(datasetLabelValue)
+      // Zähle jeden Datenpunkt (auch ohne gültigen Wert)
+      entry.metrics.rowCount += 1
+      
       const numeric = toNumber(row[valueKey])
       if (numeric !== null) {
         entry.metrics.sum += numeric
         entry.metrics.count += 1
         entry.metrics.min = entry.metrics.min === null ? numeric : Math.min(entry.metrics.min, numeric)
         entry.metrics.max = entry.metrics.max === null ? numeric : Math.max(entry.metrics.max, numeric)
+        if (entry.metrics.first === null) {
+          entry.metrics.first = numeric
+        }
+        entry.metrics.last = numeric
+        entry.metrics.values.push(numeric)
       }
     })
 
@@ -357,21 +407,35 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
     }
     const entry = groups.get(groupLabel)
     valueColumns.forEach((column) => {
-      const numeric = toNumber(row[column])
-      if (numeric === null) return
+      // Initialisiere metrics wenn noch nicht vorhanden
       if (!entry.metrics[column]) {
         entry.metrics[column] = {
           sum: 0,
           count: 0,
+          rowCount: 0,
           min: null,
-          max: null
+          max: null,
+          first: null,
+          last: null,
+          values: []
         }
       }
       const metric = entry.metrics[column]
-      metric.sum += numeric
-      metric.count += 1
-      metric.min = metric.min === null ? numeric : Math.min(metric.min, numeric)
-      metric.max = metric.max === null ? numeric : Math.max(metric.max, numeric)
+      // Zähle jeden Datenpunkt (auch ohne gültigen Wert)
+      metric.rowCount += 1
+      
+      const numeric = toNumber(row[column])
+      if (numeric !== null) {
+        metric.sum += numeric
+        metric.count += 1
+        metric.min = metric.min === null ? numeric : Math.min(metric.min, numeric)
+        metric.max = metric.max === null ? numeric : Math.max(metric.max, numeric)
+        if (metric.first === null) {
+          metric.first = numeric
+        }
+        metric.last = numeric
+        metric.values.push(numeric)
+      }
     })
   })
 

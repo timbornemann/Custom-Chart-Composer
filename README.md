@@ -8,6 +8,25 @@ Ein modernes, webbasiertes Tool zur einfachen Erstellung ästhetisch ansprechend
 ![Custom Chart Composer - Hauptansicht](screenshots/01_hauptansicht.png)
 *Die Hauptansicht der Custom Chart Composer Anwendung mit Sidebar für Diagrammtypen, Vorschau-Bereich und Konfigurationspanel*
 
+## Inhaltsverzeichnis
+
+- [✨ Features](#-features)
+- [🏗️ Technologie-Stack](#️-technologie-stack)
+- [📋 Voraussetzungen](#-voraussetzungen)
+- [🚀 Schnellstart - Schritt für Schritt](#-schnellstart---schritt-für-schritt)
+- [🖥️ Electron Desktop (Windows)](#️-electron-desktop-windows)
+- [📁 Projektstruktur](#-projektstruktur)
+- [📦 Bereitstellung und Downloads](#-bereitstellung-und-downloads)
+  - [Windows-Installer (Electron)](#windows-installer-electron)
+  - [Docker Image (GHCR)](#docker-image-ghcr)
+- [🔄 Automatische Updates mit Watchtower](#-automatische-updates-mit-watchtower)
+- [🔧 Eigene Chart-Module erstellen](#-eigene-chart-module-erstellen)
+- [🎨 Design-System](#-design-system)
+- [🐳 Docker-Deployment](#-docker-deployment)
+- [🧪 Testing](#-testing)
+- [📝 Umgebungsvariablen](#-umgebungsvariablen)
+- [📄 Lizenz](#-lizenz)
+
 ## ✨ Features
 
 - 🎨 **40+ Diagrammtypen**: Balken, Horizontal, Linie, Fläche, Kreis, Donut, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Vertikal, Prozent, Heatmap, Treemap, Sankey, Trichter, Violin, Box-Plot, Kalender-Heatmap, Koordinaten, Matrix, Sunburst, Wasserfall und viele mehr
@@ -477,6 +496,86 @@ export default {
 ```
 
 Nach dem Hinzufügen wird das Modul automatisch geladen und in der UI verfügbar sein.
+
+## 📦 Bereitstellung und Downloads
+
+### Windows-Installer (Electron)
+
+Bei jedem Release wird automatisch ein Windows-Installer erstellt.
+
+- Öffne die GitHub Releases-Seite dieses Repositories und lade die neueste Setup-Datei herunter.
+- Datei-Name (Beispiel): `Custom Chart Composer Setup <version>.exe`
+- Nach der Installation steht die Anwendung im Startmenü zur Verfügung. Die App-Version in der Kopfzeile entspricht der Release-Version.
+
+Hinweis: Der Installer enthält Frontend und Backend; es ist keine zusätzliche Runtime nötig.
+
+### Docker Image (GHCR)
+
+Wir veröffentlichen bei Releases ein fertiges Image in der GitHub Container Registry (GHCR).
+
+Ersetze `OWNER` durch deinen GitHub-Organisation/Nutzer-Namen.
+
+```bash
+docker run -d \
+  --name custom-chart-composer \
+  -p 3003:3003 \
+  ghcr.io/OWNER/custom-chart-composer:latest
+```
+
+- Web UI: `http://localhost:3003`
+- API: `http://localhost:3003/api`
+
+Eine bestimmte Version starten (z. B. 1.2.3):
+
+```bash
+docker run -d \
+  --name custom-chart-composer \
+  -p 3003:3003 \
+  ghcr.io/OWNER/custom-chart-composer:1.2.3
+```
+
+Optional: Eigene Chart-Module per Volume mounten (werden beim Start automatisch geladen):
+
+```bash
+docker run -d \
+  --name custom-chart-composer \
+  -p 3003:3003 \
+  -v $(pwd)/modules:/app/backend/modules \
+  ghcr.io/OWNER/custom-chart-composer:latest
+```
+
+## 🔄 Automatische Updates mit Watchtower
+
+Damit dein Container automatisch aktualisiert wird, kannst du Watchtower verwenden. Watchtower prüft in Intervallen auf neue Images und aktualisiert betroffene Container.
+
+Alle Container überwachen:
+
+```bash
+docker run -d --name watchtower --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower \
+  --interval 3600
+```
+
+Nur diesen Container aktualisieren:
+
+```bash
+docker run -d --name watchtower --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower custom-chart-composer \
+  --interval 3600
+```
+
+Einmalige Prüfung (danach endet der Watchtower-Container):
+
+```bash
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower custom-chart-composer \
+  --run-once
+```
+
+> Tipp: Benenne deinen Container genau `custom-chart-composer`, damit die obigen Befehle 1:1 funktionieren.
 
 ## 🎨 Design-System
 

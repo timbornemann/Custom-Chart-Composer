@@ -4,7 +4,8 @@ const getRuntimeApiUrl = () => {
   if (typeof window === 'undefined') {
     return undefined
   }
-  return window.__CCC_API_URL__
+
+  return window.__CCC_API_URL__ || window.desktopConfig?.apiBaseUrl
 }
 
 const normalizeApiBaseUrl = (rawUrl) => {

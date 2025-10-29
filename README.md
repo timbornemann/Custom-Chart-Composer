@@ -113,35 +113,6 @@ docker-compose up --build
 **Frontend**: http://localhost:5173
 **Backend API**: http://localhost:3003
 
-## 🔧 Troubleshooting
-
-### Häufige Probleme
-
-**Problem: "&&" ist kein gültiges Anweisungstrennzeichen**
-- **Lösung**: Verwenden Sie PowerShell oder CMD-Befehle einzeln, nicht mit `&&`
-
-**Problem: Port bereits belegt**
-- **Lösung**: Beenden Sie andere Anwendungen auf Port 3003 oder 5173, oder ändern Sie die Ports in den Konfigurationsdateien
-
-**Problem: npm install schlägt fehl**
-- **Lösung**: 
-  ```powershell
-  npm cache clean --force
-  npm install
-  ```
-
-**Problem: Frontend lädt nicht**
-- **Lösung**: Stellen Sie sicher, dass das Backend auf Port 3003 läuft
-
-**Problem: Electron Build schlägt fehl**
-- **Lösung**: 
-  ```powershell
-  cd desktop/electron
-  npm install
-  npm run build:frontend
-  npm run build:win
-  ```
-
 ## 🖥️ Electron Desktop (Windows)
 
 Die Desktop-Variante nutzt denselben Express-Server und das gebaute Vite-Frontend wie die Docker- bzw. Web-Version. Alle Änderungen an Backend, Frontend oder den Modulen wirken sich somit automatisch auch auf die Electron-App aus. Der Docker-Workflow bleibt unverändert funktionsfähig.

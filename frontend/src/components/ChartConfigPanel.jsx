@@ -74,8 +74,8 @@ export default function ChartConfigPanel({
       <h2 className="text-xl font-semibold text-dark-textLight mb-4">Konfiguration</h2>
       
       <div className="mb-6 border-b border-gray-700 pb-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2 flex-nowrap overflow-x-auto">
             <TabButton label="Daten" isActive={activeTab === 'data'} onClick={() => setActiveTab('data')} />
             <TabButton label="Styling" isActive={activeTab === 'styling'} onClick={() => setActiveTab('styling')} />
             <TabButton label="Annotationen" isActive={activeTab === 'annotations'} onClick={() => setActiveTab('annotations')} />
@@ -88,7 +88,7 @@ export default function ChartConfigPanel({
               onClick={onUndo}
               disabled={!canUndo}
               title="Rückgängig (Strg+Z)"
-              className={`flex items-center space-x-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-all ${
+              className={`flex items-center justify-center rounded-md border p-2 text-xs transition-all ${
                 canUndo
                   ? 'border-gray-700 text-dark-textLight hover:bg-gray-800'
                   : 'border-gray-800 text-dark-textGray cursor-not-allowed bg-gray-900'
@@ -97,14 +97,13 @@ export default function ChartConfigPanel({
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17l-5-5 5-5m8 10a5 5 0 00-5-5H4" />
               </svg>
-              <span>Rückgängig</span>
             </button>
             <button
               type="button"
               onClick={onRedo}
               disabled={!canRedo}
               title="Wiederholen (Strg+Shift+Z)"
-              className={`flex items-center space-x-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-all ${
+              className={`flex items-center justify-center rounded-md border p-2 text-xs transition-all ${
                 canRedo
                   ? 'border-gray-700 text-dark-textLight hover:bg-gray-800'
                   : 'border-gray-800 text-dark-textGray cursor-not-allowed bg-gray-900'
@@ -113,13 +112,9 @@ export default function ChartConfigPanel({
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7l5 5-5 5m-8-10a5 5 0 015 5h10" />
               </svg>
-              <span>Wiederholen</span>
             </button>
           </div>
         </div>
-        <p className="mt-3 text-xs text-dark-textGray">
-          Tipp: Nutze <span className="font-mono text-dark-textLight">Strg+Z</span> zum Rückgängigmachen und <span className="font-mono text-dark-textLight">Strg+Shift+Z</span> zum Wiederholen deiner Änderungen.
-        </p>
       </div>
 
       <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">

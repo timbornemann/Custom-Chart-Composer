@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types'
 
-export default function Header({ onNewChart, hasUnsavedChanges }) {
+export default function Header({ onNewChart, hasUnsavedChanges = false }) {
   return (
     <header className="bg-dark-secondary border-b border-gray-700 px-6 py-4">
       <div className="flex items-center justify-between">
@@ -52,7 +52,4 @@ Header.propTypes = {
   hasUnsavedChanges: PropTypes.bool
 }
 
-Header.defaultProps = {
-  hasUnsavedChanges: false
-}
 

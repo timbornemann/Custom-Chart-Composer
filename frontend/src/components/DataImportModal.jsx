@@ -41,8 +41,8 @@ export default function DataImportModal({
   isOpen,
   onClose,
   onImport,
-  allowMultipleValueColumns,
-  requireDatasets
+  allowMultipleValueColumns = true,
+  requireDatasets = false
 }) {
   const [activeTab, setActiveTab] = useState('mapping')
 
@@ -76,9 +76,7 @@ export default function DataImportModal({
     }
   }, [isOpen, reset])
 
-  if (!isOpen) {
-    return null
-  }
+  // Ensure all hooks above are always called before any early return
 
   const handleClose = () => {
     reset()
@@ -135,6 +133,10 @@ export default function DataImportModal({
     }
     return keys
   }, [mapping, transformedPreviewRows])
+
+  if (!isOpen) {
+    return null
+  }
 
   const filters = transformations.filters || []
   const grouping = transformations.grouping || {}
@@ -917,7 +919,3 @@ DataImportModal.propTypes = {
   requireDatasets: PropTypes.bool
 }
 
-DataImportModal.defaultProps = {
-  allowMultipleValueColumns: true,
-  requireDatasets: false
-}

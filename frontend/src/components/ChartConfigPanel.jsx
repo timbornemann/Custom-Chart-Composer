@@ -203,7 +203,7 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
   const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
 
-  const supportsDataImport = usesSimpleEditor || usesDatasetEditor
+  const supportsDataImport = usesSimpleEditor || usesDatasetEditor || isScatterDataset || isBubbleDataset || isCoordinateDataset || chartType?.id === 'matrix'
 
   const handleImportedData = (result) => {
     if (!result) return
@@ -214,7 +214,12 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
       datasets: Array.isArray(result.datasets) ? result.datasets : []
     }
 
-    if (datasetLabelSchema) {
+    // For Scatter/Bubble/Matrix/Coordinate, datasets are already in the correct format
+    if (isScatterDataset || isBubbleDataset || chartType?.id === 'matrix' || isCoordinateDataset) {
+      payload.datasets = result.datasets || []
+      payload.labels = []
+      payload.values = []
+    } else if (datasetLabelSchema) {
       let datasetLabelValue = ''
       if (usesSimpleEditor && result.meta?.valueColumns?.[0]) {
         datasetLabelValue = result.meta.valueColumns[0]
@@ -484,6 +489,9 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
           allowMultipleValueColumns={usesDatasetEditor}
           requireDatasets={usesDatasetEditor}
           initialData={config._importData || null}
+          chartType={chartType?.id}
+          isScatterBubble={isScatterDataset || isBubbleDataset || chartType?.id === 'matrix'}
+          isCoordinate={isCoordinateDataset}
         />
       )}
 

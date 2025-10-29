@@ -2,12 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 
-const PLACEHOLDER_VALUES = new Set(['', '-', 'n/a', 'na', 'null', 'undefined', 'nan'])
+// Note: Values are checked case-insensitively in toNumber(), so we only need lowercase here
+const PLACEHOLDER_VALUES = new Set(['', '-', 'n/a', 'na', 'null', 'undefined', 'nan', 'unknown'])
 
 const defaultMapping = {
   label: '',
   valueColumns: [],
-  datasetLabel: ''
+  datasetLabel: '',
+  xColumn: '',
+  yColumn: '',
+  rColumn: '',
+  pointLabelColumn: '',
+  longitudeColumn: '',
+  latitudeColumn: ''
 }
 
 const createDefaultTransformations = () => ({
@@ -57,11 +64,67 @@ const toNumber = (value) => {
   if (!text) return null
   const lower = text.toLowerCase()
   if (PLACEHOLDER_VALUES.has(lower)) return null
-  const normalized = text.replace(/\s+/g, '').replace(',', '.')
-  const parsed = Number(normalized)
+  
+  // Remove all whitespace
+  let normalized = text.replace(/\s+/g, '')
+  
+  // Handle different decimal separator formats
+  // Common formats for coordinates:
+  // - "13.4050" (point as decimal separator) - standard English format
+  // - "13,4050" (comma as decimal separator) - European format
+  // - "13 4050" (space as thousands separator) - some formats
+  
+  // Try parsing directly first (handles "13.4050" correctly)
+  let parsed = Number(normalized)
   if (Number.isFinite(parsed)) {
     return parsed
   }
+  
+  // If direct parsing failed, try replacing comma with point
+  // This handles "13,4050" -> "13.4050"
+  normalized = normalized.replace(',', '.')
+  parsed = Number(normalized)
+  if (Number.isFinite(parsed)) {
+    return parsed
+  }
+  
+  // If that also failed, check for ambiguous cases with multiple separators
+  // For coordinates, we typically only have one decimal separator
+  // So if there are multiple, we'll use the last one as the decimal separator
+  const originalText = text.replace(/\s+/g, '')
+  const commaPos = originalText.lastIndexOf(',')
+  const pointPos = originalText.lastIndexOf('.')
+  
+  if (commaPos > -1 && pointPos > -1) {
+    // Both separators exist - use the last one as decimal separator
+    if (commaPos > pointPos) {
+      // Comma is last - use comma as decimal, remove points as thousands separators
+      normalized = originalText.replace(/\./g, '').replace(',', '.')
+    } else {
+      // Point is last - use point as decimal, remove commas as thousands separators
+      normalized = originalText.replace(/,/g, '')
+    }
+    parsed = Number(normalized)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  } else if (originalText.match(/,/g) && (originalText.match(/,/g) || []).length > 1) {
+    // Multiple commas - use last comma as decimal separator
+    normalized = originalText.replace(/,/g, (match, offset, str) => offset === str.lastIndexOf(',') ? '.' : '')
+    parsed = Number(normalized)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  } else if (originalText.match(/\./g) && (originalText.match(/\./g) || []).length > 1) {
+    // Multiple points - use last point as decimal separator
+    const lastPointIndex = originalText.lastIndexOf('.')
+    normalized = originalText.substring(0, lastPointIndex).replace(/\./g, '') + originalText.substring(lastPointIndex)
+    parsed = Number(normalized)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+  
   return null
 }
 
@@ -593,7 +656,11 @@ const evaluateFilterCondition = (row, filter) => {
     case 'notEquals':
       return cellText.toLowerCase() !== filterText.toLowerCase()
     case 'contains':
-      return filterText ? cellText.toLowerCase().includes(filterText.toLowerCase()) : true
+      if (!filterText) return true // If filter is empty, all rows pass
+      return cellText.toLowerCase().includes(filterText.toLowerCase())
+    case 'notContains':
+      if (!filterText) return true // If filter is empty, all rows pass
+      return !cellText.toLowerCase().includes(filterText.toLowerCase())
     case 'greaterThan': {
       const numericValue = toNumber(cellValue)
       const numericFilter = toNumber(value)
@@ -862,7 +929,162 @@ const buildLongDatasetResult = (sourceRows, labelKey, valueKey, datasetLabelKey)
   return { labels, datasets: datasetList, rowWarnings }
 }
 
-export default function useDataImport({ allowMultipleValueColumns = true, requireDatasets = false, initialData = null } = {}) {
+const buildCoordinateResult = (sourceRows, longitudeColumn, latitudeColumn, datasetLabelColumn, pointLabelColumn) => {
+  const datasets = new Map()
+  let skippedNoLongitude = 0
+  let skippedNoLatitude = 0
+  let skippedInvalidRange = 0
+  const invalidLongitudeSamples = new Set()
+  const invalidLatitudeSamples = new Set()
+  const invalidRangeSamples = []
+
+  sourceRows.forEach((row) => {
+    const rawLongitude = row[longitudeColumn]
+    const rawLatitude = row[latitudeColumn]
+    const longitudeValue = toNumber(rawLongitude)
+    const latitudeValue = toNumber(rawLatitude)
+    const datasetLabel = datasetLabelColumn ? normalizeLabel(row[datasetLabelColumn]) : 'Standorte'
+    const pointLabel = pointLabelColumn ? normalizeLabel(row[pointLabelColumn]) : null
+
+    if (longitudeValue === null) {
+      skippedNoLongitude += 1
+      if (invalidLongitudeSamples.size < 3 && rawLongitude !== undefined && rawLongitude !== null) {
+        const sample = String(rawLongitude).trim()
+        if (sample && sample.length < 50) {
+          invalidLongitudeSamples.add(sample)
+        }
+      }
+      return
+    }
+    if (latitudeValue === null) {
+      skippedNoLatitude += 1
+      if (invalidLatitudeSamples.size < 3 && rawLatitude !== undefined && rawLatitude !== null) {
+        const sample = String(rawLatitude).trim()
+        if (sample && sample.length < 50) {
+          invalidLatitudeSamples.add(sample)
+        }
+      }
+      return
+    }
+
+    // Validate coordinate ranges
+    const isLongitudeInvalid = longitudeValue < -180 || longitudeValue > 180
+    const isLatitudeInvalid = latitudeValue < -90 || latitudeValue > 90
+    if (isLongitudeInvalid || isLatitudeInvalid) {
+      skippedInvalidRange += 1
+      if (invalidRangeSamples.length < 3) {
+        invalidRangeSamples.push(`Longitude: ${longitudeValue}°, Latitude: ${latitudeValue}°`)
+      }
+      return
+    }
+
+    const datasetKey = datasetLabel || 'Standorte'
+    if (!datasets.has(datasetKey)) {
+      datasets.set(datasetKey, {
+        label: datasetKey,
+        data: [],
+        backgroundColor: '#3B82F6'
+      })
+    }
+
+    const point = { longitude: longitudeValue, latitude: latitudeValue }
+    if (pointLabel) {
+      point.label = pointLabel
+    }
+
+    datasets.get(datasetKey).data.push(point)
+  })
+
+  const rowWarnings = []
+  if (skippedNoLongitude > 0) {
+    let msg = `${skippedNoLongitude} Zeile${skippedNoLongitude !== 1 ? 'n' : ''} ohne gültige Longitude-Werte wurden übersprungen.`
+    if (invalidLongitudeSamples.size > 0) {
+      msg += ` Beispielwerte: ${Array.from(invalidLongitudeSamples).slice(0, 3).map(s => `"${s}"`).join(', ')}`
+    }
+    rowWarnings.push(msg)
+  }
+  if (skippedNoLatitude > 0) {
+    let msg = `${skippedNoLatitude} Zeile${skippedNoLatitude !== 1 ? 'n' : ''} ohne gültige Latitude-Werte wurden übersprungen.`
+    if (invalidLatitudeSamples.size > 0) {
+      msg += ` Beispielwerte: ${Array.from(invalidLatitudeSamples).slice(0, 3).map(s => `"${s}"`).join(', ')}`
+    }
+    rowWarnings.push(msg)
+  }
+  if (skippedInvalidRange > 0) {
+    let msg = `${skippedInvalidRange} Zeile${skippedInvalidRange !== 1 ? 'n' : ''} mit Koordinaten außerhalb des gültigen Bereichs wurden übersprungen (Longitude: -180° bis 180°, Latitude: -90° bis 90°).`
+    if (invalidRangeSamples.length > 0) {
+      msg += ` Beispiele: ${invalidRangeSamples.slice(0, 3).join('; ')}`
+    }
+    rowWarnings.push(msg)
+  }
+
+  return { datasets: Array.from(datasets.values()), rowWarnings }
+}
+
+const buildScatterBubbleResult = (sourceRows, xColumn, yColumn, rColumn, datasetLabelColumn, pointLabelColumn, hasR = false) => {
+  const datasets = new Map()
+  let skippedNoX = 0
+  let skippedNoY = 0
+  let skippedInvalidR = 0
+
+  sourceRows.forEach((row) => {
+    const xValue = toNumber(row[xColumn])
+    const yValue = toNumber(row[yColumn])
+    const rValue = hasR && rColumn ? toNumber(row[rColumn]) : (hasR ? 10 : null)
+    const datasetLabel = datasetLabelColumn ? normalizeLabel(row[datasetLabelColumn]) : 'Dataset 1'
+    const pointLabel = pointLabelColumn ? normalizeLabel(row[pointLabelColumn]) : null
+
+    if (xValue === null) {
+      skippedNoX += 1
+      return
+    }
+    if (yValue === null) {
+      skippedNoY += 1
+      return
+    }
+    if (hasR && rColumn && rValue === null) {
+      skippedInvalidR += 1
+      return
+    }
+
+    const datasetKey = datasetLabel || 'Dataset 1'
+    if (!datasets.has(datasetKey)) {
+      datasets.set(datasetKey, {
+        label: datasetKey,
+        data: [],
+        backgroundColor: '#8B5CF6'
+      })
+    }
+
+    const point = { x: xValue, y: yValue }
+    if (hasR && rValue !== null) {
+      point.r = rValue
+    } else if (hasR && !rColumn) {
+      // Default size for bubbles when no r column is specified
+      point.r = 10
+    }
+    if (pointLabel) {
+      point.label = pointLabel
+    }
+
+    datasets.get(datasetKey).data.push(point)
+  })
+
+  const rowWarnings = []
+  if (skippedNoX > 0) {
+    rowWarnings.push(`${skippedNoX} Zeilen ohne gültige X-Werte wurden übersprungen.`)
+  }
+  if (skippedNoY > 0) {
+    rowWarnings.push(`${skippedNoY} Zeilen ohne gültige Y-Werte wurden übersprungen.`)
+  }
+  if (hasR && skippedInvalidR > 0) {
+    rowWarnings.push(`${skippedInvalidR} Zeilen ohne gültige Größenwerte wurden übersprungen.`)
+  }
+
+  return { datasets: Array.from(datasets.values()), rowWarnings }
+}
+
+export default function useDataImport({ allowMultipleValueColumns = true, requireDatasets = false, initialData = null, chartType = null, isScatterBubble = false, isCoordinate = false } = {}) {
   const [fileName, setFileName] = useState('')
   const [rows, setRows] = useState([])
   const [columns, setColumns] = useState([])
@@ -937,20 +1159,47 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         setAnalysisWarnings(summarizeColumnWarnings(analyzed))
         setTransformations(createDefaultTransformations())
 
-        const defaultLabel = analyzed.find((col) => col.type === 'string')?.key || analyzed[0]?.key || ''
-        const numericColumns = analyzed.filter((col) => col.type === 'number').map((col) => col.key)
-        const fallbackColumns = analyzed.filter((col) => col.key !== defaultLabel).map((col) => col.key)
+        if (isCoordinate) {
+          // For Coordinate, auto-detect longitude and latitude columns
+          const numericColumns = analyzed.filter((col) => col.type === 'number').map((col) => col.key)
+          const defaultLongitude = numericColumns.find((key) => key.toLowerCase().includes('long') || key.toLowerCase().includes('lon') || key.toLowerCase().includes('x')) || numericColumns[0] || ''
+          const defaultLatitude = numericColumns.find((key) => key.toLowerCase().includes('lat') || key.toLowerCase().includes('y')) || numericColumns[1] || numericColumns[0] || ''
+          
+          setMapping({
+            ...defaultMapping,
+            longitudeColumn: defaultLongitude,
+            latitudeColumn: defaultLatitude,
+            datasetLabel: ''
+          })
+        } else if (isScatterBubble) {
+          // For Scatter/Bubble/Matrix, auto-detect X and Y columns
+          const numericColumns = analyzed.filter((col) => col.type === 'number').map((col) => col.key)
+          const defaultX = numericColumns[0] || analyzed[0]?.key || ''
+          const defaultY = numericColumns[1] || numericColumns[0] || analyzed[0]?.key || ''
+          
+          setMapping({
+            ...defaultMapping,
+            xColumn: defaultX,
+            yColumn: defaultY,
+            rColumn: numericColumns[2] || '',
+            datasetLabel: ''
+          })
+        } else {
+          const defaultLabel = analyzed.find((col) => col.type === 'string')?.key || analyzed[0]?.key || ''
+          const numericColumns = analyzed.filter((col) => col.type === 'number').map((col) => col.key)
+          const fallbackColumns = analyzed.filter((col) => col.key !== defaultLabel).map((col) => col.key)
 
-        let defaultValues = numericColumns.length > 0 ? numericColumns : fallbackColumns
-        if (!allowMultipleValueColumns) {
-          defaultValues = defaultValues.slice(0, 1)
+          let defaultValues = numericColumns.length > 0 ? numericColumns : fallbackColumns
+          if (!allowMultipleValueColumns) {
+            defaultValues = defaultValues.slice(0, 1)
+          }
+
+          setMapping({
+            label: defaultLabel,
+            valueColumns: defaultValues,
+            datasetLabel: ''
+          })
         }
-
-        setMapping({
-          label: defaultLabel,
-          valueColumns: defaultValues,
-          datasetLabel: ''
-        })
       } catch (error) {
         console.error('Fehler beim Lesen der Datei:', error)
         setRows([])
@@ -963,7 +1212,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         setIsLoading(false)
       }
     },
-    [allowMultipleValueColumns]
+    [allowMultipleValueColumns, isScatterBubble, isCoordinate]
   )
 
   const updateMapping = useCallback((next) => {
@@ -1050,18 +1299,52 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       return null
     }
 
-    const { label, valueColumns, datasetLabel } = mapping
+    const { label, valueColumns, datasetLabel, xColumn, yColumn, rColumn } = mapping
     const columnKeys = new Set(columns.map((column) => column.key))
     const errors = []
 
-    if (!label) {
-      errors.push('Bitte wählen Sie eine Spalte für die Beschriftungen aus.')
-    }
-    if (!valueColumns || valueColumns.length === 0) {
-      errors.push('Bitte wählen Sie mindestens eine Werte-Spalte aus.')
-    }
-    if (datasetLabel && valueColumns.length > 1) {
-      errors.push('Bei Verwendung einer Datensatz-Spalte darf nur eine Werte-Spalte ausgewählt sein.')
+    // Coordinate validation
+    if (isCoordinate) {
+      const { longitudeColumn, latitudeColumn } = mapping
+      if (!longitudeColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die Longitude-Werte aus.')
+      }
+      if (!latitudeColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die Latitude-Werte aus.')
+      }
+      if (longitudeColumn && !columnKeys.has(longitudeColumn)) {
+        errors.push(`Die ausgewählte Longitude-Spalte "${longitudeColumn}" ist nicht mehr verfügbar.`)
+      }
+      if (latitudeColumn && !columnKeys.has(latitudeColumn)) {
+        errors.push(`Die ausgewählte Latitude-Spalte "${latitudeColumn}" ist nicht mehr verfügbar.`)
+      }
+    } else if (isScatterBubble) {
+      // Scatter/Bubble/Matrix validation
+      if (!xColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die X-Werte aus.')
+      }
+      if (!yColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die Y-Werte aus.')
+      }
+      if (xColumn && !columnKeys.has(xColumn)) {
+        errors.push(`Die ausgewählte X-Spalte "${xColumn}" ist nicht mehr verfügbar.`)
+      }
+      if (yColumn && !columnKeys.has(yColumn)) {
+        errors.push(`Die ausgewählte Y-Spalte "${yColumn}" ist nicht mehr verfügbar.`)
+      }
+      if (rColumn && !columnKeys.has(rColumn)) {
+        errors.push(`Die ausgewählte Größen-Spalte "${rColumn}" ist nicht mehr verfügbar.`)
+      }
+    } else {
+      if (!label) {
+        errors.push('Bitte wählen Sie eine Spalte für die Beschriftungen aus.')
+      }
+      if (!valueColumns || valueColumns.length === 0) {
+        errors.push('Bitte wählen Sie mindestens eine Werte-Spalte aus.')
+      }
+      if (datasetLabel && valueColumns.length > 1) {
+        errors.push('Bei Verwendung einer Datensatz-Spalte darf nur eine Werte-Spalte ausgewählt sein.')
+      }
     }
 
     const activeFilters = (transformations.filters || []).filter((filter) => filter.enabled !== false)
@@ -1075,8 +1358,11 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     })
 
     if (transformations.grouping?.enabled) {
-      if (!label) {
-        errors.push('Aktivierte Gruppierung benötigt eine ausgewählte Beschriftungs-Spalte.')
+      // For coordinate and scatter/bubble charts, grouping doesn't require a label column
+      if (!isCoordinate && !isScatterBubble) {
+        if (!label) {
+          errors.push('Aktivierte Gruppierung benötigt eine ausgewählte Beschriftungs-Spalte.')
+        }
       }
       if (transformations.grouping.column && !columnKeys.has(transformations.grouping.column)) {
         errors.push('Die ausgewählte Gruppierungs-Spalte ist nicht mehr verfügbar.')
@@ -1103,7 +1389,68 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     let result = null
     let warningsFromRows = []
 
-    if (datasetLabel) {
+    // Coordinate charts have special mapping
+    if (isCoordinate) {
+      const { longitudeColumn, latitudeColumn, datasetLabel: datasetLabelCol, pointLabelColumn } = mapping
+      
+      if (!longitudeColumn || !latitudeColumn) {
+        setValidationErrors(['Bitte wählen Sie Longitude- und Latitude-Spalten aus.'])
+        return null
+      }
+      
+      const coordinateResult = buildCoordinateResult(
+        transformed,
+        longitudeColumn,
+        latitudeColumn,
+        datasetLabelCol,
+        pointLabelColumn
+      )
+      warningsFromRows = coordinateResult.rowWarnings
+      delete coordinateResult.rowWarnings
+      result = { datasets: coordinateResult.datasets, labels: [], values: [] }
+      
+      if (!result.datasets || result.datasets.length === 0 || result.datasets.every(ds => ds.data.length === 0)) {
+        const errorParts = ['Es konnten keine gültigen Koordinaten importiert werden.']
+        if (warningsFromRows.length > 0) {
+          errorParts.push('', ...warningsFromRows)
+        }
+        errorParts.push('', 'Bitte prüfen Sie:')
+        errorParts.push(`- Die ausgewählten Spalten (${longitudeColumn}, ${latitudeColumn})`)
+        errorParts.push('- Ob die Werte gültige Zahlen enthalten')
+        errorParts.push('- Ob die Koordinaten im gültigen Bereich liegen (Longitude: -180° bis 180°, Latitude: -90° bis 90°)')
+        const errorMsg = errorParts.join('\n')
+        setValidationErrors([errorMsg])
+        setResultWarnings(warningsFromRows)
+        return null
+      }
+    } else if (isScatterBubble) {
+      // Scatter/Bubble/Matrix charts have special mapping
+      const { xColumn, yColumn, rColumn, datasetLabel: datasetLabelCol, pointLabelColumn } = mapping
+      const hasR = chartType === 'bubble' || chartType === 'matrix'
+      
+      if (!xColumn || !yColumn) {
+        setValidationErrors(['Bitte wählen Sie X- und Y-Spalten aus.'])
+        return null
+      }
+      
+      const scatterResult = buildScatterBubbleResult(
+        transformed,
+        xColumn,
+        yColumn,
+        rColumn,
+        datasetLabelCol,
+        pointLabelColumn,
+        hasR
+      )
+      warningsFromRows = scatterResult.rowWarnings
+      delete scatterResult.rowWarnings
+      result = { datasets: scatterResult.datasets, labels: [], values: [] }
+      
+      if (!result.datasets || result.datasets.length === 0 || result.datasets.every(ds => ds.data.length === 0)) {
+        setValidationErrors(['Es konnten keine gültigen Datenpunkte importiert werden. Bitte prüfen Sie die Spaltenauswahl.'])
+        return null
+      }
+    } else if (datasetLabel) {
       result = buildLongDatasetResult(transformed, label, valueColumns[0], datasetLabel)
       warningsFromRows = result.rowWarnings
       delete result.rowWarnings
@@ -1120,7 +1467,15 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       result = { ...simpleResult, datasets: [] }
     }
 
-    if (!result.labels || result.labels.length === 0) {
+    // For coordinate and scatter/bubble charts, we check datasets instead of labels
+    if (isCoordinate || isScatterBubble) {
+      // Already validated above - datasets must not be empty
+      if (!result.datasets || result.datasets.length === 0 || result.datasets.every(ds => ds.data.length === 0)) {
+        // This should not happen as we check above, but just in case
+        setValidationErrors(['Es konnten keine gültigen Koordinaten/Datenpunkte importiert werden.'])
+        return null
+      }
+    } else if (!result.labels || result.labels.length === 0) {
       setValidationErrors(['Es konnten keine gültigen Datenzeilen importiert werden. Bitte prüfen Sie die Auswahl.'])
       return null
     }

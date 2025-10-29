@@ -17,6 +17,7 @@ const FILTER_OPERATORS = [
   { value: 'equals', label: 'ist gleich' },
   { value: 'notEquals', label: 'ist ungleich' },
   { value: 'contains', label: 'enthält' },
+  { value: 'notContains', label: 'enthält nicht' },
   { value: 'greaterThan', label: 'größer als' },
   { value: 'lessThan', label: 'kleiner als' }
 ]
@@ -51,7 +52,10 @@ export default function DataImportModal({
   onImport,
   allowMultipleValueColumns = true,
   requireDatasets = false,
-  initialData = null
+  initialData = null,
+  chartType = null,
+  isScatterBubble = false,
+  isCoordinate = false
 }) {
   const [activeTab, setActiveTab] = useState('mapping')
 
@@ -77,7 +81,7 @@ export default function DataImportModal({
     warnings,
     getImportResult,
     getImportState
-  } = useDataImport({ allowMultipleValueColumns, requireDatasets, initialData })
+  } = useDataImport({ allowMultipleValueColumns, requireDatasets, initialData, chartType, isScatterBubble, isCoordinate })
 
   useEffect(() => {
     if (!isOpen) {
@@ -131,26 +135,77 @@ export default function DataImportModal({
 
   const transformedColumns = useMemo(() => {
     const keys = []
-    if (mapping.label) {
-      keys.push(mapping.label)
-    }
-    if (mapping.datasetLabel && !keys.includes(mapping.datasetLabel)) {
-      keys.push(mapping.datasetLabel)
-    }
-    mapping.valueColumns.forEach((column) => {
-      if (column && !keys.includes(column)) {
-        keys.push(column)
+    
+    // For coordinate charts, show longitude and latitude columns
+    if (isCoordinate) {
+      if (mapping.longitudeColumn) {
+        keys.push(mapping.longitudeColumn)
       }
-    })
-    if (keys.length === 0 && transformedPreviewRows.length > 0) {
-      Object.keys(transformedPreviewRows[0] || {}).forEach((key) => {
-        if (!keys.includes(key)) {
-          keys.push(key)
+      if (mapping.latitudeColumn && !keys.includes(mapping.latitudeColumn)) {
+        keys.push(mapping.latitudeColumn)
+      }
+      if (mapping.datasetLabel && !keys.includes(mapping.datasetLabel)) {
+        keys.push(mapping.datasetLabel)
+      }
+      if (mapping.pointLabelColumn && !keys.includes(mapping.pointLabelColumn)) {
+        keys.push(mapping.pointLabelColumn)
+      }
+      // Add all other columns that exist in the data
+      if (transformedPreviewRows.length > 0) {
+        Object.keys(transformedPreviewRows[0] || {}).forEach((key) => {
+          if (!keys.includes(key)) {
+            keys.push(key)
+          }
+        })
+      }
+    } else if (isScatterBubble) {
+      // For scatter/bubble charts, show x, y, r columns
+      if (mapping.xColumn) {
+        keys.push(mapping.xColumn)
+      }
+      if (mapping.yColumn && !keys.includes(mapping.yColumn)) {
+        keys.push(mapping.yColumn)
+      }
+      if (mapping.rColumn && !keys.includes(mapping.rColumn)) {
+        keys.push(mapping.rColumn)
+      }
+      if (mapping.datasetLabel && !keys.includes(mapping.datasetLabel)) {
+        keys.push(mapping.datasetLabel)
+      }
+      if (mapping.pointLabelColumn && !keys.includes(mapping.pointLabelColumn)) {
+        keys.push(mapping.pointLabelColumn)
+      }
+      // Add all other columns that exist in the data
+      if (transformedPreviewRows.length > 0) {
+        Object.keys(transformedPreviewRows[0] || {}).forEach((key) => {
+          if (!keys.includes(key)) {
+            keys.push(key)
+          }
+        })
+      }
+    } else {
+      // Standard mapping for other chart types
+      if (mapping.label) {
+        keys.push(mapping.label)
+      }
+      if (mapping.datasetLabel && !keys.includes(mapping.datasetLabel)) {
+        keys.push(mapping.datasetLabel)
+      }
+      mapping.valueColumns.forEach((column) => {
+        if (column && !keys.includes(column)) {
+          keys.push(column)
         }
       })
+      if (keys.length === 0 && transformedPreviewRows.length > 0) {
+        Object.keys(transformedPreviewRows[0] || {}).forEach((key) => {
+          if (!keys.includes(key)) {
+            keys.push(key)
+          }
+        })
+      }
     }
     return keys
-  }, [mapping, transformedPreviewRows])
+  }, [mapping, transformedPreviewRows, isCoordinate, isScatterBubble])
 
   if (!isOpen) {
     return null
@@ -413,10 +468,236 @@ export default function DataImportModal({
                   <div className="space-y-2">
                     <h3 className="text-sm font-semibold text-dark-textLight">Spalten zuordnen</h3>
                     <p className="text-xs text-dark-textGray">
-                      Wählen Sie aus, welche Spalten Beschriftungen, Werte und optionale Datensatz-Kennungen enthalten.
+                      {isCoordinate
+                        ? 'Wählen Sie aus, welche CSV-Spalten den Longitude-, Latitude-Werten und optionalen Labels entsprechen.'
+                        : isScatterBubble
+                        ? 'Wählen Sie aus, welche CSV-Spalten den X-, Y- und optionalen Werte (Größe, Datensatz-Label, Punkt-Label) entsprechen.'
+                        : 'Wählen Sie aus, welche Spalten Beschriftungen, Werte und optionale Datensatz-Kennungen enthalten.'}
                     </p>
                   </div>
 
+                  {isCoordinate ? (
+                    <div className="space-y-4">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                            Longitude (erforderlich)
+                          </label>
+                          <select
+                            value={mapping.longitudeColumn || ''}
+                            onChange={(event) => updateMapping({ longitudeColumn: event.target.value })}
+                            className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                          >
+                            <option value="">Spalte wählen …</option>
+                            {columns
+                              .filter((column) => column.type === 'number')
+                              .map((column) => (
+                                <option key={column.key} value={column.key}>
+                                  {column.key} (Zahl)
+                                </option>
+                              ))}
+                          </select>
+                          <p className="text-[11px] text-dark-textGray">
+                            Spalte mit den Longitude-Werten (-180° bis 180°).
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                            Latitude (erforderlich)
+                          </label>
+                          <select
+                            value={mapping.latitudeColumn || ''}
+                            onChange={(event) => updateMapping({ latitudeColumn: event.target.value })}
+                            className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                          >
+                            <option value="">Spalte wählen …</option>
+                            {columns
+                              .filter((column) => column.type === 'number')
+                              .map((column) => (
+                                <option key={column.key} value={column.key}>
+                                  {column.key} (Zahl)
+                                </option>
+                              ))}
+                          </select>
+                          <p className="text-[11px] text-dark-textGray">
+                            Spalte mit den Latitude-Werten (-90° bis 90°).
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                            Datensatz-Label (optional)
+                          </label>
+                          <select
+                            value={mapping.datasetLabel || ''}
+                            onChange={(event) => updateMapping({ datasetLabel: event.target.value })}
+                            className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                          >
+                            <option value="">Nicht verwenden (Alle in einem Datensatz)</option>
+                            {columns
+                              .filter((column) => column.type !== 'number' && column.key !== mapping.longitudeColumn && column.key !== mapping.latitudeColumn)
+                              .map((column) => (
+                                <option key={column.key} value={column.key}>
+                                  {column.key}
+                                </option>
+                              ))}
+                          </select>
+                          <p className="text-[11px] text-dark-textGray">
+                            Spalte zur Gruppierung von Punkten in verschiedene Datensätze.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                            Punkt-Label (optional)
+                          </label>
+                          <select
+                            value={mapping.pointLabelColumn || ''}
+                            onChange={(event) => updateMapping({ pointLabelColumn: event.target.value })}
+                            className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                          >
+                            <option value="">Keine Labels</option>
+                            {columns
+                              .filter((column) => column.key !== mapping.longitudeColumn && column.key !== mapping.latitudeColumn && column.key !== mapping.datasetLabel)
+                              .map((column) => (
+                                <option key={column.key} value={column.key}>
+                                  {column.key} {column.type === 'number' ? '(Zahl)' : ''}
+                                </option>
+                              ))}
+                          </select>
+                          <p className="text-[11px] text-dark-textGray">
+                            Spalte mit Beschriftungen für einzelne Punkte.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : isScatterBubble ? (
+                    <div className="space-y-4">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                            X-Werte (erforderlich)
+                          </label>
+                          <select
+                            value={mapping.xColumn || ''}
+                            onChange={(event) => updateMapping({ xColumn: event.target.value })}
+                            className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                          >
+                            <option value="">Spalte wählen …</option>
+                            {columns
+                              .filter((column) => column.type === 'number')
+                              .map((column) => (
+                                <option key={column.key} value={column.key}>
+                                  {column.key} (Zahl)
+                                </option>
+                              ))}
+                          </select>
+                          <p className="text-[11px] text-dark-textGray">
+                            Spalte mit den X-Koordinaten für die Punkte.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                            Y-Werte (erforderlich)
+                          </label>
+                          <select
+                            value={mapping.yColumn || ''}
+                            onChange={(event) => updateMapping({ yColumn: event.target.value })}
+                            className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                          >
+                            <option value="">Spalte wählen …</option>
+                            {columns
+                              .filter((column) => column.type === 'number')
+                              .map((column) => (
+                                <option key={column.key} value={column.key}>
+                                  {column.key} (Zahl)
+                                </option>
+                              ))}
+                          </select>
+                          <p className="text-[11px] text-dark-textGray">
+                            Spalte mit den Y-Koordinaten für die Punkte.
+                          </p>
+                        </div>
+                      </div>
+
+                      {(chartType === 'bubble' || chartType === 'matrix') && (
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                            Größe (r) - optional
+                          </label>
+                          <select
+                            value={mapping.rColumn || ''}
+                            onChange={(event) => updateMapping({ rColumn: event.target.value })}
+                            className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                          >
+                            <option value="">Keine (Standard: 10)</option>
+                            {columns
+                              .filter((column) => column.type === 'number')
+                              .map((column) => (
+                                <option key={column.key} value={column.key}>
+                                  {column.key} (Zahl)
+                                </option>
+                              ))}
+                          </select>
+                          <p className="text-[11px] text-dark-textGray">
+                            Spalte mit den Größenwerten für die Blasen. Wenn keine Spalte ausgewählt wird, wird Standard-Größe 10 verwendet.
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                            Datensatz-Label (optional)
+                          </label>
+                          <select
+                            value={mapping.datasetLabel || ''}
+                            onChange={(event) => updateMapping({ datasetLabel: event.target.value })}
+                            className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                          >
+                            <option value="">Nicht verwenden (Alle in einem Datensatz)</option>
+                            {columns
+                              .filter((column) => column.type !== 'number' && column.key !== mapping.xColumn && column.key !== mapping.yColumn && column.key !== mapping.rColumn)
+                              .map((column) => (
+                                <option key={column.key} value={column.key}>
+                                  {column.key}
+                                </option>
+                              ))}
+                          </select>
+                          <p className="text-[11px] text-dark-textGray">
+                            Spalte zur Gruppierung von Punkten in verschiedene Datensätze.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                            Punkt-Label (optional)
+                          </label>
+                          <select
+                            value={mapping.pointLabelColumn || ''}
+                            onChange={(event) => updateMapping({ pointLabelColumn: event.target.value })}
+                            className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                          >
+                            <option value="">Keine Labels</option>
+                            {columns
+                              .filter((column) => column.key !== mapping.xColumn && column.key !== mapping.yColumn && column.key !== mapping.rColumn && column.key !== mapping.datasetLabel)
+                              .map((column) => (
+                                <option key={column.key} value={column.key}>
+                                  {column.key} {column.type === 'number' ? '(Zahl)' : ''}
+                                </option>
+                              ))}
+                          </select>
+                          <p className="text-[11px] text-dark-textGray">
+                            Spalte mit Beschriftungen für einzelne Punkte.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
@@ -501,8 +782,9 @@ export default function DataImportModal({
                       </p>
                     </div>
                   </div>
+                  )}
 
-                  {allowMultipleValueColumns && (
+                  {!isScatterBubble && allowMultipleValueColumns && (
                     <div className="space-y-2">
                       <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
                         Datensatz-Spalte (optional)
@@ -1105,7 +1387,7 @@ export default function DataImportModal({
               {validationErrors.length > 0 && (
                 <div className="space-y-1 rounded-lg border border-red-700 bg-red-900/40 px-4 py-3 text-sm text-red-100">
                   {validationErrors.map((message, index) => (
-                    <div key={index}>• {message}</div>
+                    <div key={index} className="whitespace-pre-line">• {message}</div>
                   ))}
                 </div>
               )}
@@ -1160,6 +1442,9 @@ DataImportModal.propTypes = {
   onImport: PropTypes.func.isRequired,
   allowMultipleValueColumns: PropTypes.bool,
   requireDatasets: PropTypes.bool,
-  initialData: PropTypes.object
+  initialData: PropTypes.object,
+  chartType: PropTypes.string,
+  isScatterBubble: PropTypes.bool,
+  isCoordinate: PropTypes.bool
 }
 

@@ -92,6 +92,13 @@ const createWindow = async () => {
   const port = await startBackend();
   const apiBaseUrl = `http://127.0.0.1:${port}/api`;
 
+  const resolveWindowIcon = () => {
+    if (isDev) {
+      return path.resolve(__dirname, '../../frontend/src/Custom-Chart-Composer-Icon.png');
+    }
+    return path.join(process.resourcesPath, 'app', 'assets', 'icon.png');
+  };
+
   const window = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -99,7 +106,8 @@ const createWindow = async () => {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
       additionalArguments: [`--apiBaseUrl=${apiBaseUrl}`]
-    }
+    },
+    icon: resolveWindowIcon()
   });
 
   const frontendEntry = resolveFrontendEntry();

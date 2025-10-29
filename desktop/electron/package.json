@@ -26,6 +26,7 @@
   "build": {
     "appId": "com.custom.chartcomposer",
     "productName": "Custom Chart Composer",
+    "icon": "icons/icon.ico",
     "directories": {
       "output": "dist"
     },

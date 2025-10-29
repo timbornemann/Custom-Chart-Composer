@@ -10,6 +10,7 @@ const electronDir = path.resolve(__dirname, '../');
 const outputDir = path.join(electronDir, 'app');
 const backendSrc = path.join(projectRoot, 'backend');
 const frontendSrc = path.join(projectRoot, 'frontend', 'dist');
+const frontendAssetsSrc = path.join(projectRoot, 'frontend', 'src');
 
 const ensureFrontendBuildExists = () => {
   if (!fs.existsSync(frontendSrc)) {
@@ -63,11 +64,25 @@ const copyFrontend = () => {
   fs.cpSync(frontendSrc, frontendDest, { recursive: true });
 };
 
+const copyIcons = () => {
+  const iconsDir = path.join(electronDir, 'icons');
+  const appAssetsDir = path.join(outputDir, 'assets');
+  fs.mkdirSync(iconsDir, { recursive: true });
+  fs.mkdirSync(appAssetsDir, { recursive: true });
+
+  const icoSrc = path.join(frontendAssetsSrc, 'Custom-Chart-Composer-Icon.ico');
+  const pngSrc = path.join(frontendAssetsSrc, 'Custom-Chart-Composer-Icon.png');
+
+  try { fs.copyFileSync(icoSrc, path.join(iconsDir, 'icon.ico')); } catch (_) {}
+  try { fs.copyFileSync(pngSrc, path.join(appAssetsDir, 'icon.png')); } catch (_) {}
+};
+
 const main = () => {
   ensureFrontendBuildExists();
   cleanOutputDir();
   copyBackend();
   copyFrontend();
+  copyIcons();
 };
 
 main();

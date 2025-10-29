@@ -1,4 +1,9 @@
+import { useState } from 'react'
+
 export default function SimpleDataEditor({ labels, values, onLabelsChange, onValuesChange }) {
+  const [draggedIndex, setDraggedIndex] = useState(null)
+  const [dragOverIndex, setDragOverIndex] = useState(null)
+
   const addEntry = () => {
     onLabelsChange([...labels, `Label ${labels.length + 1}`])
     onValuesChange([...values, 0])
@@ -21,6 +26,56 @@ export default function SimpleDataEditor({ labels, values, onLabelsChange, onVal
     onValuesChange(updated)
   }
 
+  const moveEntry = (fromIndex, toIndex) => {
+    if (fromIndex === toIndex) return
+    
+    const newLabels = [...labels]
+    const newValues = [...values]
+    
+    const [removedLabel] = newLabels.splice(fromIndex, 1)
+    const [removedValue] = newValues.splice(fromIndex, 1)
+    
+    newLabels.splice(toIndex, 0, removedLabel)
+    newValues.splice(toIndex, 0, removedValue)
+    
+    onLabelsChange(newLabels)
+    onValuesChange(newValues)
+  }
+
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/html', e.target)
+    e.currentTarget.style.opacity = '0.5'
+  }
+
+  const handleDragEnd = (e) => {
+    e.currentTarget.style.opacity = '1'
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index)
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null)
+  }
+
+  const handleDrop = (e, index) => {
+    e.preventDefault()
+    if (draggedIndex !== null && draggedIndex !== index) {
+      moveEntry(draggedIndex, index)
+    }
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-2">
@@ -37,8 +92,24 @@ export default function SimpleDataEditor({ labels, values, onLabelsChange, onVal
 
       <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
         {labels.map((label, idx) => (
-          <div key={idx} className="bg-dark-bg rounded-lg p-3 border border-gray-700">
+          <div
+            key={idx}
+            draggable
+            onDragStart={(e) => handleDragStart(e, idx)}
+            onDragEnd={handleDragEnd}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, idx)}
+            className={`bg-dark-bg rounded-lg p-3 border border-gray-700 cursor-move transition-all ${
+              draggedIndex === idx ? 'opacity-50' : ''
+            } ${dragOverIndex === idx ? 'border-blue-500 border-2 shadow-lg' : ''}`}
+          >
             <div className="flex items-start space-x-2">
+              <div className="flex items-center justify-center w-6 h-6 mt-1 text-dark-textGray cursor-grab active:cursor-grabbing">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                </svg>
+              </div>
               <div className="flex-1 space-y-2">
                 <div>
                   <label className="text-xs text-dark-textGray mb-1 block">Beschriftung</label>

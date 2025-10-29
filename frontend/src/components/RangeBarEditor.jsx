@@ -2,6 +2,8 @@ import { useState } from 'react'
 
 export default function RangeBarEditor({ labels, datasets, onLabelsChange, onDatasetsChange }) {
   const [expandedItem, setExpandedItem] = useState(0)
+  const [draggedIndex, setDraggedIndex] = useState(null)
+  const [dragOverIndex, setDragOverIndex] = useState(null)
   
   const addDataPoint = () => {
     onLabelsChange([...labels, `Task ${labels.length + 1}`])
@@ -64,6 +66,59 @@ export default function RangeBarEditor({ labels, datasets, onLabelsChange, onDat
       return ds
     })
     onDatasetsChange(updated)
+  }
+
+  const moveDataPoint = (fromIndex, toIndex) => {
+    if (fromIndex === toIndex) return
+
+    // Update labels
+    const newLabels = [...labels]
+    const [removedLabel] = newLabels.splice(fromIndex, 1)
+    newLabels.splice(toIndex, 0, removedLabel)
+    onLabelsChange(newLabels)
+
+    // Update all datasets
+    const updated = datasets.map(ds => {
+      const newData = [...ds.data]
+      const [removedRange] = newData.splice(fromIndex, 1)
+      newData.splice(toIndex, 0, removedRange)
+      return { ...ds, data: newData }
+    })
+    onDatasetsChange(updated)
+  }
+
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/html', e.target)
+    e.currentTarget.style.opacity = '0.5'
+  }
+
+  const handleDragEnd = (e) => {
+    e.currentTarget.style.opacity = '1'
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index)
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null)
+  }
+
+  const handleDrop = (e, index) => {
+    e.preventDefault()
+    if (draggedIndex !== null && draggedIndex !== index) {
+      moveDataPoint(draggedIndex, index)
+    }
+    setDraggedIndex(null)
+    setDragOverIndex(null)
   }
 
   return (
@@ -138,8 +193,24 @@ export default function RangeBarEditor({ labels, datasets, onLabelsChange, onDat
                       {labels.map((label, labelIdx) => {
                         const range = dataset.data[labelIdx] || [0, 10]
                         return (
-                          <div key={labelIdx} className="bg-dark-secondary rounded p-3 border border-gray-700/50">
+                          <div
+                            key={labelIdx}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, labelIdx)}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={(e) => handleDragOver(e, labelIdx)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, labelIdx)}
+                            className={`bg-dark-secondary rounded p-3 border border-gray-700/50 cursor-move transition-all ${
+                              draggedIndex === labelIdx ? 'opacity-50' : ''
+                            } ${dragOverIndex === labelIdx ? 'border-blue-500 border-2 shadow-lg' : ''}`}
+                          >
                             <div className="flex items-start space-x-2">
+                              <div className="flex items-center justify-center w-5 h-5 mt-1 text-dark-textGray cursor-grab active:cursor-grabbing">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                                </svg>
+                              </div>
                               <div className="flex-1 space-y-2">
                                 <div>
                                   <label className="text-xs text-dark-textGray mb-1 block">Name</label>

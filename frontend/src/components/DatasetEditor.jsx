@@ -2,6 +2,8 @@ import { useState } from 'react'
 
 export default function DatasetEditor({ datasets, labels, onDatasetsChange, onLabelsChange }) {
   const [expandedDataset, setExpandedDataset] = useState(0)
+  const [draggedIndex, setDraggedIndex] = useState(null)
+  const [dragOverIndex, setDragOverIndex] = useState(null)
 
   const addDataset = () => {
     const newDataset = {
@@ -63,6 +65,59 @@ export default function DatasetEditor({ datasets, labels, onDatasetsChange, onLa
     const updated = [...labels]
     updated[index] = value
     onLabelsChange(updated)
+  }
+
+  const moveDataPoint = (fromIndex, toIndex) => {
+    if (fromIndex === toIndex) return
+
+    // Update labels
+    const newLabels = [...labels]
+    const [removedLabel] = newLabels.splice(fromIndex, 1)
+    newLabels.splice(toIndex, 0, removedLabel)
+    onLabelsChange(newLabels)
+
+    // Update all datasets
+    const updated = datasets.map(ds => {
+      const newData = [...ds.data]
+      const [removedValue] = newData.splice(fromIndex, 1)
+      newData.splice(toIndex, 0, removedValue)
+      return { ...ds, data: newData }
+    })
+    onDatasetsChange(updated)
+  }
+
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/html', e.target)
+    e.currentTarget.style.opacity = '0.5'
+  }
+
+  const handleDragEnd = (e) => {
+    e.currentTarget.style.opacity = '1'
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index)
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null)
+  }
+
+  const handleDrop = (e, index) => {
+    e.preventDefault()
+    if (draggedIndex !== null && draggedIndex !== index) {
+      moveDataPoint(draggedIndex, index)
+    }
+    setDraggedIndex(null)
+    setDragOverIndex(null)
   }
 
   return (
@@ -194,21 +249,39 @@ export default function DatasetEditor({ datasets, labels, onDatasetsChange, onLa
                     </div>
                     <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2">
                       {dataset.data.map((value, pointIdx) => (
-                        <div key={pointIdx} className="bg-dark-secondary rounded p-2 border border-gray-700/50">
-                          <div className="flex items-center justify-between mb-1">
-                            <input
-                              type="text"
-                              value={labels[pointIdx] || `Label ${pointIdx + 1}`}
-                              onChange={(e) => updateLabel(pointIdx, e.target.value)}
-                              placeholder={`Label ${pointIdx + 1}`}
-                              className="flex-1 px-2 py-1 bg-dark-bg text-dark-textLight rounded border-0 focus:outline-none text-xs font-medium"
-                            />
-                            <button
-                              onClick={() => removeDataPoint(pointIdx)}
-                              className="px-1 text-red-400 hover:text-red-300 text-xs ml-1"
-                            >
-                              ✕
-                            </button>
+                        <div
+                          key={pointIdx}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, pointIdx)}
+                          onDragEnd={handleDragEnd}
+                          onDragOver={(e) => handleDragOver(e, pointIdx)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDrop(e, pointIdx)}
+                          className={`bg-dark-secondary rounded p-2 border border-gray-700/50 cursor-move transition-all ${
+                            draggedIndex === pointIdx ? 'opacity-50' : ''
+                          } ${dragOverIndex === pointIdx ? 'border-blue-500 border-2 shadow-lg' : ''}`}
+                        >
+                          <div className="flex items-center gap-1 mb-1">
+                            <div className="flex items-center justify-center w-5 h-5 text-dark-textGray cursor-grab active:cursor-grabbing">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                              </svg>
+                            </div>
+                            <div className="flex items-center justify-between flex-1">
+                              <input
+                                type="text"
+                                value={labels[pointIdx] || `Label ${pointIdx + 1}`}
+                                onChange={(e) => updateLabel(pointIdx, e.target.value)}
+                                placeholder={`Label ${pointIdx + 1}`}
+                                className="flex-1 px-2 py-1 bg-dark-bg text-dark-textLight rounded border-0 focus:outline-none text-xs font-medium"
+                              />
+                              <button
+                                onClick={() => removeDataPoint(pointIdx)}
+                                className="px-1 text-red-400 hover:text-red-300 text-xs ml-1"
+                              >
+                                ✕
+                              </button>
+                            </div>
                           </div>
                           <input
                             type="number"

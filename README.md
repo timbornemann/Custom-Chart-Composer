@@ -15,6 +15,8 @@ Ein modernes, webbasiertes Tool zur einfachen Erstellung ästhetisch ansprechend
 - 🖌️ **Umfangreiche Anpassungen**: Farben, Beschriftungen, Optionen
 - 📦 **Multiple Export-Formate**: PNG, JPEG, HTML
 - 🌙 **Modernes Dark Theme**: Professionelles UI-Design
+- ↩️ **Undo & Redo inklusive Shortcuts**: Änderungen bequem per Toolbar oder mit Strg+Z / Strg+Shift+Z rückgängig machen bzw. wiederholen
+- 💾 **Automatische Zwischenspeicherung**: Deine Diagrammdaten werden lokal gepuffert, sodass beim Neuladen nichts verloren geht
 - 🐳 **Docker-Support**: Einfache Bereitstellung
 - ⚡ **Live-Vorschau**: Echtzeit-Aktualisierung bei Änderungen
 

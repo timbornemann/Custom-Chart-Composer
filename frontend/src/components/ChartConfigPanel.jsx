@@ -18,8 +18,48 @@ import BackgroundImageEditor from './BackgroundImageEditor'
 import { useExport } from '../hooks/useExport'
 import ExportPreviewModal from './ExportPreviewModal'
 
-export default function ChartConfigPanel({ chartType, config, onConfigChange, chartRef, onResetData, onClearData }) {
+export default function ChartConfigPanel({
+  chartType,
+  config,
+  onConfigChange,
+  chartRef,
+  onResetData,
+  onClearData,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo
+}) {
   const [activeTab, setActiveTab] = useState('data')
+
+  useEffect(() => {
+    const handleKeydown = (event) => {
+      const activeElement = document.activeElement
+      const tagName = activeElement?.tagName?.toLowerCase()
+      const isEditableElement = activeElement?.isContentEditable || tagName === 'input' || tagName === 'textarea'
+
+      if (isEditableElement) {
+        return
+      }
+
+      if (event.ctrlKey && event.key === 'z' && !event.shiftKey) {
+        event.preventDefault()
+        if (canUndo) {
+          onUndo()
+        }
+      }
+
+      if (event.ctrlKey && (event.key === 'Z' || (event.key === 'z' && event.shiftKey))) {
+        event.preventDefault()
+        if (canRedo) {
+          onRedo()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeydown)
+    return () => window.removeEventListener('keydown', handleKeydown)
+  }, [onUndo, onRedo, canUndo, canRedo])
 
   if (!chartType) {
     return (
@@ -33,57 +73,53 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange, ch
     <div className="bg-dark-secondary rounded-2xl shadow-lg p-6">
       <h2 className="text-xl font-semibold text-dark-textLight mb-4">Konfiguration</h2>
       
-      <div className="flex space-x-2 mb-6 border-b border-gray-700">
-        <button
-          onClick={() => setActiveTab('data')}
-          className={`px-4 py-2 font-medium transition-all ${
-            activeTab === 'data'
-              ? 'text-dark-accent1 border-b-2 border-dark-accent1'
-              : 'text-dark-textGray hover:text-dark-textLight'
-          }`}
-        >
-          Daten
-        </button>
-        <button
-          onClick={() => setActiveTab('styling')}
-          className={`px-4 py-2 font-medium transition-all ${
-            activeTab === 'styling'
-              ? 'text-dark-accent1 border-b-2 border-dark-accent1'
-              : 'text-dark-textGray hover:text-dark-textLight'
-          }`}
-        >
-          Styling
-        </button>
-        <button
-          onClick={() => setActiveTab('annotations')}
-          className={`px-4 py-2 font-medium transition-all ${
-            activeTab === 'annotations'
-              ? 'text-dark-accent1 border-b-2 border-dark-accent1'
-              : 'text-dark-textGray hover:text-dark-textLight'
-          }`}
-        >
-          Annotationen
-        </button>
-        <button
-          onClick={() => setActiveTab('options')}
-          className={`px-4 py-2 font-medium transition-all ${
-            activeTab === 'options'
-              ? 'text-dark-accent1 border-b-2 border-dark-accent1'
-              : 'text-dark-textGray hover:text-dark-textLight'
-          }`}
-        >
-          Optionen
-        </button>
-        <button
-          onClick={() => setActiveTab('export')}
-          className={`px-4 py-2 font-medium transition-all ${
-            activeTab === 'export'
-              ? 'text-dark-accent1 border-b-2 border-dark-accent1'
-              : 'text-dark-textGray hover:text-dark-textLight'
-          }`}
-        >
-          Export
-        </button>
+      <div className="mb-6 border-b border-gray-700 pb-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <TabButton label="Daten" isActive={activeTab === 'data'} onClick={() => setActiveTab('data')} />
+            <TabButton label="Styling" isActive={activeTab === 'styling'} onClick={() => setActiveTab('styling')} />
+            <TabButton label="Annotationen" isActive={activeTab === 'annotations'} onClick={() => setActiveTab('annotations')} />
+            <TabButton label="Optionen" isActive={activeTab === 'options'} onClick={() => setActiveTab('options')} />
+            <TabButton label="Export" isActive={activeTab === 'export'} onClick={() => setActiveTab('export')} />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onUndo}
+              disabled={!canUndo}
+              title="Rückgängig (Strg+Z)"
+              className={`flex items-center space-x-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-all ${
+                canUndo
+                  ? 'border-gray-700 text-dark-textLight hover:bg-gray-800'
+                  : 'border-gray-800 text-dark-textGray cursor-not-allowed bg-gray-900'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17l-5-5 5-5m8 10a5 5 0 00-5-5H4" />
+              </svg>
+              <span>Rückgängig</span>
+            </button>
+            <button
+              type="button"
+              onClick={onRedo}
+              disabled={!canRedo}
+              title="Wiederholen (Strg+Shift+Z)"
+              className={`flex items-center space-x-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-all ${
+                canRedo
+                  ? 'border-gray-700 text-dark-textLight hover:bg-gray-800'
+                  : 'border-gray-800 text-dark-textGray cursor-not-allowed bg-gray-900'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7l5 5-5 5m-8-10a5 5 0 015 5h10" />
+              </svg>
+              <span>Wiederholen</span>
+            </button>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-dark-textGray">
+          Tipp: Nutze <span className="font-mono text-dark-textLight">Strg+Z</span> zum Rückgängigmachen und <span className="font-mono text-dark-textLight">Strg+Shift+Z</span> zum Wiederholen deiner Änderungen.
+        </p>
       </div>
 
       <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
@@ -115,6 +151,28 @@ export default function ChartConfigPanel({ chartType, config, onConfigChange, ch
       </div>
     </div>
   )
+}
+
+function TabButton({ label, isActive, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-4 py-2 font-medium transition-all ${
+        isActive
+          ? 'text-dark-accent1 border-b-2 border-dark-accent1'
+          : 'text-dark-textGray hover:text-dark-textLight'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+TabButton.propTypes = {
+  label: PropTypes.string.isRequired,
+  isActive: PropTypes.bool.isRequired,
+  onClick: PropTypes.func.isRequired
 }
 
 function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }) {
@@ -2919,7 +2977,11 @@ ChartConfigPanel.propTypes = {
   onConfigChange: PropTypes.func.isRequired,
   chartRef: PropTypes.shape({ current: PropTypes.any }),
   onResetData: PropTypes.func.isRequired,
-  onClearData: PropTypes.func.isRequired
+  onClearData: PropTypes.func.isRequired,
+  onUndo: PropTypes.func.isRequired,
+  onRedo: PropTypes.func.isRequired,
+  canUndo: PropTypes.bool.isRequired,
+  canRedo: PropTypes.bool.isRequired
 }
 
 DataTab.propTypes = {

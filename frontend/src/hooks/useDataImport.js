@@ -260,6 +260,13 @@ const evaluateCriteria = (value, criteria) => {
   }
 }
 
+const evaluateCriteriaList = (value, criteriaOrList) => {
+  if (!criteriaOrList) return false
+  const list = Array.isArray(criteriaOrList) ? criteriaOrList : [criteriaOrList]
+  if (list.length === 0) return false
+  return list.every((crit) => evaluateCriteria(value, crit))
+}
+
 const computeAggregateValue = (metrics, operation, criteria = null) => {
   if (!metrics) return null
   const op = operation || 'sum'
@@ -276,10 +283,10 @@ const computeAggregateValue = (metrics, operation, criteria = null) => {
     case 'countRows':
       return metrics.rowCount || 0
     case 'countValid': {
-      if (!criteria) return metrics.count
+      if (!criteria || (Array.isArray(criteria) && criteria.length === 0)) return metrics.count
       // Verwende allValues statt values, um auch nicht-numerische Werte zu prüfen
       const valuesToCheck = metrics.allValues || metrics.values || []
-      return valuesToCheck.filter(val => evaluateCriteria(val, criteria)).length
+      return valuesToCheck.filter(val => evaluateCriteriaList(val, criteria)).length
     }
     case 'sum':
       return metrics.count > 0 ? metrics.sum : null
@@ -381,7 +388,14 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
   const resolveCriteria = (column) => {
     const operation = resolveOperation(column)
     if (operation !== 'countValid') return null
-    return aggregations?.criteria?.[column] || aggregations?.defaultCriteria || null
+    const perColumnList = aggregations?.criteriaList?.[column]
+    const perColumnSingle = aggregations?.criteria?.[column]
+    const defaultList = aggregations?.defaultCriteriaList
+    const defaultSingle = aggregations?.defaultCriteria
+    // Prefer per-column list, then single; fallback to default list or single
+    const selected = perColumnList || perColumnSingle || defaultList || defaultSingle || null
+    if (!selected) return null
+    return Array.isArray(selected) ? selected : [selected]
   }
 
   if (!groupColumn) {

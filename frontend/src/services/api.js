@@ -5,7 +5,13 @@ const getRuntimeApiUrl = () => {
     return undefined
   }
 
-  return window.__CCC_API_URL__ || window.desktopConfig?.apiBaseUrl
+  // Prefer runtime values injected by Electron preload. Fall back to bridge getter.
+  const fromGlobals = window.__CCC_API_URL__ || window.desktopConfig?.apiBaseUrl
+  const fromBridge = typeof window.desktopBridge?.getApiBaseUrl === 'function'
+    ? window.desktopBridge.getApiBaseUrl()
+    : undefined
+
+  return fromGlobals || fromBridge
 }
 
 const normalizeApiBaseUrl = (rawUrl) => {
@@ -46,21 +52,21 @@ const normalizeApiBaseUrl = (rawUrl) => {
   return ensureApiSuffix(normalized)
 }
 
-const runtimeApiUrl = getRuntimeApiUrl()
-
-// In dev, prefer Vite's proxy by default to avoid localhost issues on LAN
-const API_BASE_URL = normalizeApiBaseUrl(runtimeApiUrl || import.meta.env.VITE_API_URL)
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
+// Build an axios client on demand so we always use the latest base URL provided by Electron
+const getApiClient = () => {
+  const runtimeApiUrl = getRuntimeApiUrl()
+  const baseURL = normalizeApiBaseUrl(runtimeApiUrl || import.meta.env.VITE_API_URL)
+  return axios.create({
+    baseURL,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+}
 
 export const getChartTypes = async () => {
   try {
-    const response = await api.get('/charts')
+    const response = await getApiClient().get('/charts')
     return response.data.data
   } catch (error) {
     console.error('Error fetching chart types:', error)
@@ -70,7 +76,7 @@ export const getChartTypes = async () => {
 
 export const renderChart = async (chartType, config) => {
   try {
-    const response = await api.post('/render', { chartType, config })
+    const response = await getApiClient().post('/render', { chartType, config })
     return response.data.data
   } catch (error) {
     console.error('Error rendering chart:', error)
@@ -80,7 +86,7 @@ export const renderChart = async (chartType, config) => {
 
 export const exportChart = async (chartType, config, format = 'png', transparent = false) => {
   try {
-    const response = await api.post('/export', {
+    const response = await getApiClient().post('/export', {
       chartType,
       config,
       format,
@@ -93,4 +99,4 @@ export const exportChart = async (chartType, config, format = 'png', transparent
   }
 }
 
-export default api
+export default { getChartTypes, renderChart, exportChart }

@@ -35,7 +35,7 @@ const shouldCopyBackendEntry = sourcePath => {
   }
 
   const basename = path.basename(sourcePath);
-  if (basename === 'package.json' || basename === 'package-lock.json' || basename === 'pnpm-lock.yaml') {
+  if (basename === 'package-lock.json' || basename === 'pnpm-lock.yaml') {
     return false;
   }
 
@@ -48,6 +48,13 @@ const copyBackend = () => {
     recursive: true,
     filter: shouldCopyBackendEntry
   });
+  try {
+    const modulesDir = path.join(backendDest, 'modules');
+    const files = fs.existsSync(modulesDir)
+      ? fs.readdirSync(modulesDir).filter(f => f.endsWith('.js'))
+      : [];
+    console.log(`[prepare-assets] Copied backend. modules/*.js = ${files.length}`);
+  } catch (_) {}
 };
 
 const copyFrontend = () => {

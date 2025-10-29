@@ -11,6 +11,12 @@ const getRuntimeApiUrl = () => {
     ? window.desktopBridge.getApiBaseUrl()
     : undefined
 
+  // If running from a file:// origin (packaged app) and no value is injected yet,
+  // fall back to localhost:3009 where the Electron backend listens.
+  if (!(fromGlobals || fromBridge) && typeof window.location !== 'undefined' && window.location.protocol === 'file:') {
+    return 'http://127.0.0.1:3009/api'
+  }
+
   return fromGlobals || fromBridge
 }
 

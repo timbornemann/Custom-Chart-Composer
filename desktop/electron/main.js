@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,9 +19,38 @@ const resolveAppPath = (...segments) => {
 };
 
 const ensureBackendEnvironment = () => {
-  const backendRoot = resolveAppPath('backend');
-  process.env.BACKEND_ROOT = backendRoot;
-  process.env.BACKEND_MODULES_PATH = path.join(backendRoot, 'modules');
+  // In development we can point to the repo backend directly.
+  if (isDev) {
+    const backendRoot = resolveAppPath('backend');
+    process.env.BACKEND_ROOT = backendRoot;
+    process.env.BACKEND_MODULES_PATH = path.join(backendRoot, 'modules');
+    return;
+  }
+
+  // In production, prefer the unpacked resources path so dynamic imports work.
+  // electron-builder places files inside resources/app.asar with asarUnpack mirrored to app.asar.unpacked
+  const resourcesRoot = process.resourcesPath;
+  const extraResourcesModules = path.join(resourcesRoot, 'modules');
+  const unpackedModules = path.join(resourcesRoot, 'app.asar.unpacked', 'app', 'backend', 'modules');
+  const packedModules = path.join(resourcesRoot, 'app', 'backend', 'modules');
+
+  process.env.BACKEND_ROOT = path.join(resourcesRoot, 'app', 'backend');
+  // Prefer extraResources when it exists and contains .js files, then unpacked, then packed
+  process.env.BACKEND_MODULES_PATH = extraResourcesModules;
+
+  // Fallback guard: choose the first existing with .js files
+  try {
+    const hasJs = dir => fs.existsSync(dir) && fs.readdirSync(dir).some(n => n.endsWith('.js'));
+    if (hasJs(extraResourcesModules)) {
+      process.env.BACKEND_MODULES_PATH = extraResourcesModules;
+    } else if (hasJs(unpackedModules)) {
+      process.env.BACKEND_MODULES_PATH = unpackedModules;
+    } else if (hasJs(packedModules)) {
+      process.env.BACKEND_MODULES_PATH = packedModules;
+    }
+  } catch (_) {
+    // ignore; loader has additional fallbacks
+  }
 };
 
 const resolveFrontendEntry = () => {
@@ -50,7 +80,9 @@ const startBackend = async () => {
   }
 
   const { startServer } = await loadBackendModule();
-  const { server, port } = await startServer({ port: 0, host: '127.0.0.1', log: isDev });
+  // Use a fixed port in production so users can reach the debug endpoint easily
+  const desiredPort = isDev ? 0 : 3009;
+  const { server, port } = await startServer({ port: desiredPort, host: '127.0.0.1', log: isDev });
   backendServer = server;
   backendPort = port;
   return port;

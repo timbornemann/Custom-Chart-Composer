@@ -38,6 +38,16 @@
     "asarUnpack": [
       "app/backend/modules/**"
     ],
+    "extraResources": [
+      {
+        "from": "app/backend/modules",
+        "to": "modules"
+      },
+      {
+        "from": "app/backend/package.json",
+        "to": "modules/package.json"
+      }
+    ],
     "win": {
       "target": [
         {

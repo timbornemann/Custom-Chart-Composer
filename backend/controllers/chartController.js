@@ -1,4 +1,5 @@
-import { getModules, reloadModules } from '../services/moduleLoader.js';
+import { getModules, reloadModules, getResolvedModulesPath, getLoadReport } from '../services/moduleLoader.js';
+import fs from 'fs';
 import { renderChartImage } from '../services/chartRenderer.js';
 import { exportChartToFormat } from '../services/exportService.js';
 
@@ -64,6 +65,29 @@ export const reloadPlugins = (req, res) => {
       success: true, 
       message: `${modules.length} chart modules loaded`,
       modules: modules.map(m => ({ id: m.id, name: m.name }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const pluginsStatus = (req, res) => {
+  try {
+    const modules = getModules();
+    const report = getLoadReport();
+    let dirListing = [];
+    try {
+      if (report.path && fs.existsSync(report.path)) {
+        dirListing = fs.readdirSync(report.path).slice(0, 20);
+      }
+    } catch (_) {}
+    res.json({
+      success: true,
+      count: modules.length,
+      resolvedPath: getResolvedModulesPath(),
+      moduleIds: modules.map(m => m.id),
+      dirListing,
+      loadErrors: report.errors
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

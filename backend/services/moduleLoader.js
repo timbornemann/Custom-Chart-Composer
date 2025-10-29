@@ -7,6 +7,20 @@ const __dirname = dirname(__filename);
 
 let chartModules = [];
 
+const createCandidateVariants = basePath => {
+  if (!basePath) {
+    return [];
+  }
+
+  const variants = new Set([basePath]);
+
+  if (basePath.includes('.asar') && !basePath.includes('.asar.unpacked')) {
+    variants.add(basePath.replace('.asar', '.asar.unpacked'));
+  }
+
+  return Array.from(variants);
+};
+
 const resolveModulesDirectory = () => {
   const candidates = [];
 
@@ -20,11 +34,15 @@ const resolveModulesDirectory = () => {
   if (process.resourcesPath) {
     candidates.push(join(process.resourcesPath, 'app', 'backend', 'modules'));
     candidates.push(join(process.resourcesPath, 'backend', 'modules'));
+    candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'app', 'backend', 'modules'));
+    candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'backend', 'modules'));
   }
 
   for (const candidate of candidates) {
-    if (candidate && fs.existsSync(candidate)) {
-      return candidate;
+    for (const variant of createCandidateVariants(candidate)) {
+      if (variant && fs.existsSync(variant)) {
+        return variant;
+      }
     }
   }
 

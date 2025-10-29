@@ -10,22 +10,83 @@ Ein modernes, webbasiertes Tool zur einfachen Erstellung ästhetisch ansprechend
 
 ## Inhaltsverzeichnis
 
+- [🚀 Installation](#-installation)
+  - [Windows-Installer (Empfohlen)](#windows-installer-empfohlen)
+  - [Docker Image](#docker-image)
 - [✨ Features](#-features)
+- [🎯 Verwendung](#-verwendung)
+- [📊 Diagrammtypen im Detail](#-diagrammtypen-im-detail)
+- [🔄 Automatische Updates](#-automatische-updates-mit-watchtower)
 - [🏗️ Technologie-Stack](#️-technologie-stack)
-- [📋 Voraussetzungen](#-voraussetzungen)
-- [🚀 Schnellstart - Schritt für Schritt](#-schnellstart---schritt-für-schritt)
-- [🖥️ Electron Desktop (Windows)](#️-electron-desktop-windows)
+- [🖥️ Lokale Entwicklung](#️-lokale-entwicklung)
 - [📁 Projektstruktur](#-projektstruktur)
-- [📦 Bereitstellung und Downloads](#-bereitstellung-und-downloads)
-  - [Windows-Installer (Electron)](#windows-installer-electron)
-  - [Docker Image (GHCR)](#docker-image-ghcr)
-- [🔄 Automatische Updates mit Watchtower](#-automatische-updates-mit-watchtower)
 - [🔧 Eigene Chart-Module erstellen](#-eigene-chart-module-erstellen)
 - [🎨 Design-System](#-design-system)
-- [🐳 Docker-Deployment](#-docker-deployment)
-- [🧪 Testing](#-testing)
 - [📝 Umgebungsvariablen](#-umgebungsvariablen)
+- [🧪 Testing](#-testing)
 - [📄 Lizenz](#-lizenz)
+
+## 🚀 Installation
+
+### Windows-Installer (Empfohlen)
+
+Die einfachste Möglichkeit, Custom Chart Composer zu nutzen – keine Docker oder Node.js erforderlich!
+
+**Downloads:**
+- Alle Releases: [GitHub Releases](https://github.com/timbornemann/Custom-Chart-Composer/releases)
+- Neueste Version: [v1.0.2](https://github.com/timbornemann/Custom-Chart-Composer/releases/tag/v1.0.2)
+
+**Installation:**
+1. Laden Sie die neueste `Custom Chart Composer Setup <version>.exe` herunter
+2. Führen Sie die Setup-Datei aus
+3. Die Anwendung wird installiert und steht im Startmenü zur Verfügung
+
+**Hinweise:**
+- Der Installer enthält Frontend und Backend – keine zusätzliche Runtime nötig
+- Die App-Version in der Kopfzeile entspricht der Release-Version
+- Keine Installation von Node.js, Docker oder anderen Abhängigkeiten erforderlich
+
+### Docker Image
+
+Für Server-Bereitstellung oder Container-Umgebungen.
+
+**Image herunterladen:**
+```bash
+docker pull ghcr.io/timbornemann/custom-chart-composer:latest
+```
+
+**Container starten:**
+```bash
+docker run -d \
+  --name custom-chart-composer \
+  -p 3003:3003 \
+  ghcr.io/timbornemann/custom-chart-composer:latest
+```
+
+**Zugriff:**
+- Web UI: http://localhost:3003
+- API: http://localhost:3003/api
+
+**Bestimmte Version verwenden:**
+```bash
+docker run -d \
+  --name custom-chart-composer \
+  -p 3003:3003 \
+  ghcr.io/timbornemann/custom-chart-composer:1.0.2
+```
+
+**Eigene Chart-Module hinzufügen:**
+```bash
+docker run -d \
+  --name custom-chart-composer \
+  -p 3003:3003 \
+  -v $(pwd)/modules:/app/backend/modules \
+  ghcr.io/timbornemann/custom-chart-composer:latest
+```
+
+**Weitere Informationen:**
+- [Container Packages](https://github.com/timbornemann/Custom-Chart-Composer/pkgs/container/custom-chart-composer)
+- [Alle Releases](https://github.com/timbornemann/Custom-Chart-Composer/releases)
 
 ## ✨ Features
 
@@ -38,235 +99,6 @@ Ein modernes, webbasiertes Tool zur einfachen Erstellung ästhetisch ansprechend
 - 💾 **Automatische Zwischenspeicherung**: Deine Diagrammdaten werden lokal gepuffert, sodass beim Neuladen nichts verloren geht
 - 🐳 **Docker-Support**: Einfache Bereitstellung
 - ⚡ **Live-Vorschau**: Echtzeit-Aktualisierung bei Änderungen
-
-## 🏗️ Technologie-Stack
-
-| Komponente | Technologie |
-|------------|-------------|
-| Frontend | React + Vite + TailwindCSS |
-| Backend | Node.js + Express |
-| Charts | Chart.js |
-| Export | Canvas (Node) |
-| Container | Docker |
-
-## 📋 Voraussetzungen
-
-- Node.js 20+ (für lokale Entwicklung)
-- Docker & Docker Compose (für Container-Deployment)
-- npm oder yarn
-
-## 🚀 Schnellstart - Schritt für Schritt
-
-### Option 1: Automatisch (Empfohlen)
-
-**Windows:**
-```cmd
-# Doppelklick auf start-dev.bat
-# oder im Terminal:
-start-dev.bat
-```
-
-**Linux/Mac:**
-```bash
-# Ausführbar machen
-chmod +x start-dev.sh
-
-# Starten
-./start-dev.sh
-```
-
-### Option 2: Manuell - Schritt für Schritt
-
-**Schritt 1: Backend starten**
-```powershell
-cd backend
-npm install
-npm run dev
-```
-*Warten Sie bis "Server running on port 3003" angezeigt wird*
-
-**Schritt 2: Frontend starten (neues Terminal)**
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-*Warten Sie bis "Local: http://localhost:5173" angezeigt wird*
-
-**Schritt 3: Anwendung öffnen**
-- Öffnen Sie http://localhost:5173 in Ihrem Browser
-- Die Anwendung ist jetzt bereit!
-
-### Option 3: Docker (Empfohlen für Production)
-
-```bash
-# Repository klonen
-git clone <repository-url>
-cd Custom-Chart-Composer
-
-# Mit Docker Compose starten
-docker-compose up --build
-
-# App öffnen unter http://localhost:3003
-```
-
-**Frontend**: http://localhost:5173
-**Backend API**: http://localhost:3003
-
-## 🖥️ Electron Desktop (Windows)
-
-Die Desktop-Variante nutzt denselben Express-Server und das gebaute Vite-Frontend wie die Docker- bzw. Web-Version. Alle Änderungen an Backend, Frontend oder den Modulen wirken sich somit automatisch auch auf die Electron-App aus. Der Docker-Workflow bleibt unverändert funktionsfähig.
-
-### Vorbereitung (PowerShell)
-
-```powershell
-# Abhängigkeiten installieren
-cd backend
-npm install
-cd ..
-
-cd frontend
-npm install
-cd ..
-
-# Electron-Hülle installieren
-cd desktop/electron
-npm install
-```
-
-### Vorbereitung (CMD)
-
-```cmd
-# Abhängigkeiten installieren
-cd backend
-npm install
-cd ..
-
-cd frontend
-npm install
-cd ..
-
-# Electron-Hülle installieren
-cd desktop/electron
-npm install
-```
-
-### Windows-Build erstellen (PowerShell)
-
-```powershell
-cd desktop/electron
-npm run build:win
-```
-
-### Windows-Build erstellen (CMD)
-
-```cmd
-cd desktop/electron
-npm run build:win
-```
-
-Der fertige Installer befindet sich im Verzeichnis `desktop/electron/dist`. Für andere Plattformen kann `npm run build` mit zusätzlichen Targets aus `electron-builder` verwendet werden.
-
-### Entwicklung im Desktop-Kontext (PowerShell)
-
-```powershell
-# Frontend-Dev-Server starten
-cd frontend
-npm run dev
-
-# In einem zweiten Terminal das Electron-Fenster öffnen (verwendet denselben Dev-Server)
-cd ../desktop/electron
-npm run dev
-```
-
-### Entwicklung im Desktop-Kontext (CMD)
-
-```cmd
-# Frontend-Dev-Server starten
-cd frontend
-npm run dev
-
-# In einem zweiten Terminal das Electron-Fenster öffnen (verwendet denselben Dev-Server)
-cd ../desktop/electron
-npm run dev
-```
-
-> **Hinweis:** Die Electron-App startet automatisch den Express-Server auf einem freien lokalen Port und übergibt diesen intern an das Frontend. Anpassungen am Backend (z. B. neue Module im Ordner `backend/modules`) stehen sowohl in Docker als auch in der Desktop-App direkt zur Verfügung.
-
-## 📁 Projektstruktur
-
-```
-Custom-Chart-Composer/
-├── backend/
-│   ├── controllers/          # API-Controller
-│   ├── routes/              # API-Routes
-│   ├── services/            # Business Logic
-│   ├── modules/             # Chart-Module (40+ Diagrammtypen)
-│   │   ├── areaChart.js
-│   │   ├── barChart.js
-│   │   ├── boxPlotChart.js
-│   │   ├── bubbleChart.js
-│   │   ├── calendarHeatmap.js
-│   │   ├── candlestickChart.js
-│   │   ├── chordChart.js
-│   │   ├── coordinateChart.js
-│   │   ├── curvedAreaChart.js
-│   │   ├── dashedLineChart.js
-│   │   ├── donutChart.js
-│   │   ├── funnelChart.js
-│   │   ├── gaugeChart.js
-│   │   ├── groupedBarChart.js
-│   │   ├── heatmapChart.js
-│   │   ├── horizontalBarChart.js
-│   │   ├── lineChart.js
-│   │   ├── matrixChart.js
-│   │   ├── mixedChart.js
-│   │   ├── multiLineChart.js
-│   │   ├── nestedDonutChart.js
-│   │   ├── percentageBarChart.js
-│   │   ├── pieChart.js
-│   │   ├── polarAreaChart.js
-│   │   ├── radarChart.js
-│   │   ├── radialBarChart.js
-│   │   ├── rangeBarChart.js
-│   │   ├── sankeyChart.js
-│   │   ├── scatterChart.js
-│   │   ├── segmentedBarChart.js
-│   │   ├── semiCircleChart.js
-│   │   ├── smoothLineChart.js
-│   │   ├── stackedBarChart.js
-│   │   ├── steppedLineChart.js
-│   │   ├── streamGraph.js
-│   │   ├── sunburstChart.js
-│   │   ├── treemapChart.js
-│   │   ├── verticalLineChart.js
-│   │   ├── violinChart.js
-│   │   └── waterfallChart.js
-│   ├── package.json
-│   └── server.js
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/      # React-Komponenten
-│   │   │   ├── Layout/
-│   │   │   ├── ChartPreview.jsx
-│   │   │   ├── ChartConfigPanel.jsx
-│   │   │   └── ExportPanel.jsx
-│   │   ├── hooks/           # Custom React Hooks
-│   │   ├── services/        # API-Services
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── package.json
-│   └── vite.config.js
-│
-├── docker-compose.yml
-├── Dockerfile
-├── screenshots/            # Screenshots der Anwendung
-│   ├── README.md          # Detaillierte Screenshot-Beschreibungen
-│   └── *.png              # Screenshots verschiedener Diagrammtypen
-├── Guideline.md            # Technische Spezifikation
-└── README.md
-```
 
 ## 🎯 Verwendung
 
@@ -402,33 +234,215 @@ Die Custom Chart Composer bietet eine beeindruckende Vielfalt an Diagrammtypen f
 
 > **📸 Screenshots**: Eine detaillierte Sammlung aller Screenshots mit Beschreibungen finden Sie im Ordner [`screenshots/`](screenshots/README.md)
 
-| Methode | Route | Beschreibung |
-|---------|-------|--------------|
-| GET | `/api/charts` | Liste aller verfügbaren Diagrammtypen |
-| POST | `/api/render` | Rendert ein Diagramm |
-| POST | `/api/export` | Exportiert Diagramm in gewähltem Format |
-| GET | `/api/plugins/reload` | Lädt Chart-Module neu |
-| GET | `/health` | Health-Check |
+## 🔄 Automatische Updates mit Watchtower
 
-### Beispiel: Export Request
+Damit dein Container automatisch aktualisiert wird, kannst du Watchtower verwenden. Watchtower prüft in Intervallen auf neue Images und aktualisiert betroffene Container.
 
-```javascript
-POST /api/export
-Content-Type: application/json
+**Alle Container überwachen:**
+```bash
+docker run -d --name watchtower --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower \
+  --interval 3600
+```
 
-{
-  "chartType": "bar",
-  "config": {
-    "labels": ["Jan", "Feb", "Mär"],
-    "values": [10, 20, 30],
-    "colors": ["#4ADE80", "#22D3EE", "#F472B6"],
-    "backgroundColor": "#0F172A",
-    "width": 800,
-    "height": 600
-  },
-  "format": "png",
-  "transparent": false
-}
+**Nur diesen Container aktualisieren:**
+```bash
+docker run -d --name watchtower --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower custom-chart-composer \
+  --interval 3600
+```
+
+**Einmalige Prüfung (danach endet der Watchtower-Container):**
+```bash
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower custom-chart-composer \
+  --run-once
+```
+
+> Tipp: Benenne deinen Container genau `custom-chart-composer`, damit die obigen Befehle 1:1 funktionieren.
+
+## 🏗️ Technologie-Stack
+
+| Komponente | Technologie |
+|------------|-------------|
+| Frontend | React + Vite + TailwindCSS |
+| Backend | Node.js + Express |
+| Charts | Chart.js |
+| Export | Canvas (Node) |
+| Container | Docker |
+
+## 🖥️ Lokale Entwicklung
+
+### Option 1: Automatisch (Empfohlen)
+
+**Windows:**
+```cmd
+# Doppelklick auf start-dev.bat
+# oder im Terminal:
+start-dev.bat
+```
+
+**Linux/Mac:**
+```bash
+# Ausführbar machen
+chmod +x start-dev.sh
+
+# Starten
+./start-dev.sh
+```
+
+### Option 2: Manuell - Schritt für Schritt
+
+**Schritt 1: Backend starten**
+```powershell
+cd backend
+npm install
+npm run dev
+```
+*Warten Sie bis "Server running on port 3003" angezeigt wird*
+
+**Schritt 2: Frontend starten (neues Terminal)**
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+*Warten Sie bis "Local: http://localhost:5173" angezeigt wird*
+
+**Schritt 3: Anwendung öffnen**
+- Öffnen Sie http://localhost:5173 in Ihrem Browser
+- Die Anwendung ist jetzt bereit!
+
+### Option 3: Docker Compose (Lokale Entwicklung)
+
+```bash
+# Repository klonen
+git clone https://github.com/timbornemann/Custom-Chart-Composer.git
+cd Custom-Chart-Composer
+
+# Mit Docker Compose starten
+docker-compose up --build
+
+# App öffnen unter http://localhost:3003
+```
+
+**Voraussetzungen:**
+- Node.js 20+ (für lokale Entwicklung)
+- Docker & Docker Compose (für Container-Deployment)
+- npm oder yarn
+
+### Electron Desktop (Windows)
+
+Die Desktop-Variante nutzt denselben Express-Server und das gebaute Vite-Frontend wie die Docker- bzw. Web-Version. Alle Änderungen an Backend, Frontend oder den Modulen wirken sich somit automatisch auch auf die Electron-App aus.
+
+**Vorbereitung:**
+```powershell
+# Abhängigkeiten installieren
+cd backend
+npm install
+cd ../frontend
+npm install
+cd ../desktop/electron
+npm install
+```
+
+**Windows-Build erstellen:**
+```powershell
+cd desktop/electron
+npm run build:win
+```
+
+Der fertige Installer befindet sich im Verzeichnis `desktop/electron/dist`.
+
+**Entwicklung im Desktop-Kontext:**
+```powershell
+# Frontend-Dev-Server starten
+cd frontend
+npm run dev
+
+# In einem zweiten Terminal das Electron-Fenster öffnen
+cd ../desktop/electron
+npm run dev
+```
+
+> **Hinweis:** Die Electron-App startet automatisch den Express-Server auf einem freien lokalen Port und übergibt diesen intern an das Frontend. Anpassungen am Backend (z. B. neue Module im Ordner `backend/modules`) stehen sowohl in Docker als auch in der Desktop-App direkt zur Verfügung.
+
+## 📁 Projektstruktur
+
+```
+Custom-Chart-Composer/
+├── backend/
+│   ├── controllers/          # API-Controller
+│   ├── routes/              # API-Routes
+│   ├── services/            # Business Logic
+│   ├── modules/             # Chart-Module (40+ Diagrammtypen)
+│   │   ├── areaChart.js
+│   │   ├── barChart.js
+│   │   ├── boxPlotChart.js
+│   │   ├── bubbleChart.js
+│   │   ├── calendarHeatmap.js
+│   │   ├── candlestickChart.js
+│   │   ├── chordChart.js
+│   │   ├── coordinateChart.js
+│   │   ├── curvedAreaChart.js
+│   │   ├── dashedLineChart.js
+│   │   ├── donutChart.js
+│   │   ├── funnelChart.js
+│   │   ├── gaugeChart.js
+│   │   ├── groupedBarChart.js
+│   │   ├── heatmapChart.js
+│   │   ├── horizontalBarChart.js
+│   │   ├── lineChart.js
+│   │   ├── matrixChart.js
+│   │   ├── mixedChart.js
+│   │   ├── multiLineChart.js
+│   │   ├── nestedDonutChart.js
+│   │   ├── percentageBarChart.js
+│   │   ├── pieChart.js
+│   │   ├── polarAreaChart.js
+│   │   ├── radarChart.js
+│   │   ├── radialBarChart.js
+│   │   ├── rangeBarChart.js
+│   │   ├── sankeyChart.js
+│   │   ├── scatterChart.js
+│   │   ├── segmentedBarChart.js
+│   │   ├── semiCircleChart.js
+│   │   ├── smoothLineChart.js
+│   │   ├── stackedBarChart.js
+│   │   ├── steppedLineChart.js
+│   │   ├── streamGraph.js
+│   │   ├── sunburstChart.js
+│   │   ├── treemapChart.js
+│   │   ├── verticalLineChart.js
+│   │   ├── violinChart.js
+│   │   └── waterfallChart.js
+│   ├── package.json
+│   └── server.js
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/      # React-Komponenten
+│   │   │   ├── Layout/
+│   │   │   ├── ChartPreview.jsx
+│   │   │   ├── ChartConfigPanel.jsx
+│   │   │   └── ExportPanel.jsx
+│   │   ├── hooks/           # Custom React Hooks
+│   │   ├── services/        # API-Services
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── package.json
+│   └── vite.config.js
+│
+├── docker-compose.yml
+├── Dockerfile
+├── screenshots/            # Screenshots der Anwendung
+│   ├── README.md          # Detaillierte Screenshot-Beschreibungen
+│   └── *.png              # Screenshots verschiedener Diagrammtypen
+├── Guideline.md            # Technische Spezifikation
+└── README.md
 ```
 
 ## 🔧 Eigene Chart-Module erstellen
@@ -468,85 +482,35 @@ export default {
 
 Nach dem Hinzufügen wird das Modul automatisch geladen und in der UI verfügbar sein.
 
-## 📦 Bereitstellung und Downloads
+### API-Dokumentation
 
-### Windows-Installer (Electron)
+| Methode | Route | Beschreibung |
+|---------|-------|--------------|
+| GET | `/api/charts` | Liste aller verfügbaren Diagrammtypen |
+| POST | `/api/render` | Rendert ein Diagramm |
+| POST | `/api/export` | Exportiert Diagramm in gewähltem Format |
+| GET | `/api/plugins/reload` | Lädt Chart-Module neu |
+| GET | `/health` | Health-Check |
 
-Bei jedem Release wird automatisch ein Windows-Installer erstellt.
+**Beispiel: Export Request**
+```javascript
+POST /api/export
+Content-Type: application/json
 
-- Öffne die GitHub Releases-Seite dieses Repositories und lade die neueste Setup-Datei herunter.
-- Datei-Name (Beispiel): `Custom Chart Composer Setup <version>.exe`
-- Nach der Installation steht die Anwendung im Startmenü zur Verfügung. Die App-Version in der Kopfzeile entspricht der Release-Version.
-
-Hinweis: Der Installer enthält Frontend und Backend; es ist keine zusätzliche Runtime nötig.
-
-### Docker Image (GHCR)
-
-Wir veröffentlichen bei Releases ein fertiges Image in der GitHub Container Registry (GHCR).
-
-Ersetze `OWNER` durch deinen GitHub-Organisation/Nutzer-Namen.
-
-```bash
-docker run -d \
-  --name custom-chart-composer \
-  -p 3003:3003 \
-  ghcr.io/OWNER/custom-chart-composer:latest
+{
+  "chartType": "bar",
+  "config": {
+    "labels": ["Jan", "Feb", "Mär"],
+    "values": [10, 20, 30],
+    "colors": ["#4ADE80", "#22D3EE", "#F472B6"],
+    "backgroundColor": "#0F172A",
+    "width": 800,
+    "height": 600
+  },
+  "format": "png",
+  "transparent": false
+}
 ```
-
-- Web UI: `http://localhost:3003`
-- API: `http://localhost:3003/api`
-
-Eine bestimmte Version starten (z. B. 1.2.3):
-
-```bash
-docker run -d \
-  --name custom-chart-composer \
-  -p 3003:3003 \
-  ghcr.io/OWNER/custom-chart-composer:1.2.3
-```
-
-Optional: Eigene Chart-Module per Volume mounten (werden beim Start automatisch geladen):
-
-```bash
-docker run -d \
-  --name custom-chart-composer \
-  -p 3003:3003 \
-  -v $(pwd)/modules:/app/backend/modules \
-  ghcr.io/OWNER/custom-chart-composer:latest
-```
-
-## 🔄 Automatische Updates mit Watchtower
-
-Damit dein Container automatisch aktualisiert wird, kannst du Watchtower verwenden. Watchtower prüft in Intervallen auf neue Images und aktualisiert betroffene Container.
-
-Alle Container überwachen:
-
-```bash
-docker run -d --name watchtower --restart unless-stopped \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  containrrr/watchtower \
-  --interval 3600
-```
-
-Nur diesen Container aktualisieren:
-
-```bash
-docker run -d --name watchtower --restart unless-stopped \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  containrrr/watchtower custom-chart-composer \
-  --interval 3600
-```
-
-Einmalige Prüfung (danach endet der Watchtower-Container):
-
-```bash
-docker run --rm \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  containrrr/watchtower custom-chart-composer \
-  --run-once
-```
-
-> Tipp: Benenne deinen Container genau `custom-chart-composer`, damit die obigen Befehle 1:1 funktionieren.
 
 ## 🎨 Design-System
 
@@ -566,90 +530,6 @@ docker run --rm \
 - **Schriftart**: Inter (Google Fonts)
 - **Überschriften**: 600 Gewicht, 1.5-2rem
 - **Fließtext**: 400 Gewicht, 0.875-1rem
-
-## 🐳 Docker-Deployment
-
-### Development
-
-```bash
-docker-compose up
-```
-
-### Production
-
-```bash
-docker-compose up -d --build
-```
-
-### Logs anzeigen
-
-```bash
-docker-compose logs -f
-```
-
-### Container stoppen
-
-```bash
-docker-compose down
-```
-
-## 🛠️ Entwicklung
-
-### Backend Development (PowerShell)
-
-```powershell
-cd backend
-npm install
-npm run dev  # mit Nodemon (Hot-Reload)
-```
-
-### Frontend Development (PowerShell)
-
-```powershell
-cd frontend
-npm install
-npm run dev  # Vite Dev Server
-```
-
-### Build für Production (PowerShell)
-
-```powershell
-# Frontend
-cd frontend
-npm run build
-
-# Backend (keine Build erforderlich)
-cd backend
-npm install --production
-```
-
-### Backend Development (CMD)
-
-```cmd
-cd backend
-npm install
-npm run dev  # mit Nodemon (Hot-Reload)
-```
-
-### Frontend Development (CMD)
-
-```cmd
-cd frontend
-npm install
-npm run dev  # Vite Dev Server
-```
-
-### Build für Production (CMD)
-
-```cmd
-# Frontend
-cd frontend
-npm run build
-
-# Backend (keine Build erforderlich)
-cd backend
-npm install --production
-```
 
 ## 📝 Umgebungsvariablen
 

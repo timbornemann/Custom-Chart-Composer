@@ -154,7 +154,7 @@ export default function DataImportModal({
     const id = createUniqueId('filter')
     updateTransformations((prev) => ({
       ...prev,
-      filters: [...(prev.filters || []), { id, column: '', operator: 'equals', value: '', enabled: true }]
+      filters: [...(prev.filters || []), { id, column: '', operator: 'equals', value: '', enabled: true, logicOperator: 'and' }]
     }))
   }
 
@@ -579,73 +579,86 @@ export default function DataImportModal({
                         </p>
                       ) : (
                         <div className="space-y-3">
-                          {filters.map((filter) => (
-                            <div
-                              key={filter.id}
-                              className="grid gap-2 rounded-md border border-gray-700 bg-dark-bg/60 p-3 md:grid-cols-12"
-                            >
-                              <div className="flex items-center space-x-2 md:col-span-2">
-                                <input
-                                  type="checkbox"
-                                  checked={filter.enabled !== false}
-                                  onChange={(event) => handleToggleFilter(filter.id, event.target.checked)}
-                                  className="h-4 w-4 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
-                                />
-                                <span className="text-xs text-dark-textLight">Aktiv</span>
-                              </div>
-                              <div className="md:col-span-4">
-                                <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
-                                  Spalte
-                                </label>
-                                <select
-                                  value={filter.column}
-                                  onChange={(event) => handleFilterChange(filter.id, { column: event.target.value })}
-                                  className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                                >
-                                  <option value="">Spalte wählen …</option>
-                                  {columns.map((column) => (
-                                    <option key={column.key} value={column.key}>
-                                      {column.key}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div className="md:col-span-3">
-                                <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
-                                  Operator
-                                </label>
-                                <select
-                                  value={filter.operator}
-                                  onChange={(event) => handleFilterChange(filter.id, { operator: event.target.value })}
-                                  className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                                >
-                                  {FILTER_OPERATORS.map((operator) => (
-                                    <option key={operator.value} value={operator.value}>
-                                      {operator.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div className="md:col-span-2">
-                                <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
-                                  Wert
-                                </label>
-                                <input
-                                  type="text"
-                                  value={filter.value}
-                                  onChange={(event) => handleFilterChange(filter.id, { value: event.target.value })}
-                                  className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                                  placeholder="Wert eingeben"
-                                />
-                              </div>
-                              <div className="flex items-end justify-end md:col-span-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveFilter(filter.id)}
-                                  className="rounded-md border border-red-600 px-2 py-1 text-xs text-red-200 hover:bg-red-900/40"
-                                >
-                                  Entfernen
-                                </button>
+                          {filters.map((filter, filterIndex) => (
+                            <div key={filter.id} className="space-y-2">
+                              {filterIndex > 0 && (
+                                <div className="flex items-center justify-center py-1">
+                                  <select
+                                    value={filter.logicOperator || 'and'}
+                                    onChange={(event) => handleFilterChange(filter.id, { logicOperator: event.target.value })}
+                                    className="rounded-md border border-gray-600 bg-dark-bg/80 px-3 py-1 text-xs font-semibold text-dark-textLight hover:border-dark-accent1 focus:border-dark-accent1 focus:outline-none"
+                                  >
+                                    <option value="and">UND</option>
+                                    <option value="or">ODER</option>
+                                  </select>
+                                </div>
+                              )}
+                              <div
+                                className="grid gap-2 rounded-md border border-gray-700 bg-dark-bg/60 p-3 md:grid-cols-12"
+                              >
+                                <div className="flex items-center space-x-2 md:col-span-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={filter.enabled !== false}
+                                    onChange={(event) => handleToggleFilter(filter.id, event.target.checked)}
+                                    className="h-4 w-4 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
+                                  />
+                                  <span className="text-xs text-dark-textLight">Aktiv</span>
+                                </div>
+                                <div className="md:col-span-4">
+                                  <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                    Spalte
+                                  </label>
+                                  <select
+                                    value={filter.column}
+                                    onChange={(event) => handleFilterChange(filter.id, { column: event.target.value })}
+                                    className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                  >
+                                    <option value="">Spalte wählen …</option>
+                                    {columns.map((column) => (
+                                      <option key={column.key} value={column.key}>
+                                        {column.key}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="md:col-span-3">
+                                  <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                    Operator
+                                  </label>
+                                  <select
+                                    value={filter.operator}
+                                    onChange={(event) => handleFilterChange(filter.id, { operator: event.target.value })}
+                                    className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                  >
+                                    {FILTER_OPERATORS.map((operator) => (
+                                      <option key={operator.value} value={operator.value}>
+                                        {operator.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                    Wert
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={filter.value}
+                                    onChange={(event) => handleFilterChange(filter.id, { value: event.target.value })}
+                                    className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                    placeholder="Wert eingeben"
+                                  />
+                                </div>
+                                <div className="flex items-end justify-end md:col-span-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveFilter(filter.id)}
+                                    className="rounded-md border border-red-600 px-2 py-1 text-xs text-red-200 hover:bg-red-900/40"
+                                  >
+                                    Entfernen
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           ))}

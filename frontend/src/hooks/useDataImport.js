@@ -618,11 +618,27 @@ const applyFilters = (rows, filters) => {
   }
   let removed = 0
   const filteredRows = rows.filter((row) => {
-    const keep = activeFilters.every((filter) => evaluateFilterCondition(row, filter))
-    if (!keep) {
+    // Start with the first filter's result
+    let result = evaluateFilterCondition(row, activeFilters[0])
+    
+    // Apply subsequent filters with their logic operators
+    for (let i = 1; i < activeFilters.length; i++) {
+      const filter = activeFilters[i]
+      const filterResult = evaluateFilterCondition(row, filter)
+      const logicOperator = filter.logicOperator || 'and'
+      
+      if (logicOperator === 'or') {
+        result = result || filterResult
+      } else {
+        // 'and' is the default
+        result = result && filterResult
+      }
+    }
+    
+    if (!result) {
       removed += 1
     }
-    return keep
+    return result
   })
   return { rows: filteredRows.map((row) => ({ ...row })), removed }
 }

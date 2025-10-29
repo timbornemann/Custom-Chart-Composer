@@ -1164,15 +1164,22 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
         display: config.options?.showLegend !== false,
         position: config.options?.legendPosition || 'top',
         labels: {
-          color: '#F8FAFC',
-          font: { size: 14, family: 'Inter' }
+          color: config.options?.fontStyles?.legend?.color || '#F8FAFC',
+          font: { 
+            size: 14, 
+            family: config.options?.fontStyles?.legend?.family || 'Inter' 
+          }
         }
       },
       title: {
         display: !!config.title,
         text: config.title || '',
-        color: '#F8FAFC',
-        font: { size: 20, family: 'Inter', weight: 'bold' }
+        color: config.options?.fontStyles?.title?.color || '#F8FAFC',
+        font: { 
+          size: 20, 
+          family: config.options?.fontStyles?.title?.family || 'Inter', 
+          weight: 'bold' 
+        }
       },
       tooltip: {
         backgroundColor: 'rgba(15, 23, 42, 0.95)',
@@ -1285,14 +1292,20 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           color: config.options?.gridColor || '#334155'
         },
         ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: { 
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
         },
         title: {
           display: !!config.options?.yAxisLabel,
           text: config.options?.yAxisLabel || '',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
+          color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+          font: { 
+            size: 13, 
+            family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+          }
         }
       },
       x: {
@@ -1301,14 +1314,20 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           display: false
         },
         ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: { 
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
         },
         title: {
           display: !!config.options?.xAxisLabel,
           text: config.options?.xAxisLabel || '',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
+          color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
+          font: { 
+            size: 13, 
+            family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+          }
         }
       }
     }
@@ -1330,14 +1349,20 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           color: config.options?.gridColor || '#334155'
         },
         ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: { 
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
         },
         title: {
           display: !!config.options?.xAxisLabel,
           text: config.options?.xAxisLabel || '',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
+          color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
+          font: { 
+            size: 13, 
+            family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+          }
         }
       },
       y: {
@@ -1345,14 +1370,20 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           display: false
         },
         ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: { 
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
         },
         title: {
           display: !!config.options?.yAxisLabel,
           text: config.options?.yAxisLabel || '',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
+          color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+          font: { 
+            size: 13, 
+            family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+          }
         }
       }
     }
@@ -1369,14 +1400,20 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           color: config.options?.gridColor || '#334155'
         },
         ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: { 
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
         },
         title: {
           display: !!config.options?.xAxisLabel,
           text: config.options?.xAxisLabel || '',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
+          color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
+          font: { 
+            size: 13, 
+            family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+          }
         }
       },
       y: {
@@ -1384,14 +1421,20 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           display: false
         },
         ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: { 
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
         },
         title: {
           display: !!config.options?.yAxisLabel,
           text: config.options?.yAxisLabel || '',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
+          color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+          font: { 
+            size: 13, 
+            family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+          }
         }
       }
     }
@@ -1411,14 +1454,20 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           color: config.options?.gridColor || '#334155'
         },
         ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: { 
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
         },
         title: {
           display: !!config.options?.yAxisLabel,
           text: config.options?.yAxisLabel || '',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
+          color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+          font: { 
+            size: 13, 
+            family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+          }
         }
       },
       x: {
@@ -1427,14 +1476,20 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           color: config.options?.gridColor || '#334155'
         },
         ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: { 
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
         },
         title: {
           display: !!config.options?.xAxisLabel,
           text: config.options?.xAxisLabel || '',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
+          color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
+          font: { 
+            size: 13, 
+            family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+          }
         }
       }
     }
@@ -1450,14 +1505,20 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           color: config.options?.gridColor || '#334155'
         },
         ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: { 
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
         },
         title: {
           display: !!config.options?.yAxisLabel,
           text: config.options?.yAxisLabel || '',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
+          color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+          font: { 
+            size: 13, 
+            family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+          }
         }
       },
       x: {
@@ -1467,14 +1528,20 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           color: config.options?.gridColor || '#334155'
         },
         ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: { 
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
         },
         title: {
           display: !!config.options?.xAxisLabel,
           text: config.options?.xAxisLabel || '',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
+          color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
+          font: { 
+            size: 13, 
+            family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+          }
         }
       }
     }
@@ -1568,8 +1635,12 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
         display: true,
         layout: 'default',
         offsetY: 10,
-        color: '#F8FAFC',
-        font: { size: 10, weight: '600' },
+        color: config.options?.fontStyles?.valueLabels?.color || '#F8FAFC',
+        font: { 
+          size: 10, 
+          weight: '600',
+          family: config.options?.fontStyles?.valueLabels?.family || 'Inter'
+        },
         formatter: (value) => {
           if (typeof value === 'object' && value.label) {
             return value.label
@@ -1810,8 +1881,12 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     const pluginConfig = {
       display: !!config.options?.showValues,
       layout,
-      color: '#F8FAFC',
-      font: { family: 'Inter', weight: '600', size: 12 },
+      color: config.options?.fontStyles?.valueLabels?.color || '#F8FAFC',
+      font: { 
+        family: config.options?.fontStyles?.valueLabels?.family || 'Inter', 
+        weight: '600', 
+        size: 12 
+      },
       offsetX: layout === 'horizontalBar' ? 12 : 0,
       offsetY: layout === 'verticalBar' ? 10 : 0
     }

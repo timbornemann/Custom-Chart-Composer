@@ -78,6 +78,10 @@ const createWindow = async () => {
     await window.loadFile(frontendEntry.value);
   }
 
+  window.webContents.once('did-finish-load', () => {
+    window.webContents.send('ccc:config', { apiBaseUrl });
+  });
+
   if (isDev) {
     window.webContents.openDevTools({ mode: 'detach' });
   }

@@ -1182,11 +1182,16 @@ function OptionsTab({ chartType, config, onConfigChange }) {
               ) : (
                 <input
                   type="number"
-                  value={value}
+                  value={value ?? ''}
                   min={field.min}
                   max={field.max}
                   step={field.step || 1}
-                  onChange={(e) => handleOptionChange(key, Number(e.target.value))}
+                  onChange={(e) => {
+                    const inputValue = e.target.value
+                    const numValue = inputValue === '' || inputValue === null ? null : Number(inputValue)
+                    handleOptionChange(key, numValue)
+                  }}
+                  placeholder={field.default === null ? "Automatisch" : ""}
                   className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                 />
               )}

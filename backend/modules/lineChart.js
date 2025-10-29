@@ -60,6 +60,9 @@ export default {
       lineWidth: { type: "number", min: 1, max: 10, step: 1, default: 3, description: "Breite der Linie" },
       xAxisLabel: { type: "string", default: "", placeholder: "z.B. Monate", description: "Beschriftung der X-Achse" },
       yAxisLabel: { type: "string", default: "", placeholder: "z.B. Werte", description: "Beschriftung der Y-Achse" },
+      yAxisMin: { type: "number", default: null, description: "Minimalwert der Y-Achse (leer = automatisch)" },
+      yAxisMax: { type: "number", default: null, description: "Maximalwert der Y-Achse (leer = automatisch)" },
+      yAxisStep: { type: "number", min: 0.1, step: 0.1, default: null, description: "Schrittweite der Y-Achse (leer = automatisch)" },
       animation: { type: "boolean", default: true, description: "Animationen aktivieren" },
       animationDuration: { type: "number", min: 0, max: 3000, step: 100, default: 1000, description: "Animationsdauer in Millisekunden" }
     }

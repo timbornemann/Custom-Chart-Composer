@@ -1287,6 +1287,8 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
       y: {
         beginAtZero: config.options?.beginAtZero !== false,
         stacked: ['stackedBar', 'segmentedBar', 'boxPlot', 'violin', 'candlestick'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked) || (config.options?.stacked),
+        min: config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
+        max: config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
         grid: {
           display: config.options?.showGrid !== false,
           color: config.options?.gridColor || '#334155'
@@ -1296,7 +1298,8 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           font: { 
             size: 12,
             family: config.options?.fontStyles?.ticks?.family || 'Inter'
-          }
+          },
+          stepSize: config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
         },
         title: {
           display: !!config.options?.yAxisLabel,
@@ -1341,9 +1344,12 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
   // Range Bar (horizontal with special config)
   if (chartType.id === 'rangeBar') {
     baseOptions.indexAxis = config.options?.horizontal ? 'y' : 'x'
+    const isHorizontal = config.options?.horizontal
     baseOptions.scales = {
       x: {
         beginAtZero: config.options?.beginAtZero !== false,
+        min: isHorizontal && config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
+        max: isHorizontal && config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
         grid: {
           display: config.options?.showGrid !== false,
           color: config.options?.gridColor || '#334155'
@@ -1353,7 +1359,8 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           font: { 
             size: 12,
             family: config.options?.fontStyles?.ticks?.family || 'Inter'
-          }
+          },
+          stepSize: isHorizontal && config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
         },
         title: {
           display: !!config.options?.xAxisLabel,
@@ -1366,6 +1373,9 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
         }
       },
       y: {
+        beginAtZero: !isHorizontal && config.options?.beginAtZero !== false,
+        min: !isHorizontal && config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
+        max: !isHorizontal && config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
         grid: {
           display: false
         },
@@ -1374,7 +1384,8 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           font: { 
             size: 12,
             family: config.options?.fontStyles?.ticks?.family || 'Inter'
-          }
+          },
+          stepSize: !isHorizontal && config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
         },
         title: {
           display: !!config.options?.yAxisLabel,
@@ -1395,6 +1406,8 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     baseOptions.scales = {
       x: {
         beginAtZero: config.options?.beginAtZero !== false,
+        min: config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
+        max: config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
         grid: {
           display: config.options?.showGrid !== false,
           color: config.options?.gridColor || '#334155'
@@ -1404,7 +1417,8 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           font: { 
             size: 12,
             family: config.options?.fontStyles?.ticks?.family || 'Inter'
-          }
+          },
+          stepSize: config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
         },
         title: {
           display: !!config.options?.xAxisLabel,
@@ -1449,6 +1463,8 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     baseOptions.scales = {
       y: {
         beginAtZero: config.options?.beginAtZero !== false,
+        min: config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
+        max: config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
         grid: {
           display: config.options?.showGrid !== false,
           color: config.options?.gridColor || '#334155'
@@ -1458,7 +1474,8 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           font: { 
             size: 12,
             family: config.options?.fontStyles?.ticks?.family || 'Inter'
-          }
+          },
+          stepSize: config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
         },
         title: {
           display: !!config.options?.yAxisLabel,
@@ -1500,6 +1517,8 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     baseOptions.scales = {
       y: {
         beginAtZero: config.options?.beginAtZero !== false,
+        min: config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
+        max: config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
         grid: {
           display: config.options?.showGrid !== false,
           color: config.options?.gridColor || '#334155'
@@ -1509,7 +1528,8 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           font: { 
             size: 12,
             family: config.options?.fontStyles?.ticks?.family || 'Inter'
-          }
+          },
+          stepSize: config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
         },
         title: {
           display: !!config.options?.yAxisLabel,

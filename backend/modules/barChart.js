@@ -110,6 +110,23 @@ export default {
         placeholder: "z.B. Verkäufe",
         description: "Beschriftung der Y-Achse"
       },
+      yAxisMin: {
+        type: "number",
+        default: null,
+        description: "Minimalwert der Y-Achse (leer = automatisch)"
+      },
+      yAxisMax: {
+        type: "number",
+        default: null,
+        description: "Maximalwert der Y-Achse (leer = automatisch)"
+      },
+      yAxisStep: {
+        type: "number",
+        min: 0.1,
+        step: 0.1,
+        default: null,
+        description: "Schrittweite der Y-Achse (leer = automatisch)"
+      },
       minBarLength: {
         type: "number",
         min: 0,

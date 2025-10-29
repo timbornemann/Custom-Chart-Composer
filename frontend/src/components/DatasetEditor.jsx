@@ -120,6 +120,31 @@ export default function DatasetEditor({ datasets, labels, onDatasetsChange, onLa
     setDragOverIndex(null)
   }
 
+  const sortBy = (key, direction, dsIndexForValue) => {
+    const indices = labels.map((_, i) => i)
+    const compare = (a, b) => {
+      if (key === 'label') {
+        const la = String(labels[a] ?? '')
+        const lb = String(labels[b] ?? '')
+        return la.localeCompare(lb, undefined, { numeric: true, sensitivity: 'base' })
+      }
+      const ds = datasets[dsIndexForValue] || datasets[0]
+      const va = Number(ds?.data?.[a] ?? 0)
+      const vb = Number(ds?.data?.[b] ?? 0)
+      return va - vb
+    }
+    indices.sort(compare)
+    if (direction === 'desc') indices.reverse()
+
+    const newLabels = indices.map(i => labels[i])
+    const newDatasets = datasets.map(ds => ({
+      ...ds,
+      data: indices.map(i => ds.data[i])
+    }))
+    onLabelsChange(newLabels)
+    onDatasetsChange(newDatasets)
+  }
+
   return (
     <div className="space-y-4">
       {/* Datasets Management */}
@@ -240,12 +265,61 @@ export default function DatasetEditor({ datasets, labels, onDatasetsChange, onLa
                       <label className="text-xs font-medium text-dark-textGray">
                         Datenpunkte ({dataset.data.length})
                       </label>
-                      <button
-                        onClick={addDataPoint}
-                        className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-all"
-                      >
-                        + Datenpunkt
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 text-xs">
+                          <span className="text-dark-textGray">Sortieren nach</span>
+                          <select
+                            id={`ds-sort-key-${dsIdx}`}
+                            className="bg-dark-secondary border border-gray-700 text-dark-textLight rounded px-2 py-1"
+                            defaultValue="label"
+                          >
+                            <option value="label">Beschriftung</option>
+                            <option value="value">Wert</option>
+                          </select>
+                          {datasets.length > 0 && (
+                            <select
+                              id={`ds-sort-ds-${dsIdx}`}
+                              className="bg-dark-secondary border border-gray-700 text-dark-textLight rounded px-2 py-1"
+                              defaultValue={String(dsIdx)}
+                              title="Datensatz für Wert-Sortierung"
+                            >
+                              {datasets.map((d, i) => (
+                                <option key={i} value={String(i)}>{d.label || `Serie ${i+1}`}</option>
+                              ))}
+                            </select>
+                          )}
+                          <button
+                            type="button"
+                            className="rounded border border-gray-700 px-2 py-1 text-dark-textLight hover:bg-gray-800"
+                            title="Aufsteigend sortieren"
+                            onClick={() => sortBy(
+                              document.getElementById(`ds-sort-key-${dsIdx}`).value,
+                              'asc',
+                              Number(document.getElementById(`ds-sort-ds-${dsIdx}`)?.value ?? 0)
+                            )}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded border border-gray-700 px-2 py-1 text-dark-textLight hover:bg-gray-800"
+                            title="Absteigend sortieren"
+                            onClick={() => sortBy(
+                              document.getElementById(`ds-sort-key-${dsIdx}`).value,
+                              'desc',
+                              Number(document.getElementById(`ds-sort-ds-${dsIdx}`)?.value ?? 0)
+                            )}
+                          >
+                            ↓
+                          </button>
+                        </div>
+                        <button
+                          onClick={addDataPoint}
+                          className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-all"
+                        >
+                          + Datenpunkt
+                        </button>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2">
                       {dataset.data.map((value, pointIdx) => (

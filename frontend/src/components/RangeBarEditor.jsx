@@ -121,6 +121,32 @@ export default function RangeBarEditor({ labels, datasets, onLabelsChange, onDat
     setDragOverIndex(null)
   }
 
+  const sortBy = (key, direction) => {
+    const indices = labels.map((_, i) => i)
+    const compare = (a, b) => {
+      if (key === 'label') {
+        const la = String(labels[a] ?? '')
+        const lb = String(labels[b] ?? '')
+        return la.localeCompare(lb, undefined, { numeric: true, sensitivity: 'base' })
+      }
+      // key: from or to
+      const ds0 = datasets[0]
+      const va = Number(ds0?.data?.[a]?.[key === 'from' ? 0 : 1] ?? 0)
+      const vb = Number(ds0?.data?.[b]?.[key === 'from' ? 0 : 1] ?? 0)
+      return va - vb
+    }
+    indices.sort(compare)
+    if (direction === 'desc') indices.reverse()
+
+    const newLabels = indices.map(i => labels[i])
+    const newDatasets = datasets.map(ds => ({
+      ...ds,
+      data: indices.map(i => ds.data[i])
+    }))
+    onLabelsChange(newLabels)
+    onDatasetsChange(newDatasets)
+  }
+
   return (
     <div className="space-y-4">
       {/* Datasets Management */}
@@ -182,12 +208,42 @@ export default function RangeBarEditor({ labels, datasets, onLabelsChange, onDat
                       <label className="text-xs font-medium text-dark-textGray">
                         Zeitbereiche ({labels.length})
                       </label>
-                      <button
-                        onClick={addDataPoint}
-                        className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-all"
-                      >
-                        + Zeitbereich
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 text-xs">
+                          <span className="text-dark-textGray">Sortieren nach</span>
+                          <select
+                            id={`range-sort-key-${dsIdx}`}
+                            className="bg-dark-secondary border border-gray-700 text-dark-textLight rounded px-2 py-1"
+                            defaultValue="label"
+                          >
+                            <option value="label">Name</option>
+                            <option value="from">Von</option>
+                            <option value="to">Bis</option>
+                          </select>
+                          <button
+                            type="button"
+                            className="rounded border border-gray-700 px-2 py-1 text-dark-textLight hover:bg-gray-800"
+                            title="Aufsteigend sortieren"
+                            onClick={() => sortBy(document.getElementById(`range-sort-key-${dsIdx}`).value, 'asc')}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded border border-gray-700 px-2 py-1 text-dark-textLight hover:bg-gray-800"
+                            title="Absteigend sortieren"
+                            onClick={() => sortBy(document.getElementById(`range-sort-key-${dsIdx}`).value, 'desc')}
+                          >
+                            ↓
+                          </button>
+                        </div>
+                        <button
+                          onClick={addDataPoint}
+                          className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-all"
+                        >
+                          + Zeitbereich
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
                       {labels.map((label, labelIdx) => {

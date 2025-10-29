@@ -68,18 +68,61 @@ export default function PointEditor({ points, onPointsChange, isBubble = false }
     setDragOverIndex(null)
   }
 
+  const sortBy = (key, direction) => {
+    const indices = points.map((_, i) => i)
+    const compare = (a, b) => {
+      const va = Number(points[a]?.[key] ?? 0)
+      const vb = Number(points[b]?.[key] ?? 0)
+      return va - vb
+    }
+    indices.sort(compare)
+    if (direction === 'desc') indices.reverse()
+    const newPoints = indices.map(i => points[i])
+    onPointsChange(newPoints)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-dark-textLight">
           {isBubble ? 'Blasen (x, y, Größe)' : 'Punkte (x, y)'}
         </label>
-        <button
-          onClick={addPoint}
-          className="text-xs px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded transition-all"
-        >
-          + Punkt
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 text-xs">
+            <span className="text-dark-textGray">Sortieren nach</span>
+            <select
+              id="point-sort-key"
+              className="bg-dark-secondary border border-gray-700 text-dark-textLight rounded px-2 py-1"
+              defaultValue="x"
+            >
+              <option value="x">X</option>
+              <option value="y">Y</option>
+              {isBubble && <option value="r">Größe</option>}
+            </select>
+            <button
+              type="button"
+              className="rounded border border-gray-700 px-2 py-1 text-dark-textLight hover:bg-gray-800"
+              title="Aufsteigend sortieren"
+              onClick={() => sortBy(document.getElementById('point-sort-key').value, 'asc')}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="rounded border border-gray-700 px-2 py-1 text-dark-textLight hover:bg-gray-800"
+              title="Absteigend sortieren"
+              onClick={() => sortBy(document.getElementById('point-sort-key').value, 'desc')}
+            >
+              ↓
+            </button>
+          </div>
+          <button
+            onClick={addPoint}
+            className="text-xs px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded transition-all"
+          >
+            + Punkt
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2 max-h-96 overflow-y-auto pr-2">

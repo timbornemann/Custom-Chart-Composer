@@ -76,18 +76,69 @@ export default function SimpleDataEditor({ labels, values, onLabelsChange, onVal
     setDragOverIndex(null)
   }
 
+  const sortBy = (key, direction) => {
+    const indices = labels.map((_, i) => i)
+    const compare = (a, b) => {
+      if (key === 'label') {
+        const la = String(labels[a] ?? '')
+        const lb = String(labels[b] ?? '')
+        return la.localeCompare(lb, undefined, { numeric: true, sensitivity: 'base' })
+      }
+      const va = Number(values[a] ?? 0)
+      const vb = Number(values[b] ?? 0)
+      return va - vb
+    }
+    indices.sort(compare)
+    if (direction === 'desc') indices.reverse()
+
+    const newLabels = indices.map(i => labels[i])
+    const newValues = indices.map(i => values[i])
+    onLabelsChange(newLabels)
+    onValuesChange(newValues)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-2">
         <label className="text-sm font-medium text-dark-textLight">
           Datenpunkte ({labels.length})
         </label>
-        <button
-          onClick={addEntry}
-          className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-all"
-        >
-          + Datenpunkt
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 text-xs">
+            <span className="text-dark-textGray">Sortieren nach</span>
+            <select
+              id="simple-sort-key"
+              className="bg-dark-secondary border border-gray-700 text-dark-textLight rounded px-2 py-1"
+              onChange={(e) => sortBy(e.target.value, 'asc')}
+              defaultValue="label"
+            >
+              <option value="label">Beschriftung</option>
+              <option value="value">Wert</option>
+            </select>
+            <button
+              type="button"
+              className="rounded border border-gray-700 px-2 py-1 text-dark-textLight hover:bg-gray-800"
+              title="Aufsteigend sortieren"
+              onClick={() => sortBy(document.getElementById('simple-sort-key').value, 'asc')}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="rounded border border-gray-700 px-2 py-1 text-dark-textLight hover:bg-gray-800"
+              title="Absteigend sortieren"
+              onClick={() => sortBy(document.getElementById('simple-sort-key').value, 'desc')}
+            >
+              ↓
+            </button>
+          </div>
+          <button
+            onClick={addEntry}
+            className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded transition-all"
+          >
+            + Datenpunkt
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2 max-h-96 overflow-y-auto pr-2">

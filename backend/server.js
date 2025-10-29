@@ -4,6 +4,8 @@ import bodyParser from 'body-parser';
 import { pathToFileURL } from 'url';
 import chartRoutes from './routes/chartRoutes.js';
 import { loadChartModules } from './services/moduleLoader.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 export const createApp = () => {
   const app = express();
@@ -15,6 +17,18 @@ export const createApp = () => {
 
   // Routes
   app.use('/api', chartRoutes);
+
+  // Serve frontend build if available (Docker/production)
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const frontendDist = path.resolve(__dirname, '../frontend/dist');
+    app.use(express.static(frontendDist));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) return next();
+      res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+  } catch (_) {}
 
   // Health check
   app.get('/health', (req, res) => {

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import PropTypes from 'prop-types'
+import Papa from 'papaparse'
 import useDataImport from '../hooks/useDataImport'
 
 const formatCellValue = (value) => {
@@ -92,10 +93,10 @@ const VALUE_RULE_ACTIONS = [
   { value: 'trim', label: 'Leerzeichen trimmen' }
 ]
 
-export default function DataImportModal({
-  isOpen,
-  onClose,
-  onImport,
+export default function CsvWorkbench({
+  onApplyToChart,
+  onImportStateChange,
+  onResetWorkbench,
   allowMultipleValueColumns = true,
   requireDatasets = false,
   initialData = null,
@@ -110,10 +111,10 @@ export default function DataImportModal({
     columns,
     mapping,
     transformations,
-    updateMapping,
-    updateTransformations,
-    toggleValueColumn,
-    parseFile,
+    updateMapping: internalUpdateMapping,
+    updateTransformations: internalUpdateTransformations,
+    toggleValueColumn: internalToggleValueColumn,
+    parseFile: internalParseFile,
     reset,
     previewRows,
     totalRows,
@@ -128,25 +129,438 @@ export default function DataImportModal({
     previewLimit,
     setPreviewLimit,
     getImportResult,
-    getImportState
+    getImportState,
+    searchQuery,
+    setSearchQuery,
+    sortConfig,
+    setSortConfig,
+    previewEntries,
+    filteredRowCount,
+    transformedPreviewEntries,
+    transformedFilteredRowCount,
+    transformedRows,
+    updateCell: internalUpdateCell
   } = useDataImport({ allowMultipleValueColumns, requireDatasets, initialData, chartType, isScatterBubble, isCoordinate })
 
-  useEffect(() => {
-    if (!isOpen) {
-      setActiveTab('mapping')
-      // Don't reset when closing - keep state for next open
-    } else if (isOpen && initialData) {
-      // When opening with initial data, ensure we're on the mapping tab to show the data
-      setActiveTab('mapping')
-    }
-  }, [isOpen, initialData])
+  const [editingCell, setEditingCell] = useState(null)
+  const [editingValue, setEditingValue] = useState('')
+  const [activeSection, setActiveSection] = useState('mapping')
 
-  // Ensure all hooks above are always called before any early return
+  const schedulePersist = useCallback(() => {
+    if (!onImportStateChange) return
+    setTimeout(() => {
+      const state = getImportState()
+      onImportStateChange({ ...state, stateVersion: Date.now() })
+    }, 0)
+  }, [onImportStateChange, getImportState])
 
-  const handleClose = () => {
+  const parseFile = useCallback(
+    async (file) => {
+      if (!file) return
+      await internalParseFile(file)
+      schedulePersist()
+    },
+    [internalParseFile, schedulePersist]
+  )
+
+  const updateMapping = useCallback(
+    (changes) => {
+      internalUpdateMapping(changes)
+      schedulePersist()
+    },
+    [internalUpdateMapping, schedulePersist]
+  )
+
+  const updateTransformations = useCallback(
+    (updater) => {
+      internalUpdateTransformations(updater)
+      schedulePersist()
+    },
+    [internalUpdateTransformations, schedulePersist]
+  )
+
+  const toggleValueColumn = useCallback(
+    (columnKey) => {
+      internalToggleValueColumn(columnKey)
+      schedulePersist()
+    },
+    [internalToggleValueColumn, schedulePersist]
+  )
+
+  const updateCell = useCallback(
+    (rowIndex, columnKey, value) => {
+      internalUpdateCell(rowIndex, columnKey, value)
+      schedulePersist()
+    },
+    [internalUpdateCell, schedulePersist]
+  )
+
+  const handleResetWorkbench = useCallback(() => {
     reset()
-    onClose()
-  }
+    setEditingCell(null)
+    setEditingValue('')
+    if (onImportStateChange) {
+      onImportStateChange(null)
+    }
+    if (onResetWorkbench) {
+      onResetWorkbench()
+    }
+  }, [reset, onImportStateChange, onResetWorkbench])
+
+  const handleSearchChange = useCallback(
+    (event) => {
+      setSearchQuery(event.target.value)
+    },
+    [setSearchQuery]
+  )
+
+  const handleSortToggle = useCallback(
+    (columnKey) => {
+      if (!columnKey) return
+      if (sortConfig.column !== columnKey) {
+        setSortConfig({ column: columnKey, direction: 'asc' })
+        return
+      }
+
+      if (sortConfig.direction === 'asc') {
+        setSortConfig({ column: columnKey, direction: 'desc' })
+      } else if (sortConfig.direction === 'desc') {
+        setSortConfig({ column: '', direction: 'none' })
+      } else {
+        setSortConfig({ column: columnKey, direction: 'asc' })
+      }
+    },
+    [sortConfig, setSortConfig]
+  )
+
+  const startEditCell = useCallback((entry, columnKey) => {
+    if (!entry) return
+    setEditingCell({ rowIndex: entry.index, columnKey })
+    const currentValue = entry.row?.[columnKey]
+    setEditingValue(currentValue === undefined || currentValue === null ? '' : String(currentValue))
+  }, [])
+
+  const cancelEdit = useCallback(() => {
+    setEditingCell(null)
+    setEditingValue('')
+  }, [])
+
+  const confirmEdit = useCallback(() => {
+    if (!editingCell) return
+    updateCell(editingCell.rowIndex, editingCell.columnKey, editingValue)
+    cancelEdit()
+  }, [editingCell, editingValue, updateCell, cancelEdit])
+
+  const handleExportTransformed = useCallback(() => {
+    if (!transformedRows || transformedRows.length === 0) {
+      return
+    }
+    try {
+      const csv = Papa.unparse(transformedRows)
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      const baseName = fileName ? fileName.replace(/\.[^.]+$/, '') : 'daten'
+      anchor.download = `${baseName}-transformiert.csv`
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Export der transformierten Daten fehlgeschlagen:', error)
+    }
+  }, [transformedRows, fileName])
+
+  const numericColumns = useMemo(() => columns.filter((column) => column.type === 'number'), [columns])
+  const textColumns = useMemo(() => columns.filter((column) => column.type !== 'number'), [columns])
+
+  const chartSuggestions = useMemo(() => {
+    if (!columns || columns.length === 0) return []
+    const suggestions = []
+
+    if (textColumns.length > 0 && numericColumns.length > 0) {
+      suggestions.push({
+        id: 'multiValue',
+        title: 'Kategorien mit mehreren Zahlen',
+        description: 'Ideal für Balken- oder Liniendiagramme mit mehreren Serien.',
+        chartHint: 'Balken-/Liniendiagramm',
+        fields: [
+          {
+            key: 'label',
+            label: 'Beschriftungs-Spalte',
+            type: 'text',
+            multiple: false,
+            defaultValue: textColumns[0]?.key || ''
+          },
+          {
+            key: 'values',
+            label: 'Werte-Spalten',
+            type: 'number',
+            multiple: true,
+            defaultValues: numericColumns.slice(0, 3).map((column) => column.key)
+          }
+        ],
+        buildMapping: (selection) => ({
+          label: selection.label || '',
+          valueColumns: Array.isArray(selection.values) ? selection.values : selection.values ? [selection.values] : [],
+          datasetLabel: ''
+        })
+      })
+    }
+
+    if (textColumns.length > 0 && numericColumns.length > 0) {
+      suggestions.push({
+        id: 'singleValue',
+        title: 'Kategorien mit einer Kennzahl',
+        description: 'Perfekt für Kreis- oder Donutdiagramme.',
+        chartHint: 'Kreis-/Donutdiagramm',
+        fields: [
+          {
+            key: 'label',
+            label: 'Beschriftungs-Spalte',
+            type: 'text',
+            multiple: false,
+            defaultValue: textColumns[0]?.key || ''
+          },
+          {
+            key: 'value',
+            label: 'Wert-Spalte',
+            type: 'number',
+            multiple: false,
+            defaultValue: numericColumns[0]?.key || ''
+          }
+        ],
+        buildMapping: (selection) => ({
+          label: selection.label || '',
+          valueColumns: selection.value ? [selection.value] : [],
+          datasetLabel: ''
+        })
+      })
+    }
+
+    if (textColumns.length > 1 && numericColumns.length > 0) {
+      suggestions.push({
+        id: 'longFormat',
+        title: 'Lange Tabelle mit Datensatz-Spalte',
+        description: 'Verwende eine Datensatzspalte, um Serien dynamisch zu gruppieren.',
+        chartHint: 'Mehrserien-Diagramm',
+        fields: [
+          {
+            key: 'label',
+            label: 'Beschriftungs-Spalte',
+            type: 'text',
+            multiple: false,
+            defaultValue: textColumns[0]?.key || ''
+          },
+          {
+            key: 'value',
+            label: 'Wert-Spalte',
+            type: 'number',
+            multiple: false,
+            defaultValue: numericColumns[0]?.key || ''
+          },
+          {
+            key: 'dataset',
+            label: 'Datensatz-Spalte',
+            type: 'text',
+            multiple: false,
+            defaultValue: textColumns[1]?.key || ''
+          }
+        ],
+        buildMapping: (selection) => ({
+          label: selection.label || '',
+          valueColumns: selection.value ? [selection.value] : [],
+          datasetLabel: selection.dataset || ''
+        })
+      })
+    }
+
+    const needsRadius = chartType === 'bubble' || chartType === 'matrix'
+
+    if (isScatterBubble && numericColumns.length >= 2) {
+      suggestions.push({
+        id: 'scatter',
+        title: needsRadius ? 'Blasen-/Matrixdaten' : 'Streudiagramm-Daten',
+        description: needsRadius
+          ? 'Wähle Spalten für X, Y und optional Radiuswerte.'
+          : 'Wähle Spalten für X- und Y-Werte.',
+        chartHint: needsRadius ? 'Bubble/Matrix' : 'Scatter',
+        fields: [
+          {
+            key: 'xColumn',
+            label: 'X-Spalte',
+            type: 'number',
+            multiple: false,
+            defaultValue: numericColumns[0]?.key || ''
+          },
+          {
+            key: 'yColumn',
+            label: 'Y-Spalte',
+            type: 'number',
+            multiple: false,
+            defaultValue: numericColumns[1]?.key || numericColumns[0]?.key || ''
+          },
+          ...(needsRadius
+            ? [
+                {
+                  key: 'rColumn',
+                  label: 'Radius-Spalte (optional)',
+                  type: 'number',
+                  multiple: false,
+                  optional: true,
+                  defaultValue: numericColumns[2]?.key || ''
+                }
+              ]
+            : []),
+          {
+            key: 'datasetLabel',
+            label: 'Datensatz-Spalte (optional)',
+            type: 'text',
+            multiple: false,
+            optional: true,
+            defaultValue: ''
+          },
+          {
+            key: 'pointLabelColumn',
+            label: 'Punkt-Label (optional)',
+            type: 'any',
+            multiple: false,
+            optional: true,
+            defaultValue: ''
+          }
+        ],
+        buildMapping: (selection) => ({
+          xColumn: selection.xColumn || '',
+          yColumn: selection.yColumn || '',
+          rColumn: selection.rColumn || '',
+          datasetLabel: selection.datasetLabel || '',
+          pointLabelColumn: selection.pointLabelColumn || '',
+          valueColumns: [],
+          label: ''
+        })
+      })
+    }
+
+    if (isCoordinate && numericColumns.length >= 2) {
+      const defaultLongitude =
+        numericColumns.find((col) => col.key.toLowerCase().includes('lon') || col.key.toLowerCase().includes('long'))?.key ||
+        numericColumns[0]?.key || ''
+      const defaultLatitude =
+        numericColumns.find((col) => col.key.toLowerCase().includes('lat'))?.key || numericColumns[1]?.key || numericColumns[0]?.key || ''
+
+      suggestions.push({
+        id: 'coordinate',
+        title: 'Koordinaten-Daten',
+        description: 'Geeignet für Kartenvisualisierungen mit Longitude/Latitude.',
+        chartHint: 'Karten-/Koordinatenvisualisierung',
+        fields: [
+          {
+            key: 'longitudeColumn',
+            label: 'Longitude',
+            type: 'number',
+            multiple: false,
+            defaultValue: defaultLongitude
+          },
+          {
+            key: 'latitudeColumn',
+            label: 'Latitude',
+            type: 'number',
+            multiple: false,
+            defaultValue: defaultLatitude
+          },
+          {
+            key: 'datasetLabel',
+            label: 'Datensatz-Spalte (optional)',
+            type: 'text',
+            multiple: false,
+            optional: true,
+            defaultValue: ''
+          },
+          {
+            key: 'pointLabelColumn',
+            label: 'Beschriftung (optional)',
+            type: 'any',
+            multiple: false,
+            optional: true,
+            defaultValue: ''
+          }
+        ],
+        buildMapping: (selection) => ({
+          longitudeColumn: selection.longitudeColumn || '',
+          latitudeColumn: selection.latitudeColumn || '',
+          datasetLabel: selection.datasetLabel || '',
+          pointLabelColumn: selection.pointLabelColumn || ''
+        })
+      })
+    }
+
+    return suggestions
+  }, [columns, textColumns, numericColumns, isScatterBubble, isCoordinate, chartType])
+
+  const initialSuggestionSelections = useMemo(() => {
+    const defaults = {}
+    chartSuggestions.forEach((suggestion) => {
+      const selection = {}
+      suggestion.fields.forEach((field) => {
+        if (field.multiple) {
+          selection[field.key] = field.defaultValues ? [...field.defaultValues] : []
+        } else {
+          selection[field.key] = field.defaultValue || ''
+        }
+      })
+      defaults[suggestion.id] = selection
+    })
+    return defaults
+  }, [chartSuggestions])
+
+  const [suggestionSelections, setSuggestionSelections] = useState(initialSuggestionSelections)
+
+  useEffect(() => {
+    setSuggestionSelections(initialSuggestionSelections)
+  }, [initialSuggestionSelections])
+
+  const updateSuggestionSelection = useCallback((suggestionId, fieldKey, value) => {
+    setSuggestionSelections((prev) => ({
+      ...prev,
+      [suggestionId]: {
+        ...(prev[suggestionId] || {}),
+        [fieldKey]: value
+      }
+    }))
+  }, [])
+
+  const getFieldOptions = useCallback(
+    (field) => {
+      if (field.type === 'number') return numericColumns
+      if (field.type === 'text') return textColumns
+      return columns
+    },
+    [numericColumns, textColumns, columns]
+  )
+
+  const isSuggestionComplete = useCallback((suggestion, selection) => {
+    return suggestion.fields.every((field) => {
+      if (field.optional) return true
+      const value = selection?.[field.key]
+      if (field.multiple) {
+        return Array.isArray(value) && value.length > 0
+      }
+      return Boolean(value)
+    })
+  }, [])
+
+  const handleSuggestionApply = useCallback(
+    (suggestion) => {
+      const selection = suggestionSelections[suggestion.id] || {}
+      if (!isSuggestionComplete(suggestion, selection)) {
+        return
+      }
+      const mappingOverride = suggestion.buildMapping(selection)
+      handleApply(mappingOverride)
+    },
+    [suggestionSelections, isSuggestionComplete, handleApply]
+  )
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0]
@@ -155,19 +569,23 @@ export default function DataImportModal({
     }
   }
 
-  const handleImport = () => {
-    const result = getImportResult()
-    if (!result) {
-      return
-    }
-    // Include import state in result so it can be saved
-    const importState = getImportState()
-    onImport({
-      ...result,
-      importState
-    })
-    // Don't reset here - allow user to keep editing
-  }
+  const handleApply = useCallback(
+    (mappingOverride = null) => {
+      const result = getImportResult(mappingOverride)
+      if (!result) {
+        return
+      }
+      if (!onApplyToChart) {
+        return
+      }
+      const importState = getImportState()
+      onApplyToChart({
+        ...result,
+        importState: { ...importState, stateVersion: Date.now() }
+      }, mappingOverride)
+    },
+    [getImportResult, getImportState, onApplyToChart]
+  )
 
   const availableDatasetColumns = columns.filter(
     (column) =>
@@ -459,25 +877,32 @@ export default function DataImportModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
-      <div className="w-full max-w-5xl rounded-xl bg-dark-secondary shadow-2xl border border-gray-700">
-        <div className="flex items-start justify-between border-b border-gray-700 px-6 py-4">
+    <div className="space-y-6">
+      <div className="rounded-xl border border-gray-700 bg-dark-secondary shadow-lg">
+        <div className="flex flex-col gap-2 border-b border-gray-700 px-6 py-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-dark-textLight">CSV/Excel-Daten importieren</h2>
+            <h2 className="text-lg font-semibold text-dark-textLight">CSV Viewer &amp; Editor</h2>
             <p className="text-sm text-dark-textGray">
-              Laden Sie eine Datei hoch, ordnen Sie die Spalten zu und konfigurieren Sie optionale Transformationen.
+              Lade eine Datei, inspiziere und bearbeite die Daten, wende Transformationen an und übertrage Ergebnisse flexibel in den Diagramm-Editor.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="rounded-md bg-transparent p-2 text-dark-textGray hover:text-dark-textLight"
-          >
-            ✕
-          </button>
+          <div className="flex flex-wrap gap-2 text-xs text-dark-textGray">
+            <div className="rounded-md border border-gray-700 px-3 py-1.5">
+              {fileName ? (
+                <span>
+                  Datei: <span className="text-dark-textLight">{fileName}</span>
+                </span>
+              ) : (
+                'Keine Datei geladen'
+              )}
+            </div>
+            <div className="rounded-md border border-gray-700 px-3 py-1.5">
+              {totalRows} Zeilen erkannt
+            </div>
+          </div>
         </div>
 
-        <div className="max-h-[75vh] overflow-y-auto px-6 py-5 space-y-5">
+        <div className="px-6 py-5 space-y-5">
           <section className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-dark-textLight mb-2">Datei auswählen</label>
@@ -893,15 +1318,25 @@ export default function DataImportModal({
                     </div>
                   )}
 
-                  {previewRows.length > 0 && (
-                    <section className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-dark-textLight">Originaldaten Vorschau</h4>
-                        <div className="flex items-center gap-3 text-xs text-dark-textGray">
-                          <span>{totalRows} Zeilen erkannt</span>
+                  {previewEntries.length > 0 ? (
+                    <section className="space-y-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-dark-textLight">Originaldaten Vorschau</h4>
+                          <p className="text-xs text-dark-textGray">
+                            {filteredRowCount} von {totalRows} Zeilen sichtbar
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-dark-textGray">
                           <label className="flex items-center gap-1">
                             <span className="hidden sm:inline">Zeilen:</span>
-                            <select value={String(previewLimit)} onChange={(e) => setPreviewLimit(e.target.value === 'all' ? 'all' : Number(e.target.value))} className="rounded-md border border-gray-700 bg-dark-bg px-1.5 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none">
+                            <select
+                              value={String(previewLimit)}
+                              onChange={(e) =>
+                                setPreviewLimit(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                              }
+                              className="rounded-md border border-gray-700 bg-dark-bg px-1.5 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                            >
                               <option value={5}>5</option>
                               <option value={10}>10</option>
                               <option value={50}>50</option>
@@ -909,35 +1344,101 @@ export default function DataImportModal({
                               <option value="all">alle</option>
                             </select>
                           </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={searchQuery}
+                              onChange={handleSearchChange}
+                              placeholder="Suchen …"
+                              className="rounded-md border border-gray-700 bg-dark-bg pl-7 pr-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                            />
+                            <span className="pointer-events-none absolute left-2 top-1.5 text-dark-textGray/80">🔍</span>
+                          </div>
                         </div>
                       </div>
                       <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
                         <table className="min-w-full divide-y divide-gray-700 text-sm">
                           <thead className="bg-dark-bg/80 text-xs uppercase tracking-wide text-dark-textGray">
                             <tr>
-                              {columns.map((column) => (
-                                <th key={column.key} className="px-3 py-2 text-left">
-                                  {column.key}
-                                </th>
-                              ))}
+                              {columns.map((column) => {
+                                const isSorted = sortConfig.column === column.key
+                                const sortSymbol =
+                                  sortConfig.column === column.key
+                                    ? sortConfig.direction === 'asc'
+                                      ? '▲'
+                                      : sortConfig.direction === 'desc'
+                                      ? '▼'
+                                      : ''
+                                    : ''
+                                return (
+                                  <th key={column.key} className="px-3 py-2 text-left">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSortToggle(column.key)}
+                                      className={`flex items-center gap-1 text-dark-textGray transition-colors hover:text-dark-textLight ${
+                                        isSorted ? 'text-dark-textLight' : ''
+                                      }`}
+                                    >
+                                      <span>{column.key}</span>
+                                      {sortSymbol && <span className="text-[10px]">{sortSymbol}</span>}
+                                    </button>
+                                  </th>
+                                )
+                              })}
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
-                            {previewRows.map((row, rowIndex) => (
-                              <tr key={rowIndex}>
-                                {columns.map((column) => (
-                                  <td key={column.key} className="px-3 py-2 text-xs text-dark-textLight/90">
-                                    {formatCellValue(row[column.key]) || (
-                                      <span className="text-dark-textGray/60">–</span>
-                                    )}
-                                  </td>
-                                ))}
+                            {previewEntries.map((entry) => (
+                              <tr key={entry.index}>
+                                {columns.map((column) => {
+                                  const isEditing =
+                                    editingCell?.rowIndex === entry.index && editingCell.columnKey === column.key
+                                  return (
+                                    <td key={column.key} className="px-3 py-2 text-xs text-dark-textLight/90">
+                                      {isEditing ? (
+                                        <input
+                                          value={editingValue}
+                                          onChange={(event) => setEditingValue(event.target.value)}
+                                          onBlur={confirmEdit}
+                                          onKeyDown={(event) => {
+                                            if (event.key === 'Enter') {
+                                              confirmEdit()
+                                            } else if (event.key === 'Escape') {
+                                              cancelEdit()
+                                            }
+                                          }}
+                                          autoFocus
+                                          className="w-full rounded-md border border-dark-accent1/60 bg-dark-secondary px-2 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                        />
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onDoubleClick={() => startEditCell(entry, column.key)}
+                                          onKeyDown={(event) => {
+                                            if (event.key === 'Enter') {
+                                              startEditCell(entry, column.key)
+                                            }
+                                          }}
+                                          className="w-full text-left text-dark-textLight/90 hover:text-dark-textLight"
+                                        >
+                                          {formatCellValue(entry.row[column.key]) || (
+                                            <span className="text-dark-textGray/60">–</span>
+                                          )}
+                                        </button>
+                                      )}
+                                    </td>
+                                  )
+                                })}
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
                     </section>
+                  ) : (
+                    <p className="text-xs text-dark-textGray">
+                      Keine Daten zum Anzeigen. Laden Sie eine Datei oder passen Sie die Suchfilter an.
+                    </p>
                   )}
                 </div>
               )}
@@ -1620,15 +2121,25 @@ export default function DataImportModal({
                         ))}
                       </div>
                     )}
-                    {transformedPreviewRows.length > 0 ? (
+                    {transformedPreviewEntries.length > 0 ? (
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-semibold text-dark-textLight">Transformierte Daten</h4>
-                          <div className="flex items-center gap-3 text-xs text-dark-textGray">
-                            <span>{transformedRowCount} Zeilen nach Transformation</span>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <h4 className="text-sm font-semibold text-dark-textLight">Transformierte Daten</h4>
+                            <p className="text-xs text-dark-textGray">
+                              {transformedFilteredRowCount} von {transformedRowCount} Ergebnissen sichtbar
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-dark-textGray">
                             <label className="flex items-center gap-1">
                               <span className="hidden sm:inline">Zeilen:</span>
-                              <select value={String(previewLimit)} onChange={(e) => setPreviewLimit(e.target.value === 'all' ? 'all' : Number(e.target.value))} className="rounded-md border border-gray-700 bg-dark-bg px-1.5 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none">
+                              <select
+                                value={String(previewLimit)}
+                                onChange={(e) =>
+                                  setPreviewLimit(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                                }
+                                className="rounded-md border border-gray-700 bg-dark-bg px-1.5 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                              >
                                 <option value={5}>5</option>
                                 <option value={10}>10</option>
                                 <option value={50}>50</option>
@@ -1636,6 +2147,14 @@ export default function DataImportModal({
                                 <option value="all">alle</option>
                               </select>
                             </label>
+                            <button
+                              type="button"
+                              onClick={handleExportTransformed}
+                              className="inline-flex items-center gap-1 rounded-md border border-dark-accent1/50 px-2 py-1 text-xs text-dark-accent1 transition-colors hover:bg-dark-accent1/10"
+                              title="Transformierte Daten als CSV speichern"
+                            >
+                              <span>CSV exportieren</span>
+                            </button>
                           </div>
                         </div>
                         <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
@@ -1650,11 +2169,11 @@ export default function DataImportModal({
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
-                              {transformedPreviewRows.map((row, rowIndex) => (
-                                <tr key={rowIndex}>
+                              {transformedPreviewEntries.map((entry) => (
+                                <tr key={entry.index}>
                                   {transformedColumns.map((column) => (
                                     <td key={column} className="px-3 py-2 text-xs text-dark-textLight/90">
-                                      {formatCellValue(row[column]) || <span className="text-dark-textGray/60">–</span>}
+                                      {formatCellValue(entry.row[column]) || <span className="text-dark-textGray/60">–</span>}
                                     </td>
                                   ))}
                                 </tr>
@@ -1670,6 +2189,95 @@ export default function DataImportModal({
                     )}
                   </div>
                 </div>
+              )}
+
+              {chartSuggestions.length > 0 && (
+                <section className="space-y-4 rounded-lg border border-gray-700 bg-dark-bg/40 p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-dark-textLight">Diagramm-Vorschläge</h3>
+                    <p className="text-xs text-dark-textGray">
+                      Wähle passende Spalten aus, um Daten direkt an den Diagramm-Editor zu übergeben. Die Originaldaten im CSV-Tab bleiben erhalten.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    {chartSuggestions.map((suggestion) => {
+                      const selection = suggestionSelections[suggestion.id] || {}
+                      const suggestionReady = isSuggestionComplete(suggestion, selection)
+                      return (
+                        <div key={suggestion.id} className="rounded-lg border border-gray-700 bg-dark-bg/60 p-4">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <h4 className="text-sm font-semibold text-dark-textLight">{suggestion.title}</h4>
+                              <p className="text-xs text-dark-textGray">{suggestion.description}</p>
+                              <p className="mt-1 text-[11px] text-dark-textGray/80">
+                                Empfohlene Diagrammtypen: <span className="text-dark-textLight/90">{suggestion.chartHint}</span>
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleSuggestionApply(suggestion)}
+                              disabled={!suggestionReady}
+                              className={`inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                                suggestionReady
+                                  ? 'border-dark-accent1/50 text-dark-accent1 hover:bg-dark-accent1/10'
+                                  : 'border-gray-800 text-dark-textGray cursor-not-allowed'
+                              }`}
+                            >
+                              <span>Daten anwenden</span>
+                            </button>
+                          </div>
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            {suggestion.fields.map((field) => {
+                              const fieldOptions = getFieldOptions(field)
+                              const fieldValue = selection[field.key]
+                              return (
+                                <div key={field.key} className="space-y-1">
+                                  <label className="block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                    {field.label}
+                                    {field.optional && <span className="text-dark-textGray/60"> (optional)</span>}
+                                  </label>
+                                  {field.multiple ? (
+                                    <select
+                                      multiple
+                                      value={Array.isArray(fieldValue) ? fieldValue : []}
+                                      onChange={(event) =>
+                                        updateSuggestionSelection(
+                                          suggestion.id,
+                                          field.key,
+                                          Array.from(event.target.selectedOptions, (option) => option.value)
+                                        )
+                                      }
+                                      className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                    >
+                                      {fieldOptions.map((option) => (
+                                        <option key={option.key} value={option.key}>
+                                          {option.key}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <select
+                                      value={fieldValue || ''}
+                                      onChange={(event) => updateSuggestionSelection(suggestion.id, field.key, event.target.value)}
+                                      className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                    >
+                                      <option value="">{field.optional ? 'Keine Auswahl' : 'Spalte wählen …'}</option>
+                                      {fieldOptions.map((option) => (
+                                        <option key={option.key} value={option.key}>
+                                          {option.key}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </section>
               )}
 
               {validationErrors.length > 0 && (
@@ -1694,20 +2302,19 @@ export default function DataImportModal({
 
         <div className="flex items-center justify-between border-t border-gray-700 bg-dark-bg/60 px-6 py-4">
           <div className="text-xs text-dark-textGray">
-            Ungültige oder leere Werte werden automatisch übersprungen. Filter und Gruppierung können die Datenmenge zusätzlich
-            reduzieren.
+            Ungültige oder leere Werte werden automatisch übersprungen. Filter, Gruppierung und Transformationen beeinflussen die Vorschau.
           </div>
           <div className="space-x-2">
             <button
               type="button"
-              onClick={handleClose}
-              className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-medium text-dark-textGray hover:text-dark-textLight"
+              onClick={handleResetWorkbench}
+              className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-medium text-dark-textGray transition-colors hover:text-dark-textLight"
             >
-              Abbrechen
+              Arbeitsbereich leeren
             </button>
             <button
               type="button"
-              onClick={handleImport}
+              onClick={() => handleApply()}
               disabled={totalRows === 0 || isLoading}
               className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors ${
                 totalRows === 0 || isLoading
@@ -1715,7 +2322,7 @@ export default function DataImportModal({
                   : 'bg-dark-accent1 hover:bg-dark-accent1/90'
               }`}
             >
-              Daten übernehmen
+              Daten an Diagramm senden
             </button>
           </div>
         </div>
@@ -1724,10 +2331,10 @@ export default function DataImportModal({
   )
 }
 
-DataImportModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onClose: PropTypes.func.isRequired,
-  onImport: PropTypes.func.isRequired,
+CsvWorkbench.propTypes = {
+  onApplyToChart: PropTypes.func,
+  onImportStateChange: PropTypes.func,
+  onResetWorkbench: PropTypes.func,
   allowMultipleValueColumns: PropTypes.bool,
   requireDatasets: PropTypes.bool,
   initialData: PropTypes.object,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 
@@ -32,6 +32,8 @@ const createDefaultTransformations = () => ({
     perColumn: {}
   }
 })
+
+const defaultSortConfig = { column: '', direction: 'none' }
 
 const sanitizeKey = (key) => {
   if (key === null || key === undefined) return ''
@@ -234,6 +236,74 @@ const toDateTime = (value) => {
   }
   
   return null
+}
+
+const normalizeSearchText = (value) => {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value.toLowerCase()
+  if (typeof value === 'number') return String(value)
+  if (value instanceof Date) return value.toISOString().toLowerCase()
+  return String(value).toLowerCase()
+}
+
+const rowMatchesQuery = (row, query) => {
+  const normalizedQuery = query.trim().toLowerCase()
+  if (!normalizedQuery) return true
+  return Object.values(row).some((cell) => normalizeSearchText(cell).includes(normalizedQuery))
+}
+
+const getColumnType = (columns, key) => {
+  const column = columns.find((col) => col.key === key)
+  return column?.type || 'string'
+}
+
+const compareCellValues = (aValue, bValue, type) => {
+  if (aValue === bValue) return 0
+  if (aValue === undefined || aValue === null || aValue === '') return 1
+  if (bValue === undefined || bValue === null || bValue === '') return -1
+
+  if (type === 'number') {
+    const aNum = toNumber(aValue)
+    const bNum = toNumber(bValue)
+    if (aNum === bNum) return 0
+    if (aNum === null) return 1
+    if (bNum === null) return -1
+    return aNum - bNum
+  }
+
+  if (type === 'date' || type === 'datetime') {
+    const aDate = toDateTime(aValue)
+    const bDate = toDateTime(bValue)
+    if (aDate === bDate) return 0
+    if (aDate === null) return 1
+    if (bDate === null) return -1
+    return aDate.getTime() - bDate.getTime()
+  }
+
+  const aText = String(aValue).toLowerCase()
+  const bText = String(bValue).toLowerCase()
+  return aText.localeCompare(bText)
+}
+
+const applySearchToEntries = (entries, query) => {
+  if (!query || !query.trim()) {
+    return entries
+  }
+  return entries.filter((entry) => rowMatchesQuery(entry.row, query))
+}
+
+const applySortToEntries = (entries, sortConfig, columns) => {
+  if (!sortConfig?.column || sortConfig.direction === 'none') {
+    return entries
+  }
+  const directionMultiplier = sortConfig.direction === 'desc' ? -1 : 1
+  const type = getColumnType(columns, sortConfig.column)
+  const sortable = [...entries]
+  sortable.sort((a, b) => {
+    const comparison = compareCellValues(a.row[sortConfig.column], b.row[sortConfig.column], type)
+    return comparison * directionMultiplier
+  })
+  return sortable
 }
 
 const analyzeColumns = (rows) => {
@@ -1484,30 +1554,50 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [mapping, setMapping] = useState(defaultMapping)
   const [transformations, setTransformations] = useState(() => createDefaultTransformations())
   const [previewLimit, setPreviewLimit] = useState(5)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortConfig, setSortConfig] = useState(defaultSortConfig)
   const [isLoading, setIsLoading] = useState(false)
   const [parseError, setParseError] = useState('')
   const [validationErrors, setValidationErrors] = useState([])
   const [analysisWarnings, setAnalysisWarnings] = useState([])
   const [resultWarnings, setResultWarnings] = useState([])
+  const initialDataSignatureRef = useRef(null)
 
   // Load initial data when provided
   useEffect(() => {
-    if (initialData && initialData.rows && initialData.columns) {
-      setFileName(initialData.fileName || '')
-      setRows(initialData.rows || [])
-      setColumns(initialData.columns || [])
-      setMapping(initialData.mapping || defaultMapping)
-      setTransformations(initialData.transformations || createDefaultTransformations())
-      
-      if (initialData.columns && initialData.columns.length > 0) {
-        const analyzed = initialData.columns.map(col => ({
-          key: col.key,
-          type: col.type || 'string',
-          filledCount: col.filledCount || 0,
-          emptyCount: col.emptyCount || 0
-        }))
-        setAnalysisWarnings(summarizeColumnWarnings(analyzed))
-      }
+    if (!initialData || !initialData.rows || !initialData.columns) {
+      return
+    }
+
+    const signatureParts = [
+      initialData.stateVersion || 0,
+      initialData.fileName || '',
+      initialData.rows?.length || 0,
+      initialData.columns?.length || 0
+    ]
+    const signature = signatureParts.join('|')
+    if (initialDataSignatureRef.current === signature) {
+      return
+    }
+    initialDataSignatureRef.current = signature
+
+    setFileName(initialData.fileName || '')
+    setRows(initialData.rows || [])
+    setColumns(initialData.columns || [])
+    setMapping(initialData.mapping || defaultMapping)
+    setTransformations(initialData.transformations || createDefaultTransformations())
+    setPreviewLimit(initialData.previewLimit ?? 5)
+    setSearchQuery(initialData.searchQuery || '')
+    setSortConfig(initialData.sortConfig || defaultSortConfig)
+
+    if (initialData.columns && initialData.columns.length > 0) {
+      const analyzed = initialData.columns.map((col) => ({
+        key: col.key,
+        type: col.type || 'string',
+        filledCount: col.filledCount || 0,
+        emptyCount: col.emptyCount || 0
+      }))
+      setAnalysisWarnings(summarizeColumnWarnings(analyzed))
     }
   }, [initialData])
 
@@ -1517,6 +1607,9 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setColumns([])
     setMapping(defaultMapping)
     setTransformations(createDefaultTransformations())
+    setPreviewLimit(5)
+    setSearchQuery('')
+    setSortConfig(defaultSortConfig)
     setIsLoading(false)
     setParseError('')
     setValidationErrors([])
@@ -1552,6 +1645,9 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         setFileName(file.name)
         setAnalysisWarnings(summarizeColumnWarnings(analyzed))
         setTransformations(createDefaultTransformations())
+        setPreviewLimit(5)
+        setSearchQuery('')
+        setSortConfig(defaultSortConfig)
 
         if (isCoordinate) {
           // For Coordinate, auto-detect longitude and latitude columns
@@ -1634,6 +1730,21 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setValidationErrors([])
   }, [])
 
+  const updateCell = useCallback((rowIndex, columnKey, value) => {
+    setRows((prev) => {
+      if (rowIndex < 0 || rowIndex >= prev.length) {
+        return prev
+      }
+      const next = prev.map((row, index) => (index === rowIndex ? { ...row, [columnKey]: value } : row))
+      const analyzed = analyzeColumns(next)
+      setColumns(analyzed)
+      setAnalysisWarnings(summarizeColumnWarnings(analyzed))
+      return next
+    })
+    setValidationErrors([])
+    setResultWarnings([])
+  }, [])
+
   useEffect(() => {
     setTransformations((prev) => {
       const nextPerColumn = {}
@@ -1672,34 +1783,73 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     })
   }, [mapping.label, mapping.valueColumns])
 
-  const previewRows = useMemo(() => (previewLimit === 'all' ? rows : rows.slice(0, Number(previewLimit) || 5)), [rows, previewLimit])
   const totalRows = rows.length
+
+  const baseEntries = useMemo(() => rows.map((row, index) => ({ row, index })), [rows])
+  const filteredEntries = useMemo(
+    () => applySearchToEntries(baseEntries, searchQuery),
+    [baseEntries, searchQuery]
+  )
+  const sortedEntries = useMemo(
+    () => applySortToEntries(filteredEntries, sortConfig, columns),
+    [filteredEntries, sortConfig, columns]
+  )
+  const previewEntries = useMemo(
+    () => (previewLimit === 'all' ? sortedEntries : sortedEntries.slice(0, Number(previewLimit) || 5)),
+    [sortedEntries, previewLimit]
+  )
+  const previewRows = useMemo(() => previewEntries.map((entry) => entry.row), [previewEntries])
+  const filteredRowCount = filteredEntries.length
   const transformationSummary = useMemo(
     () => applyTransformations(rows, mapping, transformations),
     [rows, mapping, transformations]
   )
   const transformedRows = transformationSummary.rows
   const transformationWarnings = transformationSummary.warnings
-  const transformedPreviewRows = useMemo(() => (previewLimit === 'all' ? transformedRows : transformedRows.slice(0, Number(previewLimit) || 5)), [transformedRows, previewLimit])
+  const transformedEntries = useMemo(
+    () => transformedRows.map((row, index) => ({ row, index })),
+    [transformedRows]
+  )
+  const filteredTransformedEntries = useMemo(
+    () => applySearchToEntries(transformedEntries, searchQuery),
+    [transformedEntries, searchQuery]
+  )
+  const sortedTransformedEntries = useMemo(
+    () => applySortToEntries(filteredTransformedEntries, sortConfig, columns),
+    [filteredTransformedEntries, sortConfig, columns]
+  )
+  const transformedPreviewEntries = useMemo(
+    () =>
+      previewLimit === 'all'
+        ? sortedTransformedEntries
+        : sortedTransformedEntries.slice(0, Number(previewLimit) || 5),
+    [sortedTransformedEntries, previewLimit]
+  )
+  const transformedPreviewRows = useMemo(
+    () => transformedPreviewEntries.map((entry) => entry.row),
+    [transformedPreviewEntries]
+  )
   const transformedRowCount = transformedRows.length
+  const transformedFilteredRowCount = filteredTransformedEntries.length
   const warnings = useMemo(
     () => [...analysisWarnings, ...transformationWarnings, ...resultWarnings],
     [analysisWarnings, transformationWarnings, resultWarnings]
   )
 
-  const getImportResult = useCallback(() => {
+  const getImportResult = useCallback((overrideMapping = null) => {
     if (rows.length === 0) {
       setValidationErrors(['Bitte laden Sie zuerst eine Datei hoch.'])
       return null
     }
 
-    const { label, valueColumns, datasetLabel, xColumn, yColumn, rColumn } = mapping
+    const activeMapping = overrideMapping ? { ...mapping, ...overrideMapping } : mapping
+    const { label, valueColumns, datasetLabel, xColumn, yColumn, rColumn } = activeMapping
     const columnKeys = new Set(columns.map((column) => column.key))
     const errors = []
 
     // Coordinate validation
     if (isCoordinate) {
-      const { longitudeColumn, latitudeColumn } = mapping
+      const { longitudeColumn, latitudeColumn } = activeMapping
       if (!longitudeColumn) {
         errors.push('Bitte wählen Sie eine Spalte für die Longitude-Werte aus.')
       }
@@ -1857,9 +2007,9 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       }
     } else if (isScatterBubble) {
       // Scatter/Bubble/Matrix charts have special mapping
-      const { xColumn, yColumn, rColumn, datasetLabel: datasetLabelCol, pointLabelColumn } = mapping
+      const { xColumn, yColumn, rColumn, datasetLabel: datasetLabelCol, pointLabelColumn } = activeMapping
       const hasR = chartType === 'bubble' || chartType === 'matrix'
-      
+
       if (!xColumn || !yColumn) {
         setValidationErrors(['Bitte wählen Sie X- und Y-Spalten aus.'])
         return null
@@ -1931,7 +2081,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         valueColumns: [...valueColumns],
         datasetLabelColumn: datasetLabel || null,
         transformations,
-        transformationMeta
+        transformationMeta,
+        mapping: activeMapping
       }
     }
   }, [rows, mapping, transformations, requireDatasets, columns])
@@ -1942,9 +2093,12 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       rows,
       columns,
       mapping,
-      transformations
+      transformations,
+      previewLimit,
+      searchQuery,
+      sortConfig
     }
-  }, [fileName, rows, columns, mapping, transformations])
+  }, [fileName, rows, columns, mapping, transformations, previewLimit, searchQuery, sortConfig])
 
   return {
     fileName,
@@ -1954,12 +2108,18 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     transformations,
     updateTransformations,
     toggleValueColumn,
+    updateCell,
     parseFile,
     reset,
     previewRows,
+    previewEntries,
+    filteredRowCount,
     totalRows,
     transformedPreviewRows,
+    transformedPreviewEntries,
     transformedRowCount,
+    transformedFilteredRowCount,
+    transformedRows,
     transformationWarnings,
     transformationMeta: transformationSummary.meta,
     isLoading,
@@ -1970,6 +2130,10 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     requireDatasets,
     previewLimit,
     setPreviewLimit,
+    searchQuery,
+    setSearchQuery,
+    sortConfig,
+    setSortConfig,
     getImportResult,
     getImportState
   }

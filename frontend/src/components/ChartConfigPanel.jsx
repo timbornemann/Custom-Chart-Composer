@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import PropTypes from 'prop-types'
 import DatasetEditor from './DatasetEditor'
 import PointEditor from './PointEditor'
@@ -11,7 +11,7 @@ import BubbleDatasetEditor from './BubbleDatasetEditor'
 import ScatterDatasetEditor from './ScatterDatasetEditor'
 import CoordinateDatasetEditor from './CoordinateDatasetEditor'
 import ConfirmModal from './ConfirmModal'
-import DataImportModal from './DataImportModal'
+import CsvWorkbench from './CsvWorkbench'
 import ColorPaletteSelector from './ColorPaletteSelector'
 import LabeledColorEditor from './LabeledColorEditor'
 import BackgroundImageEditor from './BackgroundImageEditor'
@@ -32,6 +32,74 @@ export default function ChartConfigPanel({
   canRedo
 }) {
   const [activeTab, setActiveTab] = useState('data')
+
+  const importCapabilities = getImportCapabilities(chartType)
+  const supportsDataImport = importCapabilities.supportsDataImport
+  const csvAllowMultipleValueColumns = importCapabilities.usesDatasetEditor || chartType?.id === 'radar'
+  const csvRequireDatasets = importCapabilities.usesDatasetEditor
+  const csvIsScatterBubble = importCapabilities.isScatterDataset || importCapabilities.isBubbleDataset || chartType?.id === 'matrix'
+  const csvIsCoordinate = importCapabilities.isCoordinateDataset
+  const schema = chartType?.configSchema || {}
+
+  const handleCsvStateChange = useCallback(
+    (state) => {
+      onConfigChange({ _importData: state || null })
+    },
+    [onConfigChange]
+  )
+
+  const handleCsvReset = useCallback(() => {
+    onConfigChange({ _importData: null })
+  }, [onConfigChange])
+
+  const openCsvEditor = useCallback(() => {
+    setActiveTab('csv')
+  }, [])
+
+  const handleImportedData = useCallback(
+    (result) => {
+      if (!result) return
+
+      const payload = {
+        labels: Array.isArray(result.labels) ? result.labels : [],
+        values: Array.isArray(result.values) ? result.values : [],
+        datasets: Array.isArray(result.datasets) ? result.datasets : []
+      }
+
+      if (csvIsScatterBubble) {
+        payload.datasets = result.datasets || []
+        payload.labels = []
+        payload.values = []
+      } else if (chartType?.id === 'radar') {
+        if (result.datasets && result.datasets.length > 0) {
+          payload.labels = result.labels || []
+          payload.datasets = result.datasets
+          if (result.datasets.length === 1) {
+            payload.values = result.datasets[0].data || []
+            payload.datasetLabel = result.datasets[0].label || 'Datensatz'
+          } else {
+            payload.values = []
+            payload.datasetLabel = ''
+          }
+        }
+      } else if (schema.datasetLabel) {
+        let datasetLabelValue = ''
+        if (importCapabilities.usesSimpleEditor && result.meta?.valueColumns?.[0]) {
+          datasetLabelValue = result.meta.valueColumns[0]
+        } else if (!importCapabilities.usesSimpleEditor && payload.datasets.length === 1) {
+          datasetLabelValue = payload.datasets[0]?.label || result.meta?.valueColumns?.[0] || ''
+        }
+        payload.datasetLabel = datasetLabelValue
+      }
+
+      if (result.importState) {
+        payload._importData = result.importState
+      }
+
+      onConfigChange(payload)
+    },
+    [chartType, csvIsScatterBubble, importCapabilities.usesSimpleEditor, onConfigChange, schema.datasetLabel]
+  )
 
   useEffect(() => {
     const handleKeydown = (event) => {
@@ -77,6 +145,9 @@ export default function ChartConfigPanel({
       <div className="mb-6 border-b border-gray-700 pb-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2 flex-nowrap overflow-x-auto">
+            {supportsDataImport && (
+              <TabButton label="CSV-Editor" isActive={activeTab === 'csv'} onClick={() => setActiveTab('csv')} />
+            )}
             <TabButton label="Daten" isActive={activeTab === 'data'} onClick={() => setActiveTab('data')} />
             <TabButton label="Styling" isActive={activeTab === 'styling'} onClick={() => setActiveTab('styling')} />
             <TabButton label="Annotationen" isActive={activeTab === 'annotations'} onClick={() => setActiveTab('annotations')} />
@@ -119,6 +190,19 @@ export default function ChartConfigPanel({
       </div>
 
       <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
+        {activeTab === 'csv' && supportsDataImport && (
+          <CsvWorkbench
+            allowMultipleValueColumns={csvAllowMultipleValueColumns}
+            requireDatasets={csvRequireDatasets}
+            initialData={config._importData || null}
+            chartType={chartType?.id}
+            isScatterBubble={csvIsScatterBubble}
+            isCoordinate={csvIsCoordinate}
+            onApplyToChart={handleImportedData}
+            onImportStateChange={handleCsvStateChange}
+            onResetWorkbench={handleCsvReset}
+          />
+        )}
         {activeTab === 'data' && (
           <DataTab
             chartType={chartType}
@@ -126,6 +210,8 @@ export default function ChartConfigPanel({
             onConfigChange={onConfigChange}
             onResetData={onResetData}
             onClearData={onClearData}
+            supportsDataImport={supportsDataImport}
+            onOpenCsvEditor={supportsDataImport ? openCsvEditor : null}
           />
         )}
         {activeTab === 'styling' && (
@@ -171,11 +257,63 @@ TabButton.propTypes = {
   onClick: PropTypes.func.isRequired
 }
 
-function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }) {
+const getImportCapabilities = (chartType) => {
+  if (!chartType) {
+    return {
+      supportsDataImport: false,
+      usesDatasetEditor: false,
+      usesSimpleEditor: false,
+      isScatterDataset: false,
+      isBubbleDataset: false,
+      isCoordinateDataset: false
+    }
+  }
+  const schema = chartType.configSchema || {}
+  const labelsSchema = schema.labels
+  const valuesSchema = schema.values
+  const datasetsSchema = schema.datasets
+  const defaultValues = Array.isArray(valuesSchema?.default) ? valuesSchema.default : []
+  const defaultDatasets = Array.isArray(datasetsSchema?.default) ? datasetsSchema.default : []
+  const sampleValue = defaultValues[0]
+  const sampleDataset = defaultDatasets[0]
+  const sampleDatasetEntry = Array.isArray(sampleDataset?.data) ? sampleDataset.data[0] : undefined
+
+  const hasSimpleValues = Array.isArray(defaultValues) && sampleValue !== undefined && typeof sampleValue !== 'object'
+  const isBubbleDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'r' in sampleDatasetEntry && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry
+  const isScatterDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && !('r' in sampleDatasetEntry) && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry && !('v' in sampleDatasetEntry)
+  const isCoordinateDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'longitude' in sampleDatasetEntry && 'latitude' in sampleDatasetEntry
+  const isRangeDataset = Array.isArray(sampleDatasetEntry)
+  const isHeatmapDataset = chartType?.id === 'heatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
+  const isCalendarHeatmapDataset = chartType?.id === 'calendarHeatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
+
+  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isCalendarHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
+  const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues && chartType?.id !== 'radar'
+  const isRadarChart = chartType?.id === 'radar'
+
+  const supportsDataImport = (
+    usesSimpleEditor ||
+    usesDatasetEditor ||
+    isScatterDataset ||
+    isBubbleDataset ||
+    isCoordinateDataset ||
+    chartType?.id === 'matrix' ||
+    isRadarChart
+  )
+
+  return {
+    supportsDataImport,
+    usesDatasetEditor,
+    usesSimpleEditor,
+    isScatterDataset,
+    isBubbleDataset,
+    isCoordinateDataset
+  }
+}
+
+function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, supportsDataImport, onOpenCsvEditor }) {
   const [showClearModal, setShowClearModal] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
-  const [showImportModal, setShowImportModal] = useState(false)
-  
+
   const schema = chartType?.configSchema || {}
 
   const labelsSchema = schema.labels
@@ -204,57 +342,6 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   const isRadarChart = chartType?.id === 'radar'
   const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
   const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
-
-  const supportsDataImport = usesSimpleEditor || usesDatasetEditor || isScatterDataset || isBubbleDataset || isCoordinateDataset || chartType?.id === 'matrix' || isRadarChart
-
-  const handleImportedData = (result) => {
-    if (!result) return
-
-    const payload = {
-      labels: Array.isArray(result.labels) ? result.labels : [],
-      values: Array.isArray(result.values) ? result.values : [],
-      datasets: Array.isArray(result.datasets) ? result.datasets : []
-    }
-
-    // For Scatter/Bubble/Matrix/Coordinate, datasets are already in the correct format
-    if (isScatterDataset || isBubbleDataset || chartType?.id === 'matrix' || isCoordinateDataset) {
-      payload.datasets = result.datasets || []
-      payload.labels = []
-      payload.values = []
-    } else if (chartType?.id === 'radar') {
-      // Radar charts: Each dataset represents one row/entity, with multiple attributes
-      // Labels are the attribute names (from value column names)
-      // Always use datasets format to support multiple datasets with different colors
-      if (result.datasets && result.datasets.length > 0) {
-        payload.labels = result.labels || [] // Attribute names (from column names)
-        payload.datasets = result.datasets
-        // Keep old format for backward compatibility if only one dataset
-        if (result.datasets.length === 1) {
-          payload.values = result.datasets[0].data || []
-          payload.datasetLabel = result.datasets[0].label || 'Datensatz'
-        } else {
-          payload.values = []
-          payload.datasetLabel = ''
-        }
-      }
-    } else if (datasetLabelSchema) {
-      let datasetLabelValue = ''
-      if (usesSimpleEditor && result.meta?.valueColumns?.[0]) {
-        datasetLabelValue = result.meta.valueColumns[0]
-      } else if (!usesSimpleEditor && payload.datasets.length === 1) {
-        datasetLabelValue = payload.datasets[0]?.label || result.meta?.valueColumns?.[0] || ''
-      }
-      payload.datasetLabel = datasetLabelValue
-    }
-
-    // Save import metadata for later editing
-    if (result.importState) {
-      payload._importData = result.importState
-    }
-
-    onConfigChange(payload)
-    setShowImportModal(false)
-  }
 
   const handleFieldChange = (key, value) => {
     onConfigChange({ [key]: value })
@@ -499,18 +586,19 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
         variant="info"
       />
 
-      {supportsDataImport && (
-        <DataImportModal
-          isOpen={showImportModal}
-          onClose={() => setShowImportModal(false)}
-          onImport={handleImportedData}
-          allowMultipleValueColumns={usesDatasetEditor || chartType?.id === 'radar'}
-          requireDatasets={usesDatasetEditor}
-          initialData={config._importData || null}
-          chartType={chartType?.id}
-          isScatterBubble={isScatterDataset || isBubbleDataset || chartType?.id === 'matrix'}
-          isCoordinate={isCoordinateDataset}
-        />
+      {supportsDataImport && onOpenCsvEditor && (
+        <div className="mb-4 flex flex-col gap-2 rounded-lg border border-dark-accent1/40 bg-dark-bg/40 p-3 text-xs text-dark-textGray sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Nutze den CSV-Editor, um Daten zu importieren, zu filtern und zu transformieren. Übernehme die Ergebnisse anschließend in diesen Tab.
+          </span>
+          <button
+            type="button"
+            onClick={onOpenCsvEditor}
+            className="inline-flex items-center gap-1 rounded-md border border-dark-accent1/60 px-3 py-1.5 text-xs font-medium text-dark-accent1 transition-colors hover:bg-dark-accent1/10"
+          >
+            CSV-Editor öffnen
+          </button>
+        </div>
       )}
 
       {schema.title && (
@@ -530,24 +618,6 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
 
       <div className="pb-4 mb-4 border-b border-gray-700">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            {supportsDataImport && (
-              <button
-                onClick={() => setShowImportModal(true)}
-                className="flex items-center space-x-1.5 rounded-md border border-dark-accent1/60 bg-dark-bg px-3 py-1.5 text-xs font-medium text-dark-accent1 transition-all hover:bg-dark-accent1/10"
-                title={config._importData ? "Import-Einstellungen bearbeiten" : "CSV- oder Excel-Datei importieren"}
-              >
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {config._importData ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  )}
-                </svg>
-                <span>{config._importData ? "Import bearbeiten" : "CSV/Excel importieren"}</span>
-              </button>
-            )}
-          </div>
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowResetModal(true)}

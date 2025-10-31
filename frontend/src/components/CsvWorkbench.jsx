@@ -215,22 +215,39 @@ export default function CsvWorkbench({
   )
 
   const handleSortToggle = useCallback(
-    (columnKey) => {
+    (columnKey, event) => {
       if (!columnKey) return
-      if (sortConfig.column !== columnKey) {
-        setSortConfig({ column: columnKey, direction: 'asc' })
-        return
-      }
+      const isMultiSort = Boolean(event?.shiftKey || event?.metaKey || event?.ctrlKey)
 
-      if (sortConfig.direction === 'asc') {
-        setSortConfig({ column: columnKey, direction: 'desc' })
-      } else if (sortConfig.direction === 'desc') {
-        setSortConfig({ column: '', direction: 'none' })
-      } else {
-        setSortConfig({ column: columnKey, direction: 'asc' })
-      }
+      setSortConfig((previous) => {
+        const current = Array.isArray(previous) ? previous : []
+        const existingIndex = current.findIndex((entry) => entry.column === columnKey)
+        const existing = existingIndex >= 0 ? current[existingIndex] : null
+        const currentDirection = existing?.direction || 'none'
+        const nextDirection = currentDirection === 'asc' ? 'desc' : currentDirection === 'desc' ? 'none' : 'asc'
+
+        if (!isMultiSort) {
+          if (nextDirection === 'none') {
+            return []
+          }
+          return [{ column: columnKey, direction: nextDirection }]
+        }
+
+        const next = [...current]
+        if (nextDirection === 'none') {
+          if (existingIndex >= 0) {
+            next.splice(existingIndex, 1)
+          }
+        } else if (existingIndex >= 0) {
+          next[existingIndex] = { column: columnKey, direction: nextDirection }
+        } else {
+          next.push({ column: columnKey, direction: nextDirection })
+        }
+        return next
+      })
+      schedulePersist()
     },
-    [sortConfig, setSortConfig]
+    [setSortConfig, schedulePersist]
   )
 
   const startEditCell = useCallback((entry, columnKey) => {
@@ -597,6 +614,11 @@ export default function CsvWorkbench({
   const groupingColumns = useMemo(
     () => columns.filter((column) => column.type !== 'number'),
     [columns]
+  )
+
+  const activeSorts = useMemo(
+    () => (Array.isArray(sortConfig) ? sortConfig : []),
+    [sortConfig]
   )
 
   const transformedColumns = useMemo(() => {
@@ -1361,26 +1383,29 @@ export default function CsvWorkbench({
                           <thead className="bg-dark-bg/80 text-xs uppercase tracking-wide text-dark-textGray">
                             <tr>
                               {columns.map((column) => {
-                                const isSorted = sortConfig.column === column.key
-                                const sortSymbol =
-                                  sortConfig.column === column.key
-                                    ? sortConfig.direction === 'asc'
-                                      ? '▲'
-                                      : sortConfig.direction === 'desc'
-                                      ? '▼'
-                                      : ''
-                                    : ''
+                                const sortIndex = activeSorts.findIndex((entry) => entry.column === column.key)
+                                const sortEntry = sortIndex >= 0 ? activeSorts[sortIndex] : null
+                                const isSorted = Boolean(sortEntry)
+                                const sortSymbol = sortEntry ? (sortEntry.direction === 'desc' ? '▼' : '▲') : ''
+
                                 return (
                                   <th key={column.key} className="px-3 py-2 text-left">
                                     <button
                                       type="button"
-                                      onClick={() => handleSortToggle(column.key)}
+                                      onClick={(event) => handleSortToggle(column.key, event)}
                                       className={`flex items-center gap-1 text-dark-textGray transition-colors hover:text-dark-textLight ${
                                         isSorted ? 'text-dark-textLight' : ''
                                       }`}
                                     >
                                       <span>{column.key}</span>
-                                      {sortSymbol && <span className="text-[10px]">{sortSymbol}</span>}
+                                      {isSorted && (
+                                        <span className="flex items-center gap-1 text-[10px]">
+                                          <span>{sortSymbol}</span>
+                                          <span className="rounded bg-dark-textGray/30 px-1 text-[9px] leading-none text-dark-textLight">
+                                            {sortIndex + 1}
+                                          </span>
+                                        </span>
+                                      )}
                                     </button>
                                   </th>
                                 )
@@ -2161,11 +2186,34 @@ export default function CsvWorkbench({
                           <table className="min-w-full divide-y divide-gray-700 text-sm">
                             <thead className="bg-dark-bg/80 text-xs uppercase tracking-wide text-dark-textGray">
                               <tr>
-                                {transformedColumns.map((column) => (
-                                  <th key={column} className="px-3 py-2 text-left">
-                                    {column}
-                                  </th>
-                                ))}
+                                {transformedColumns.map((column) => {
+                                  const sortIndex = activeSorts.findIndex((entry) => entry.column === column)
+                                  const sortEntry = sortIndex >= 0 ? activeSorts[sortIndex] : null
+                                  const isSorted = Boolean(sortEntry)
+                                  const sortSymbol = sortEntry ? (sortEntry.direction === 'desc' ? '▼' : '▲') : ''
+
+                                  return (
+                                    <th key={column} className="px-3 py-2 text-left">
+                                      <button
+                                        type="button"
+                                        onClick={(event) => handleSortToggle(column, event)}
+                                        className={`flex items-center gap-1 text-dark-textGray transition-colors hover:text-dark-textLight ${
+                                          isSorted ? 'text-dark-textLight' : ''
+                                        }`}
+                                      >
+                                        <span>{column}</span>
+                                        {isSorted && (
+                                          <span className="flex items-center gap-1 text-[10px]">
+                                            <span>{sortSymbol}</span>
+                                            <span className="rounded bg-dark-textGray/30 px-1 text-[9px] leading-none text-dark-textLight">
+                                              {sortIndex + 1}
+                                            </span>
+                                          </span>
+                                        )}
+                                      </button>
+                                    </th>
+                                  )
+                                })}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">

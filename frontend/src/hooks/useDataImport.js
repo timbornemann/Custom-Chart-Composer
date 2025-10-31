@@ -33,7 +33,35 @@ const createDefaultTransformations = () => ({
   }
 })
 
-const defaultSortConfig = { column: '', direction: 'none' }
+const defaultSortConfig = []
+
+const normalizeSortConfig = (value) => {
+  if (!value) {
+    return []
+  }
+
+  const normalizeEntry = (entry) => {
+    if (!entry || !entry.column) {
+      return null
+    }
+
+    const direction = entry.direction === 'desc' ? 'desc' : entry.direction === 'asc' ? 'asc' : null
+    if (!direction) {
+      return null
+    }
+
+    return { column: entry.column, direction }
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map(normalizeEntry)
+      .filter((entry) => entry !== null)
+  }
+
+  const single = normalizeEntry(value)
+  return single ? [single] : []
+}
 
 const sanitizeKey = (key) => {
   if (key === null || key === undefined) return ''
@@ -293,15 +321,31 @@ const applySearchToEntries = (entries, query) => {
 }
 
 const applySortToEntries = (entries, sortConfig, columns) => {
-  if (!sortConfig?.column || sortConfig.direction === 'none') {
+  const activeSorts = normalizeSortConfig(sortConfig)
+  if (activeSorts.length === 0) {
     return entries
   }
-  const directionMultiplier = sortConfig.direction === 'desc' ? -1 : 1
-  const type = getColumnType(columns, sortConfig.column)
+
+  const typeCache = new Map()
+  const getTypeForColumn = (columnKey) => {
+    if (!typeCache.has(columnKey)) {
+      typeCache.set(columnKey, getColumnType(columns, columnKey))
+    }
+    return typeCache.get(columnKey)
+  }
+
   const sortable = [...entries]
   sortable.sort((a, b) => {
-    const comparison = compareCellValues(a.row[sortConfig.column], b.row[sortConfig.column], type)
-    return comparison * directionMultiplier
+    for (const sortEntry of activeSorts) {
+      const columnKey = sortEntry.column
+      const type = getTypeForColumn(columnKey)
+      const comparison = compareCellValues(a.row[columnKey], b.row[columnKey], type)
+      if (comparison !== 0) {
+        const multiplier = sortEntry.direction === 'desc' ? -1 : 1
+        return comparison * multiplier
+      }
+    }
+    return 0
   })
   return sortable
 }
@@ -1555,7 +1599,14 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [transformations, setTransformations] = useState(() => createDefaultTransformations())
   const [previewLimit, setPreviewLimit] = useState(5)
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortConfig, setSortConfig] = useState(defaultSortConfig)
+  const [sortConfig, rawSetSortConfig] = useState(defaultSortConfig)
+  const setSortConfig = useCallback((value) => {
+    rawSetSortConfig((prev) => {
+      const base = normalizeSortConfig(prev)
+      const nextValue = typeof value === 'function' ? value(base) : value
+      return normalizeSortConfig(nextValue)
+    })
+  }, [rawSetSortConfig])
   const [isLoading, setIsLoading] = useState(false)
   const [parseError, setParseError] = useState('')
   const [validationErrors, setValidationErrors] = useState([])
@@ -1588,7 +1639,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setTransformations(initialData.transformations || createDefaultTransformations())
     setPreviewLimit(initialData.previewLimit ?? 5)
     setSearchQuery(initialData.searchQuery || '')
-    setSortConfig(initialData.sortConfig || defaultSortConfig)
+    setSortConfig(initialData.sortConfig)
 
     if (initialData.columns && initialData.columns.length > 0) {
       const analyzed = initialData.columns.map((col) => ({
@@ -1609,7 +1660,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setTransformations(createDefaultTransformations())
     setPreviewLimit(5)
     setSearchQuery('')
-    setSortConfig(defaultSortConfig)
+    setSortConfig([])
     setIsLoading(false)
     setParseError('')
     setValidationErrors([])
@@ -1647,7 +1698,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         setTransformations(createDefaultTransformations())
         setPreviewLimit(5)
         setSearchQuery('')
-        setSortConfig(defaultSortConfig)
+        setSortConfig([])
 
         if (isCoordinate) {
           // For Coordinate, auto-detect longitude and latitude columns
@@ -2096,7 +2147,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       transformations,
       previewLimit,
       searchQuery,
-      sortConfig
+      sortConfig: normalizeSortConfig(sortConfig)
     }
   }, [fileName, rows, columns, mapping, transformations, previewLimit, searchQuery, sortConfig])
 

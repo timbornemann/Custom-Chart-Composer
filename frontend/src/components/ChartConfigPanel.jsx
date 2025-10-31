@@ -199,11 +199,13 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   const isScatterDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && !('r' in sampleDatasetEntry) && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry && !('v' in sampleDatasetEntry)
   const isCoordinateDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'longitude' in sampleDatasetEntry && 'latitude' in sampleDatasetEntry
   const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isCalendarHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
-  const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues
+  const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues && chartType?.id !== 'radar'
+  // Radar charts always use datasets (can have multiple datasets with different colors)
+  const isRadarChart = chartType?.id === 'radar'
   const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
   const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
 
-  const supportsDataImport = usesSimpleEditor || usesDatasetEditor || isScatterDataset || isBubbleDataset || isCoordinateDataset || chartType?.id === 'matrix'
+  const supportsDataImport = usesSimpleEditor || usesDatasetEditor || isScatterDataset || isBubbleDataset || isCoordinateDataset || chartType?.id === 'matrix' || isRadarChart
 
   const handleImportedData = (result) => {
     if (!result) return
@@ -219,6 +221,22 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
       payload.datasets = result.datasets || []
       payload.labels = []
       payload.values = []
+    } else if (chartType?.id === 'radar') {
+      // Radar charts: Each dataset represents one row/entity, with multiple attributes
+      // Labels are the attribute names (from value column names)
+      // Always use datasets format to support multiple datasets with different colors
+      if (result.datasets && result.datasets.length > 0) {
+        payload.labels = result.labels || [] // Attribute names (from column names)
+        payload.datasets = result.datasets
+        // Keep old format for backward compatibility if only one dataset
+        if (result.datasets.length === 1) {
+          payload.values = result.datasets[0].data || []
+          payload.datasetLabel = result.datasets[0].label || 'Datensatz'
+        } else {
+          payload.values = []
+          payload.datasetLabel = ''
+        }
+      }
     } else if (datasetLabelSchema) {
       let datasetLabelValue = ''
       if (usesSimpleEditor && result.meta?.valueColumns?.[0]) {
@@ -305,7 +323,7 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
       )
     }
 
-    if (usesDatasetEditor) {
+    if (usesDatasetEditor || isRadarChart) {
       return (
         <DatasetEditor
           datasets={config.datasets || []}
@@ -413,8 +431,8 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
   const renderValueFields = () => {
     if (!valuesSchema) return null
 
-    // Don't show values if using specialized dataset editors
-    if (isBubbleDataset || isScatterDataset || isCoordinateDataset || isRangeDataset || isHeatmapDataset || isCalendarHeatmapDataset) {
+    // Don't show values if using specialized dataset editors or radar charts (they use DatasetEditor)
+    if (isBubbleDataset || isScatterDataset || isCoordinateDataset || isRangeDataset || isHeatmapDataset || isCalendarHeatmapDataset || isRadarChart) {
       return null
     }
 
@@ -486,7 +504,7 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData }
           isOpen={showImportModal}
           onClose={() => setShowImportModal(false)}
           onImport={handleImportedData}
-          allowMultipleValueColumns={usesDatasetEditor}
+          allowMultipleValueColumns={usesDatasetEditor || chartType?.id === 'radar'}
           requireDatasets={usesDatasetEditor}
           initialData={config._importData || null}
           chartType={chartType?.id}
@@ -1169,17 +1187,23 @@ function OptionsTab({ chartType, config, onConfigChange }) {
         if (field.type === 'number') {
           const value = config.options?.[key] ?? field.default
           const hasRange = field.min !== undefined && field.max !== undefined
+          
+          // For radar charts: disable scaleMax if autoScale is enabled
+          const isDisabled = chartType.id === 'radar' && key === 'scaleMax' && config.options?.autoScale !== false
 
           return (
-            <div key={key} className="p-3 bg-dark-bg rounded-lg border border-gray-700">
+            <div key={key} className={`p-3 bg-dark-bg rounded-lg border border-gray-700 ${isDisabled ? 'opacity-60' : ''}`}>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-dark-textLight">
+                <label className={`text-sm font-medium ${isDisabled ? 'text-dark-textGray' : 'text-dark-textLight'}`}>
                   {formatLabel(key)}
                 </label>
                 <span className="text-sm font-mono text-dark-accent1">{value}</span>
               </div>
               {field.description && (
                 <p className="text-xs text-dark-textGray mb-2">{field.description}</p>
+              )}
+              {isDisabled && (
+                <p className="text-xs text-yellow-300 mb-2">⚠️ Wird ignoriert, da Auto-Skala aktiviert ist.</p>
               )}
               {hasRange ? (
                 <div className="space-y-2">
@@ -1190,7 +1214,8 @@ function OptionsTab({ chartType, config, onConfigChange }) {
                     step={field.step || 1}
                     value={value}
                     onChange={(e) => handleOptionChange(key, Number(e.target.value))}
-                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-dark-accent1"
+                    disabled={isDisabled}
+                    className={`w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-dark-accent1 ${isDisabled ? 'cursor-not-allowed opacity-50' : ''}`}
                   />
                   <div className="flex justify-between text-xs text-dark-textGray">
                     <span>{field.min}</span>
@@ -1209,8 +1234,9 @@ function OptionsTab({ chartType, config, onConfigChange }) {
                     const numValue = inputValue === '' || inputValue === null ? null : Number(inputValue)
                     handleOptionChange(key, numValue)
                   }}
+                  disabled={isDisabled}
                   placeholder={field.default === null ? "Automatisch" : ""}
-                  className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                  className={`w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm ${isDisabled ? 'cursor-not-allowed opacity-50' : ''}`}
                 />
               )}
             </div>
@@ -1282,6 +1308,53 @@ function OptionsTab({ chartType, config, onConfigChange }) {
 
         return null
       })}
+      
+      {/* Radar Chart: Value Labels Font (when showValues is enabled) */}
+      {chartType.id === 'radar' && config.options?.showValues && (
+        <div className="bg-dark-bg rounded-lg p-4 border border-gray-700">
+          <label className="block text-xs font-medium text-dark-textLight mb-3">
+            Werte an Punkten
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <EnhancedColorPicker
+                value={config.options?.fontStyles?.valueLabels?.color || '#F8FAFC'}
+                onChange={(newColor) => {
+                  handleOptionChange('fontStyles', {
+                    ...config.options?.fontStyles,
+                    valueLabels: {
+                      ...config.options?.fontStyles?.valueLabels,
+                      color: newColor
+                    }
+                  })
+                }}
+                label="Schriftfarbe"
+                size="sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-dark-textGray mb-1 block">Schriftart</label>
+              <select
+                value={config.options?.fontStyles?.valueLabels?.family || 'Inter'}
+                onChange={(e) => {
+                  handleOptionChange('fontStyles', {
+                    ...config.options?.fontStyles,
+                    valueLabels: {
+                      ...config.options?.fontStyles?.valueLabels,
+                      family: e.target.value
+                    }
+                  })
+                }}
+                className="w-full px-2 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-xs"
+              >
+                {fontFamilies.map(font => (
+                  <option key={font.value} value={font.value}>{font.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

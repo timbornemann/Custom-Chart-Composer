@@ -37,6 +37,10 @@ export default {
       type: "number",
       default: 600
     },
+    datasets: {
+      type: "array",
+      default: []
+    },
     options: {
       showLegend: { type: "boolean", default: true, description: "Legende ein-/ausblenden" },
       legendPosition: { type: "select", default: "top", options: [
@@ -47,9 +51,11 @@ export default {
       fillOpacity: { type: "number", min: 0, max: 100, step: 5, default: 40, description: "Transparenz der Füllung (%)" },
       pointRadius: { type: "number", min: 0, max: 20, step: 1, default: 5, description: "Größe der Datenpunkte" },
       lineWidth: { type: "number", min: 1, max: 10, step: 1, default: 3, description: "Breite der Linie" },
-      scaleMin: { type: "number", min: 0, max: 100, default: 0, description: "Minimaler Skalenwert" },
-      scaleMax: { type: "number", min: 1, max: 200, default: 100, description: "Maximaler Skalenwert" },
+      autoScale: { type: "boolean", default: true, description: "Skala automatisch an Daten anpassen" },
+      scaleMin: { type: "number", min: 0, max: 1000, default: 0, description: "Minimaler Skalenwert" },
+      scaleMax: { type: "number", min: 1, max: 1000, default: 100, description: "Maximaler Skalenwert (wird ignoriert wenn Auto-Skala aktiv)" },
       scaleStepSize: { type: "number", min: 1, max: 50, default: 20, description: "Schrittweite der Skala" },
+      showValues: { type: "boolean", default: false, description: "Werte an Datenpunkten anzeigen" },
       animation: { type: "boolean", default: true, description: "Animationen aktivieren" },
       animationDuration: { type: "number", min: 0, max: 3000, step: 100, default: 1000, description: "Animationsdauer in Millisekunden" }
     }

@@ -14,12 +14,34 @@ const formatCellValue = (value) => {
 }
 
 const FILTER_OPERATORS = [
-  { value: 'equals', label: 'ist gleich' },
-  { value: 'notEquals', label: 'ist ungleich' },
-  { value: 'contains', label: 'enthält' },
-  { value: 'notContains', label: 'enthält nicht' },
+  // Text operators
+  { value: 'equalsText', label: 'Text ist gleich' },
+  { value: 'notEqualsText', label: 'Text ist ungleich' },
+  { value: 'containsText', label: 'Text enthält' },
+  { value: 'notContainsText', label: 'Text enthält nicht' },
+  { value: 'matchesRegex', label: 'passt auf Regex' },
+  { value: 'notMatchesRegex', label: 'passt nicht auf Regex' },
+  // Number operators
+  { value: 'equals', label: 'Zahl ist gleich' },
+  { value: 'notEquals', label: 'Zahl ist ungleich' },
   { value: 'greaterThan', label: 'größer als' },
-  { value: 'lessThan', label: 'kleiner als' }
+  { value: 'greaterThanOrEqual', label: 'größer oder gleich' },
+  { value: 'lessThan', label: 'kleiner als' },
+  { value: 'lessThanOrEqual', label: 'kleiner oder gleich' },
+  { value: 'between', label: 'liegt zwischen' },
+  // DateTime operators
+  { value: 'dateEquals', label: 'Datum ist gleich' },
+  { value: 'dateGreaterThan', label: 'Datum nach' },
+  { value: 'dateGreaterThanOrEqual', label: 'Datum nach oder gleich' },
+  { value: 'dateLessThan', label: 'Datum vor' },
+  { value: 'dateLessThanOrEqual', label: 'Datum vor oder gleich' },
+  { value: 'dateBetween', label: 'Datum zwischen' },
+  // Type checks
+  { value: 'isEmpty', label: 'ist leer' },
+  { value: 'isNotEmpty', label: 'ist nicht leer' },
+  { value: 'isNumber', label: 'ist Zahl' },
+  { value: 'isText', label: 'ist Text' },
+  { value: 'isDateTime', label: 'ist Datum/Zeit' }
 ]
 
 const AGGREGATION_OPTIONS = [
@@ -246,7 +268,7 @@ export default function DataImportModal({
     const id = createUniqueId('filter')
     updateTransformations((prev) => ({
       ...prev,
-      filters: [...(prev.filters || []), { id, column: '', operator: 'equals', value: '', enabled: true, logicOperator: 'and' }]
+      filters: [...(prev.filters || []), { id, column: '', operator: 'equalsText', value: '', enabled: true, logicOperator: 'and' }]
     }))
   }
 
@@ -754,14 +776,14 @@ export default function DataImportModal({
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
-                        Beschriftungs-Spalte
+                        {chartType === 'radar' ? 'Datensatz-Name (optional)' : 'Beschriftungs-Spalte'}
                       </label>
                       <select
                         value={mapping.label}
                         onChange={(event) => updateMapping({ label: event.target.value })}
                         className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
                       >
-                        <option value="">Spalte wählen …</option>
+                        <option value="">{chartType === 'radar' ? 'Nicht verwenden' : 'Spalte wählen …'}</option>
                         {columns.map((column) => (
                           <option key={column.key} value={column.key}>
                             {column.key} {column.type === 'number' ? '(Zahl)' : ''}
@@ -769,13 +791,15 @@ export default function DataImportModal({
                         ))}
                       </select>
                       <p className="text-[11px] text-dark-textGray">
-                        Diese Werte werden als Kategorien bzw. X-Achsen-Beschriftungen verwendet.
+                        {chartType === 'radar' 
+                          ? 'Spalte mit dem Namen für jeden Datensatz (jede Zeile). Wenn leer, wird "Datensatz" verwendet.'
+                          : 'Diese Werte werden als Kategorien bzw. X-Achsen-Beschriftungen verwendet.'}
                       </p>
                     </div>
 
                     <div className="space-y-2">
                       <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
-                        Werte-Spalten
+                        {chartType === 'radar' ? 'Attribut-Spalten' : 'Werte-Spalten'}
                       </label>
                       {allowMultipleValueColumns ? (
                         <div className="space-y-2 rounded-lg border border-gray-700 bg-dark-bg p-3">
@@ -831,13 +855,15 @@ export default function DataImportModal({
                         </select>
                       )}
                       <p className="text-[11px] text-dark-textGray">
-                        Enthalten die numerischen Werte für das Diagramm. Ungültige Zahlen werden automatisch übersprungen.
+                        {chartType === 'radar' 
+                          ? 'Wählen Sie mehrere Spalten aus, die als Attribute im Radar-Diagramm angezeigt werden sollen. Jede Spalte wird ein Attribut (Achse) im Diagramm.'
+                          : 'Enthalten die numerischen Werte für das Diagramm. Ungültige Zahlen werden automatisch übersprungen.'}
                       </p>
                     </div>
                   </div>
                   )}
 
-                  {!isScatterBubble && allowMultipleValueColumns && (
+                  {!isScatterBubble && allowMultipleValueColumns && chartType !== 'radar' && (
                     <div className="space-y-2">
                       <label className="block text-xs font-semibold uppercase tracking-wide text-dark-textGray">
                         Datensatz-Spalte (optional)
@@ -856,6 +882,13 @@ export default function DataImportModal({
                       </select>
                       <p className="text-[11px] text-dark-textGray">
                         Ermöglicht den Import mehrerer Datensätze aus einer Spalte (lange Tabellenform).
+                      </p>
+                    </div>
+                  )}
+                  {chartType === 'radar' && (
+                    <div className="space-y-2 rounded-lg border border-blue-700/40 bg-blue-900/20 p-3">
+                      <p className="text-xs text-blue-200">
+                        <strong>Hinweis:</strong> Bei Radar-Diagrammen stellt jede Zeile einen Datensatz dar. Die ausgewählten Attribut-Spalten werden als Achsen im Radar-Diagramm angezeigt. Die Namen der Attribut-Spalten werden automatisch als Beschriftungen verwendet.
                       </p>
                     </div>
                   )}
@@ -1015,64 +1048,179 @@ export default function DataImportModal({
                                   </select>
                                 </div>
                               )}
-                              <div
-                                className="grid gap-2 rounded-md border border-gray-700 bg-dark-bg/60 p-3 md:grid-cols-12"
-                              >
-                                <div className="flex items-center space-x-2 md:col-span-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={filter.enabled !== false}
-                                    onChange={(event) => handleToggleFilter(filter.id, event.target.checked)}
-                                    className="h-4 w-4 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
-                                  />
-                                  <span className="text-xs text-dark-textLight">Aktiv</span>
+                              <div className="space-y-3 rounded-md border border-gray-700 bg-dark-bg/60 p-3">
+                                <div className="grid gap-3 md:grid-cols-12 items-start">
+                                  <div className="flex items-center space-x-2 md:col-span-12 lg:col-span-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={filter.enabled !== false}
+                                      onChange={(event) => handleToggleFilter(filter.id, event.target.checked)}
+                                      className="h-4 w-4 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
+                                    />
+                                    <span className="text-xs text-dark-textLight">Aktiv</span>
+                                  </div>
+                                  <div className="md:col-span-6 lg:col-span-4">
+                                    <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                      Spalte
+                                    </label>
+                                    <select
+                                      value={filter.column}
+                                      onChange={(event) => handleFilterChange(filter.id, { column: event.target.value })}
+                                      className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                    >
+                                      <option value="">Spalte wählen …</option>
+                                      {columns.map((column) => (
+                                        <option key={column.key} value={column.key}>
+                                          {column.key}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="md:col-span-6 lg:col-span-6">
+                                    <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                      Operator
+                                    </label>
+                                    <select
+                                      value={filter.operator || 'equalsText'}
+                                      onChange={(event) => handleFilterChange(filter.id, { operator: event.target.value, value: '', minValue: '', maxValue: '', flags: '' })}
+                                      className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                    >
+                                      {FILTER_OPERATORS.map((operator) => (
+                                        <option key={operator.value} value={operator.value}>
+                                          {operator.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
                                 </div>
-                                <div className="md:col-span-4">
-                                  <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
-                                    Spalte
-                                  </label>
-                                  <select
-                                    value={filter.column}
-                                    onChange={(event) => handleFilterChange(filter.id, { column: event.target.value })}
-                                    className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                                  >
-                                    <option value="">Spalte wählen …</option>
-                                    {columns.map((column) => (
-                                      <option key={column.key} value={column.key}>
-                                        {column.key}
-                                      </option>
-                                    ))}
-                                  </select>
+                                <div className="space-y-2">
+                                  {/* Between operator needs min/max */}
+                                  {filter.operator === 'between' && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div>
+                                        <label className="mb-1 block text-[10px] uppercase tracking-wide text-dark-textGray">
+                                          Min-Wert
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          value={filter.minValue || ''}
+                                          onChange={(event) => handleFilterChange(filter.id, { minValue: event.target.value })}
+                                          className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                          placeholder="Min"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="mb-1 block text-[10px] uppercase tracking-wide text-dark-textGray">
+                                          Max-Wert
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          value={filter.maxValue || ''}
+                                          onChange={(event) => handleFilterChange(filter.id, { maxValue: event.target.value })}
+                                          className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                          placeholder="Max"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* DateBetween operator needs min/max dates */}
+                                  {filter.operator === 'dateBetween' && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div>
+                                        <label className="mb-1 block text-[10px] uppercase tracking-wide text-dark-textGray">
+                                          Von (Datum)
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={filter.minValue || ''}
+                                          onChange={(event) => handleFilterChange(filter.id, { minValue: event.target.value })}
+                                          className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                          placeholder="2023-12-01 oder ISO 8601"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="mb-1 block text-[10px] uppercase tracking-wide text-dark-textGray">
+                                          Bis (Datum)
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={filter.maxValue || ''}
+                                          onChange={(event) => handleFilterChange(filter.id, { maxValue: event.target.value })}
+                                          className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                          placeholder="2023-12-31 oder ISO 8601"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* Regex operators need pattern and flags */}
+                                  {['matchesRegex', 'notMatchesRegex'].includes(filter.operator) && (
+                                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                                      <div>
+                                        <label className="mb-1 block text-[10px] uppercase tracking-wide text-dark-textGray">
+                                          Regex-Muster
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={filter.value || ''}
+                                          onChange={(event) => handleFilterChange(filter.id, { value: event.target.value })}
+                                          className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                          placeholder="z. B. ^[A-Z]"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="mb-1 block text-[10px] uppercase tracking-wide text-dark-textGray">
+                                          Flags
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={filter.flags || ''}
+                                          onChange={(event) => handleFilterChange(filter.id, { flags: event.target.value })}
+                                          className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                          placeholder="i, g"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* DateTime operators (except dateBetween) */}
+                                  {filter.operator?.startsWith('date') && filter.operator !== 'dateBetween' && (
+                                    <div>
+                                      <label className="mb-1 block text-[10px] uppercase tracking-wide text-dark-textGray">
+                                        Datum/Zeit (ISO 8601)
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={filter.value || ''}
+                                        onChange={(event) => handleFilterChange(filter.id, { value: event.target.value })}
+                                        className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                        placeholder="2023-12-25T10:30:00 oder 2023-12-25"
+                                      />
+                                    </div>
+                                  )}
+                                  {/* Number operators (except between) */}
+                                  {!['between', 'dateBetween', 'matchesRegex', 'notMatchesRegex', 'isEmpty', 'isNotEmpty', 'isNumber', 'isText', 'isDateTime'].includes(filter.operator) && 
+                                   !filter.operator?.startsWith('date') && (
+                                    <div>
+                                      <label className="mb-1 block text-[10px] uppercase tracking-wide text-dark-textGray">
+                                        Wert
+                                      </label>
+                                      <input
+                                        type={['equals', 'notEquals', 'greaterThan', 'greaterThanOrEqual', 'lessThan', 'lessThanOrEqual'].includes(filter.operator) ? 'number' : 'text'}
+                                        step={['equals', 'notEquals', 'greaterThan', 'greaterThanOrEqual', 'lessThan', 'lessThanOrEqual'].includes(filter.operator) ? 'any' : undefined}
+                                        value={filter.value || ''}
+                                        onChange={(event) => handleFilterChange(filter.id, { value: event.target.value })}
+                                        className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                        placeholder={['equals', 'notEquals', 'greaterThan', 'greaterThanOrEqual', 'lessThan', 'lessThanOrEqual'].includes(filter.operator) ? 'Zahl' : 'Text'}
+                                      />
+                                    </div>
+                                  )}
+                                  {/* Type checks don't need values */}
+                                  {['isEmpty', 'isNotEmpty', 'isNumber', 'isText', 'isDateTime'].includes(filter.operator) && (
+                                    <p className="text-[10px] text-dark-textGray italic">Kein Wert erforderlich</p>
+                                  )}
                                 </div>
-                                <div className="md:col-span-3">
-                                  <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
-                                    Operator
-                                  </label>
-                                  <select
-                                    value={filter.operator}
-                                    onChange={(event) => handleFilterChange(filter.id, { operator: event.target.value })}
-                                    className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                                  >
-                                    {FILTER_OPERATORS.map((operator) => (
-                                      <option key={operator.value} value={operator.value}>
-                                        {operator.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div className="md:col-span-2">
-                                  <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
-                                    Wert
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={filter.value}
-                                    onChange={(event) => handleFilterChange(filter.id, { value: event.target.value })}
-                                    className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                                    placeholder="Wert eingeben"
-                                  />
-                                </div>
-                                <div className="flex items-end justify-end md:col-span-1">
+                                <div className="flex justify-end">
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveFilter(filter.id)}

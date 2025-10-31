@@ -211,6 +211,16 @@ function valueLabelPlugin() {
             ctx.textAlign = isNumeric && numericValue < 0 ? 'right' : 'left'
             ctx.textBaseline = 'middle'
             drawX = isNumeric && numericValue < 0 ? position.x - offsetX : position.x + offsetX
+          } else if (layout === 'radar') {
+            // For radar charts, position labels at the point with a slight offset outward
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            // Calculate angle for this point
+            const angle = (index * 2 * Math.PI) / meta.data.length - Math.PI / 2
+            // Offset outward from the point
+            const offsetDistance = 15 + offsetY
+            drawX = position.x + Math.cos(angle) * offsetDistance
+            drawY = position.y + Math.sin(angle) * offsetDistance
           } else {
             ctx.textAlign = 'center'
             ctx.textBaseline = 'middle'
@@ -621,6 +631,24 @@ function prepareChartData(chartType, config) {
     
     case 'radar':
       const radarOpacity = config.options?.fillOpacity !== undefined ? Math.round(config.options.fillOpacity * 2.55).toString(16).padStart(2, '0') : '40'
+      // Support both old format (values) and new format (datasets)
+      if (config.datasets && Array.isArray(config.datasets) && config.datasets.length > 0) {
+        return {
+          labels: config.labels || [],
+          datasets: config.datasets.map((ds, index) => ({
+            label: ds.label || `Datensatz ${index + 1}`,
+            data: ds.data || [],
+            backgroundColor: config.options?.fill !== false ? ((ds.backgroundColor || config.colors?.[index] || config.colors?.[0] || '#22D3EE') + radarOpacity) : 'transparent',
+            borderColor: ds.borderColor || ds.backgroundColor || config.colors?.[index] || config.colors?.[0] || '#22D3EE',
+            borderWidth: ds.borderWidth || config.options?.lineWidth || 3,
+            pointRadius: ds.pointRadius || config.options?.pointRadius || 5,
+            pointBackgroundColor: ds.pointBackgroundColor || ds.borderColor || ds.backgroundColor || config.colors?.[index] || config.colors?.[0] || '#22D3EE',
+            pointBorderColor: ds.pointBorderColor || '#fff',
+            pointBorderWidth: ds.pointBorderWidth || 2
+          }))
+        }
+      }
+      // Fallback to old format (single dataset from values)
       return {
         labels: config.labels || [],
         datasets: [{
@@ -1731,11 +1759,44 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
 
   // Radar
   if (chartType.id === 'radar') {
+    // Calculate dynamic max if autoScale is enabled
+    let scaleMax = config.options?.scaleMax || 100
+    if (config.options?.autoScale !== false) {
+      // Find maximum value across all datasets
+      const allValues = []
+      if (config.datasets && Array.isArray(config.datasets) && config.datasets.length > 0) {
+        config.datasets.forEach(ds => {
+          if (ds.data && Array.isArray(ds.data)) {
+            ds.data.forEach(val => {
+              if (typeof val === 'number' && !isNaN(val)) {
+                allValues.push(val)
+              }
+            })
+          }
+        })
+      } else if (config.values && Array.isArray(config.values)) {
+        config.values.forEach(val => {
+          if (typeof val === 'number' && !isNaN(val)) {
+            allValues.push(val)
+          }
+        })
+      }
+      
+      if (allValues.length > 0) {
+        const maxValue = Math.max(...allValues)
+        // Round up to next step size, with some padding
+        const stepSize = config.options?.scaleStepSize || 20
+        scaleMax = Math.ceil((maxValue * 1.1) / stepSize) * stepSize
+        // Ensure minimum of stepSize
+        if (scaleMax < stepSize) scaleMax = stepSize
+      }
+    }
+    
     baseOptions.scales = {
       r: {
         beginAtZero: true,
         min: config.options?.scaleMin || 0,
-        max: config.options?.scaleMax || 100,
+        max: scaleMax,
         ticks: {
           stepSize: config.options?.scaleStepSize || 20,
           color: '#CBD5E1',
@@ -1749,6 +1810,29 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
           color: '#F8FAFC',
           font: { size: 13, weight: '500' }
         }
+      }
+    }
+    
+    // Add showValues support for radar charts
+    if (config.options?.showValues) {
+      baseOptions.plugins = {
+        ...baseOptions.plugins,
+        customValueLabels: {
+          display: true,
+          layout: 'radar',
+          color: config.options?.fontStyles?.valueLabels?.color || '#F8FAFC',
+          font: { 
+            family: config.options?.fontStyles?.valueLabels?.family || 'Inter', 
+            weight: '600', 
+            size: 12 
+          },
+          offsetY: -5
+        }
+      }
+    } else {
+      baseOptions.plugins = {
+        ...baseOptions.plugins,
+        customValueLabels: { display: false }
       }
     }
   }
@@ -1893,10 +1977,12 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     pie: 'doughnut',
     chord: 'doughnut',
     sankey: 'verticalBar',
-    radialBar: 'polar'
+    radialBar: 'polar',
+    radar: 'radar'
   }
 
-  if (valueLabelChartTypes[chartType.id]) {
+  // Radar charts handle showValues separately above, so skip here
+  if (valueLabelChartTypes[chartType.id] && chartType.id !== 'radar') {
     const layout = valueLabelChartTypes[chartType.id]
     const pluginConfig = {
       display: !!config.options?.showValues,

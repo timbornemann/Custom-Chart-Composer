@@ -130,6 +130,112 @@ const toNumber = (value) => {
   return null
 }
 
+// Parse datetime strings (ISO 8601 and common formats)
+const toDateTime = (value) => {
+  if (value === null || value === undefined) return null
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value : null
+  }
+  const text = String(value).trim()
+  if (!text) return null
+  const lower = text.toLowerCase()
+  if (PLACEHOLDER_VALUES.has(lower)) return null
+  
+  // Try European format with space: DD.MM.YYYY HH:MM:SS or DD.MM.YYYY HH:MM
+  // This handles formats like "07.07.2025 12:00:00" or "07.07.2025 12:00"
+  // Priority: check this FIRST because it's more specific than ISO formats
+  const europeanDateTimeMatch = text.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*$|\.\d+|Z|[+-]\d{2}:\d{2})?/)
+  if (europeanDateTimeMatch) {
+    const [, dayStr, monthStr, yearStr, hourStr, minuteStr, secondStr = '0'] = europeanDateTimeMatch
+    const day = parseInt(dayStr, 10)
+    const month = parseInt(monthStr, 10)
+    const year = parseInt(yearStr, 10)
+    const hour = parseInt(hourStr, 10)
+    const minute = parseInt(minuteStr, 10)
+    const second = parseInt(secondStr, 10)
+    
+    // Validate date components
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 100 && year <= 9999 &&
+        hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`
+      const parsed = new Date(dateStr)
+      // Verify the parsed date matches our input (avoid month/day confusion)
+      if (Number.isFinite(parsed.getTime()) && 
+          parsed.getDate() === day && 
+          parsed.getMonth() === month - 1 && 
+          parsed.getFullYear() === year) {
+        return parsed
+      }
+    }
+  }
+  
+  // Try DD.MM.YYYY or DD/MM/YYYY (date only, no time)
+  const europeanDateOnlyMatch = text.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})(?:\s*$|(?!\s+\d))/)
+  if (europeanDateOnlyMatch) {
+    const [, dayStr, monthStr, yearStr] = europeanDateOnlyMatch
+    const day = parseInt(dayStr, 10)
+    const month = parseInt(monthStr, 10)
+    const year = parseInt(yearStr, 10)
+    
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 100 && year <= 9999) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`
+      const parsed = new Date(dateStr)
+      if (Number.isFinite(parsed.getTime()) && 
+          parsed.getDate() === day && 
+          parsed.getMonth() === month - 1 && 
+          parsed.getFullYear() === year) {
+        return parsed
+      }
+    }
+  }
+  
+  // Try YYYY-MM-DD HH:MM:SS (ISO date with space instead of T)
+  const isoDateWithSpaceMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:\s*([+-])(\d{2}):(\d{2})|Z)?$/)
+  if (isoDateWithSpaceMatch) {
+    const [, year, month, day, hour, minute, second = '00'] = isoDateWithSpaceMatch
+    const dateStr = `${year}-${month}-${day}T${hour}:${minute}:${second}`
+    const parsed = new Date(dateStr)
+    if (Number.isFinite(parsed.getTime())) {
+      return parsed
+    }
+  }
+  
+  // Try ISO 8601 format (e.g., 2023-12-25T10:30:00Z or 2023-12-25T10:30:00+01:00)
+  const isoDateMatch = text.match(/^\d{4}-\d{2}-\d{2}(?:T|\s)/)
+  if (isoDateMatch) {
+    const isoDate = new Date(text.replace(/\s+/, 'T'))
+    if (Number.isFinite(isoDate.getTime()) && !isNaN(isoDate.getTime())) {
+      return isoDate
+    }
+  }
+  
+  // Try YYYY-MM-DD (date only)
+  const isoDateOnlyMatch = text.match(/^\d{4}-\d{2}-\d{2}$/)
+  if (isoDateOnlyMatch) {
+    const parsed = new Date(text + 'T00:00:00')
+    if (Number.isFinite(parsed.getTime())) {
+      return parsed
+    }
+  }
+  
+  // Fallback: try Date.parse with any remaining format (but be careful)
+  const fallbackDate = new Date(text)
+  if (Number.isFinite(fallbackDate.getTime()) && !isNaN(fallbackDate.getTime())) {
+    // Only accept if it's not a weird parsed value (like "1970-01-01" for invalid dates)
+    const fallbackYear = fallbackDate.getFullYear()
+    if (fallbackYear >= 100 && fallbackYear <= 9999) {
+      // Additional check: if the original text looks like a date format we recognize, use it
+      // Otherwise, be cautious and return null
+      const looksLikeDate = /^\d{1,4}[./-]\d{1,2}[./-]\d{2,4}/.test(text)
+      if (looksLikeDate) {
+        return fallbackDate
+      }
+    }
+  }
+  
+  return null
+}
+
 const analyzeColumns = (rows) => {
   const columnOrder = []
   const seen = new Set()
@@ -647,37 +753,159 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
 
 const evaluateFilterCondition = (row, filter) => {
   if (!filter || filter.enabled === false) return true
-  const { column, operator, value } = filter
+  const { column, operator, value, minValue, maxValue, flags } = filter
   if (!column) return true
   const cellValue = row[column]
   const cellText = normalizeLabel(cellValue)
-  const filterText = normalizeLabel(value)
-  switch (operator) {
-    case 'equals':
-      return cellText.toLowerCase() === filterText.toLowerCase()
-    case 'notEquals':
-      return cellText.toLowerCase() !== filterText.toLowerCase()
-    case 'contains':
-      if (!filterText) return true // If filter is empty, all rows pass
-      return cellText.toLowerCase().includes(filterText.toLowerCase())
-    case 'notContains':
-      if (!filterText) return true // If filter is empty, all rows pass
-      return !cellText.toLowerCase().includes(filterText.toLowerCase())
-    case 'greaterThan': {
-      const numericValue = toNumber(cellValue)
-      const numericFilter = toNumber(value)
-      if (numericValue === null || numericFilter === null) return false
-      return numericValue > numericFilter
-    }
-    case 'lessThan': {
-      const numericValue = toNumber(cellValue)
-      const numericFilter = toNumber(value)
-      if (numericValue === null || numericFilter === null) return false
-      return numericValue < numericFilter
-    }
-    default:
-      return true
+  const operatorValue = operator || 'equalsText'
+  
+  // Type/emptiness checks
+  if (operatorValue === 'isEmpty') {
+    return isEmptyValue(cellValue)
   }
+  if (operatorValue === 'isNotEmpty') {
+    return !isEmptyValue(cellValue)
+  }
+  if (operatorValue === 'isNumber') {
+    return toNumber(cellValue) !== null
+  }
+  if (operatorValue === 'isText') {
+    return !isEmptyValue(cellValue) && toNumber(cellValue) === null
+  }
+  if (operatorValue === 'isDateTime') {
+    return toDateTime(cellValue) !== null
+  }
+  
+  // Text-based operators
+  if (
+    operatorValue === 'equalsText' ||
+    operatorValue === 'notEqualsText' ||
+    operatorValue === 'containsText' ||
+    operatorValue === 'notContainsText' ||
+    operatorValue === 'matchesRegex' ||
+    operatorValue === 'notMatchesRegex'
+  ) {
+    const filterText = normalizeLabel(value)
+    if (operatorValue === 'equalsText') {
+      return filterText ? cellText.toLowerCase() === filterText.toLowerCase() : false
+    }
+    if (operatorValue === 'notEqualsText') {
+      return filterText ? cellText.toLowerCase() !== filterText.toLowerCase() : false
+    }
+    if (operatorValue === 'containsText') {
+      return filterText ? cellText.toLowerCase().includes(filterText.toLowerCase()) : false
+    }
+    if (operatorValue === 'notContainsText') {
+      return filterText ? !cellText.toLowerCase().includes(filterText.toLowerCase()) : false
+    }
+    if (operatorValue === 'matchesRegex' || operatorValue === 'notMatchesRegex') {
+      try {
+        if (!value) return false
+        const regex = new RegExp(String(value), String(flags || ''))
+        const match = regex.test(cellText)
+        return operatorValue === 'matchesRegex' ? match : !match
+      } catch (_e) {
+        return false
+      }
+    }
+  }
+  
+  // Numeric operators
+  const numValue = toNumber(cellValue)
+  const numFilter = toNumber(value)
+  const numMin = toNumber(minValue)
+  const numMax = toNumber(maxValue)
+  
+  if (
+    operatorValue === 'greaterThan' ||
+    operatorValue === 'greaterThanOrEqual' ||
+    operatorValue === 'lessThan' ||
+    operatorValue === 'lessThanOrEqual' ||
+    operatorValue === 'equals' ||
+    operatorValue === 'notEquals' ||
+    operatorValue === 'between'
+  ) {
+    if (numValue === null) return false
+    
+    switch (operatorValue) {
+      case 'greaterThan':
+        return Number.isFinite(numFilter) && numValue > numFilter
+      case 'greaterThanOrEqual':
+        return Number.isFinite(numFilter) && numValue >= numFilter
+      case 'lessThan':
+        return Number.isFinite(numFilter) && numValue < numFilter
+      case 'lessThanOrEqual':
+        return Number.isFinite(numFilter) && numValue <= numFilter
+      case 'equals':
+        return Number.isFinite(numFilter) && numValue === numFilter
+      case 'notEquals':
+        return Number.isFinite(numFilter) && numValue !== numFilter
+      case 'between':
+        return Number.isFinite(numMin) && Number.isFinite(numMax) && numValue >= numMin && numValue <= numMax
+      default:
+        return false
+    }
+  }
+  
+  // DateTime operators
+  const dateValue = toDateTime(cellValue)
+  const dateFilter = toDateTime(value)
+  const dateMin = toDateTime(minValue)
+  const dateMax = toDateTime(maxValue)
+  
+  if (
+    operatorValue === 'dateGreaterThan' ||
+    operatorValue === 'dateGreaterThanOrEqual' ||
+    operatorValue === 'dateLessThan' ||
+    operatorValue === 'dateLessThanOrEqual' ||
+    operatorValue === 'dateEquals' ||
+    operatorValue === 'dateBetween'
+  ) {
+    if (dateValue === null) return false
+    
+    switch (operatorValue) {
+      case 'dateGreaterThan':
+        return dateFilter !== null && dateValue.getTime() > dateFilter.getTime()
+      case 'dateGreaterThanOrEqual':
+        return dateFilter !== null && dateValue.getTime() >= dateFilter.getTime()
+      case 'dateLessThan':
+        return dateFilter !== null && dateValue.getTime() < dateFilter.getTime()
+      case 'dateLessThanOrEqual':
+        return dateFilter !== null && dateValue.getTime() <= dateFilter.getTime()
+      case 'dateEquals':
+        return dateFilter !== null && dateValue.getTime() === dateFilter.getTime()
+      case 'dateBetween':
+        return dateMin !== null && dateMax !== null && dateValue.getTime() >= dateMin.getTime() && dateValue.getTime() <= dateMax.getTime()
+      default:
+        return false
+    }
+  }
+  
+  // Legacy support for old operators
+  if (operatorValue === 'equals') {
+    return cellText.toLowerCase() === normalizeLabel(value).toLowerCase()
+  }
+  if (operatorValue === 'notEquals') {
+    return cellText.toLowerCase() !== normalizeLabel(value).toLowerCase()
+  }
+  if (operatorValue === 'contains') {
+    const filterText = normalizeLabel(value)
+    return filterText ? cellText.toLowerCase().includes(filterText.toLowerCase()) : true
+  }
+  if (operatorValue === 'notContains') {
+    const filterText = normalizeLabel(value)
+    return filterText ? !cellText.toLowerCase().includes(filterText.toLowerCase()) : true
+  }
+  if (operatorValue === 'greaterThan') {
+    // Already handled above, but keeping for compatibility
+    return Number.isFinite(numFilter) && numValue !== null && numValue > numFilter
+  }
+  if (operatorValue === 'lessThan') {
+    // Already handled above, but keeping for compatibility
+    return Number.isFinite(numFilter) && numValue !== null && numValue < numFilter
+  }
+  
+  return true
 }
 
 const applyFilters = (rows, filters) => {
@@ -1192,6 +1420,63 @@ const buildScatterBubbleResult = (sourceRows, xColumn, yColumn, rColumn, dataset
   return { datasets: Array.from(datasets.values()), rowWarnings }
 }
 
+// Build result for radar charts: one dataset with multiple attributes
+// Each row becomes a radar chart, with value columns as attributes (labels)
+const buildRadarResult = (sourceRows, labelKey, valueKeys, datasetLabelKey = null) => {
+  const datasets = []
+  let skippedNoLabel = 0
+  let skippedEmptyRow = 0
+  let datasetCounter = 0
+  
+  // Labels are the attribute names (value column names)
+  const labels = valueKeys.map(key => key)
+  
+  sourceRows.forEach((row, index) => {
+    const rowLabel = labelKey ? normalizeLabel(row[labelKey]) : null
+    let datasetLabel = null
+    
+    // Priority: datasetLabelKey > labelKey > auto-generated
+    if (datasetLabelKey) {
+      datasetLabel = normalizeLabel(row[datasetLabelKey])
+    } else if (labelKey && rowLabel) {
+      datasetLabel = rowLabel
+    }
+    
+    // If still no label, generate one
+    if (!datasetLabel) {
+      datasetCounter += 1
+      datasetLabel = `Datensatz ${datasetCounter}`
+    }
+    
+    const attributeValues = valueKeys.map((key) => toNumber(row[key]))
+    const hasValue = attributeValues.some((value) => value !== null)
+    
+    if (!hasValue) {
+      skippedEmptyRow += 1
+      return
+    }
+    
+    // Only check for missing label if labelKey is required (but we don't require it for radar)
+    // Skip validation for missing labelKey since it's optional
+    
+    // Each row becomes a dataset (radar chart line)
+    datasets.push({
+      label: datasetLabel,
+      data: attributeValues
+    })
+  })
+  
+  const rowWarnings = []
+  if (skippedNoLabel > 0) {
+    rowWarnings.push(`${skippedNoLabel} Zeilen ohne Beschriftung wurden übersprungen.`)
+  }
+  if (skippedEmptyRow > 0) {
+    rowWarnings.push(`${skippedEmptyRow} Zeilen ohne numerische Werte wurden ignoriert.`)
+  }
+  
+  return { labels, datasets, rowWarnings }
+}
+
 export default function useDataImport({ allowMultipleValueColumns = true, requireDatasets = false, initialData = null, chartType = null, isScatterBubble = false, isCoordinate = false } = {}) {
   const [fileName, setFileName] = useState('')
   const [rows, setRows] = useState([])
@@ -1445,13 +1730,17 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         errors.push(`Die ausgewählte Größen-Spalte "${rColumn}" ist nicht mehr verfügbar.`)
       }
     } else {
-      if (!label) {
+      // For radar charts, label is optional (dataset name), but for other charts it's required
+      if (chartType !== 'radar' && !label) {
         errors.push('Bitte wählen Sie eine Spalte für die Beschriftungen aus.')
       }
       if (!valueColumns || valueColumns.length === 0) {
         errors.push('Bitte wählen Sie mindestens eine Werte-Spalte aus.')
       }
-      if (datasetLabel && valueColumns.length > 1) {
+      if (chartType === 'radar' && valueColumns.length < 2) {
+        errors.push('Für Radar-Diagramme müssen Sie mindestens 2 Attribut-Spalten auswählen.')
+      }
+      if (datasetLabel && valueColumns.length > 1 && chartType !== 'radar') {
         errors.push('Bei Verwendung einer Datensatz-Spalte darf nur eine Werte-Spalte ausgewählt sein.')
       }
     }
@@ -1461,8 +1750,42 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       if (filter.column && !columnKeys.has(filter.column)) {
         errors.push(`Filter bezieht sich auf eine nicht mehr vorhandene Spalte "${filter.column}".`)
       }
-      if (['greaterThan', 'lessThan'].includes(filter.operator) && toNumber(filter.value) === null) {
-        errors.push(`Filter für Spalte "${filter.column || '–'}" benötigt einen gültigen Zahlenwert.`)
+      const operator = filter.operator || 'equalsText'
+      // Validate numeric operators
+      if (['equals', 'notEquals', 'greaterThan', 'greaterThanOrEqual', 'lessThan', 'lessThanOrEqual'].includes(operator) && filter.value) {
+        if (toNumber(filter.value) === null) {
+          errors.push(`Filter für Spalte "${filter.column || '–'}" benötigt einen gültigen Zahlenwert.`)
+        }
+      }
+      if (operator === 'between') {
+        if (filter.minValue && toNumber(filter.minValue) === null) {
+          errors.push(`Filter "zwischen" für Spalte "${filter.column || '–'}" benötigt einen gültigen Min-Wert.`)
+        }
+        if (filter.maxValue && toNumber(filter.maxValue) === null) {
+          errors.push(`Filter "zwischen" für Spalte "${filter.column || '–'}" benötigt einen gültigen Max-Wert.`)
+        }
+      }
+      // Validate DateTime operators
+      if (['dateEquals', 'dateGreaterThan', 'dateGreaterThanOrEqual', 'dateLessThan', 'dateLessThanOrEqual'].includes(operator) && filter.value) {
+        if (toDateTime(filter.value) === null) {
+          errors.push(`Filter für Spalte "${filter.column || '–'}" benötigt ein gültiges Datum/Zeit (ISO 8601).`)
+        }
+      }
+      if (operator === 'dateBetween') {
+        if (filter.minValue && toDateTime(filter.minValue) === null) {
+          errors.push(`Filter "Datum zwischen" für Spalte "${filter.column || '–'}" benötigt ein gültiges Start-Datum.`)
+        }
+        if (filter.maxValue && toDateTime(filter.maxValue) === null) {
+          errors.push(`Filter "Datum zwischen" für Spalte "${filter.column || '–'}" benötigt ein gültiges End-Datum.`)
+        }
+      }
+      // Validate regex operators
+      if (['matchesRegex', 'notMatchesRegex'].includes(operator) && filter.value) {
+        try {
+          new RegExp(String(filter.value), String(filter.flags || ''))
+        } catch (_e) {
+          errors.push(`Filter für Spalte "${filter.column || '–'}" enthält ein ungültiges Regex-Muster.`)
+        }
       }
     })
 
@@ -1559,6 +1882,15 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         setValidationErrors(['Es konnten keine gültigen Datenpunkte importiert werden. Bitte prüfen Sie die Spaltenauswahl.'])
         return null
       }
+    } else if (chartType === 'radar') {
+      // Radar charts: one row per dataset, multiple value columns as attributes
+      // Labels are the attribute names (value column names)
+      // Dataset label comes from datasetLabel column if set, otherwise from label column
+      const datasetLabelCol = datasetLabel || (label || null)
+      const radarResult = buildRadarResult(transformed, null, valueColumns, datasetLabelCol)
+      warningsFromRows = radarResult.rowWarnings
+      delete radarResult.rowWarnings
+      result = { ...radarResult, values: [] }
     } else if (datasetLabel) {
       result = buildLongDatasetResult(transformed, label, valueColumns[0], datasetLabel)
       warningsFromRows = result.rowWarnings

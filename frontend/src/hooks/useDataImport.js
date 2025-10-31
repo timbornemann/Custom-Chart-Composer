@@ -18,6 +18,8 @@ const defaultMapping = {
 }
 
 const createDefaultTransformations = () => ({
+  // Value transformation rules applied before filters/grouping
+  valueRules: [],
   filters: [],
   grouping: {
     enabled: false,
@@ -710,6 +712,109 @@ const applyFilters = (rows, filters) => {
   return { rows: filteredRows.map((row) => ({ ...row })), removed }
 }
 
+// Apply rule-based value transformations on a copy of the rows
+const applyValueRules = (rows, rules) => {
+  const activeRules = (rules || []).filter((r) => r && r.enabled !== false && r.column)
+  if (activeRules.length === 0) {
+    return rows.map((row) => ({ ...row }))
+  }
+
+  const performAction = (currentValue, action) => {
+    const type = action?.type || 'replaceText'
+    const paramA = action?.value ?? ''
+    const factor = Number.parseFloat(action?.factor)
+
+    switch (type) {
+      case 'setText':
+        return String(paramA)
+      case 'replaceText': {
+        const search = String(action?.search ?? '')
+        if (!search) return currentValue
+        const src = String(currentValue ?? '')
+        return src.split(search).join(String(paramA))
+      }
+      case 'regexReplace': {
+        try {
+          const pattern = String(action?.pattern ?? '')
+          if (!pattern) return currentValue
+          const flags = String(action?.flags || 'g')
+          const re = new RegExp(pattern, flags)
+          const src = String(currentValue ?? '')
+          return src.replace(re, String(paramA))
+        } catch (_e) {
+          return currentValue
+        }
+      }
+      case 'toNumber': {
+        const n = toNumber(currentValue)
+        return n
+      }
+      case 'multiply': {
+        const n = toNumber(currentValue)
+        return n === null || !Number.isFinite(factor) ? currentValue : n * factor
+      }
+      case 'divide': {
+        const n = toNumber(currentValue)
+        return n === null || !Number.isFinite(factor) ? currentValue : n / factor
+      }
+      case 'removeNonDigits': {
+        const src = String(currentValue ?? '')
+        return src.replace(/[^0-9]+/g, '')
+      }
+      case 'uppercase':
+        return String(currentValue ?? '').toUpperCase()
+      case 'lowercase':
+        return String(currentValue ?? '').toLowerCase()
+      case 'trim':
+        return String(currentValue ?? '').trim()
+      default:
+        return currentValue
+    }
+  }
+
+  const matchesCondition = (val, cond) => {
+    if (!cond) return true
+    const op = cond.operator || 'containsText'
+    const text = String(val ?? '').trim()
+    switch (op) {
+      case 'containsText':
+        return cond.value ? text.toLowerCase().includes(String(cond.value).toLowerCase()) : false
+      case 'notContainsText':
+        return cond.value ? !text.toLowerCase().includes(String(cond.value).toLowerCase()) : false
+      case 'equalsText':
+        return cond.value ? text.toLowerCase() === String(cond.value).toLowerCase() : false
+      case 'isNumber':
+        return toNumber(val) !== null
+      case 'isEmpty':
+        return isEmptyValue(val)
+      case 'isNotEmpty':
+        return !isEmptyValue(val)
+      case 'matchesRegex':
+        try {
+          if (!cond.value) return false
+          const re = new RegExp(String(cond.value), String(cond.flags || ''))
+          return re.test(text)
+        } catch (_e) {
+          return false
+        }
+      default:
+        return true
+    }
+  }
+
+  return rows.map((row) => {
+    const next = { ...row }
+    for (const rule of activeRules) {
+      const key = rule.column
+      const current = next[key]
+      if (matchesCondition(current, rule.when)) {
+        next[key] = performAction(current, rule.action)
+      }
+    }
+    return next
+  })
+}
+
 const applyTransformations = (rows, mapping, transformations) => {
   if (!Array.isArray(rows) || rows.length === 0) {
     return {
@@ -742,7 +847,10 @@ const applyTransformations = (rows, mapping, transformations) => {
     return { rows: workingRows, warnings, meta }
   }
 
-  const { filters, grouping, aggregations } = transformations
+  const { valueRules, filters, grouping, aggregations } = transformations
+
+  // 1) Apply value rules first (original rows remain unchanged in state)
+  workingRows = applyValueRules(workingRows, valueRules)
 
   const { rows: filteredRows, removed } = applyFilters(workingRows, filters)
   workingRows = filteredRows
@@ -1090,6 +1198,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [columns, setColumns] = useState([])
   const [mapping, setMapping] = useState(defaultMapping)
   const [transformations, setTransformations] = useState(() => createDefaultTransformations())
+  const [previewLimit, setPreviewLimit] = useState(5)
   const [isLoading, setIsLoading] = useState(false)
   const [parseError, setParseError] = useState('')
   const [validationErrors, setValidationErrors] = useState([])
@@ -1278,7 +1387,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     })
   }, [mapping.label, mapping.valueColumns])
 
-  const previewRows = useMemo(() => rows.slice(0, 5), [rows])
+  const previewRows = useMemo(() => (previewLimit === 'all' ? rows : rows.slice(0, Number(previewLimit) || 5)), [rows, previewLimit])
   const totalRows = rows.length
   const transformationSummary = useMemo(
     () => applyTransformations(rows, mapping, transformations),
@@ -1286,7 +1395,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   )
   const transformedRows = transformationSummary.rows
   const transformationWarnings = transformationSummary.warnings
-  const transformedPreviewRows = useMemo(() => transformedRows.slice(0, 5), [transformedRows])
+  const transformedPreviewRows = useMemo(() => (previewLimit === 'all' ? transformedRows : transformedRows.slice(0, Number(previewLimit) || 5)), [transformedRows, previewLimit])
   const transformedRowCount = transformedRows.length
   const warnings = useMemo(
     () => [...analysisWarnings, ...transformationWarnings, ...resultWarnings],
@@ -1527,6 +1636,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     warnings,
     allowMultipleValueColumns,
     requireDatasets,
+    previewLimit,
+    setPreviewLimit,
     getImportResult,
     getImportState
   }

@@ -46,6 +46,30 @@ const createUniqueId = (prefix) => {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+// Value rule options
+const VALUE_RULE_CONDITIONS = [
+  { value: 'containsText', label: 'wenn Text enthält' },
+  { value: 'notContainsText', label: 'wenn Text nicht enthält' },
+  { value: 'equalsText', label: 'wenn Text gleich ist' },
+  { value: 'isNumber', label: 'wenn Zahl' },
+  { value: 'isEmpty', label: 'wenn leer' },
+  { value: 'isNotEmpty', label: 'wenn nicht leer' },
+  { value: 'matchesRegex', label: 'wenn Regex passt' }
+]
+
+const VALUE_RULE_ACTIONS = [
+  { value: 'replaceText', label: 'ersetze Text' },
+  { value: 'regexReplace', label: 'Regex ersetzen' },
+  { value: 'setText', label: 'setze Text' },
+  { value: 'toNumber', label: 'in Zahl umwandeln' },
+  { value: 'multiply', label: 'Zahl multiplizieren' },
+  { value: 'divide', label: 'Zahl dividieren' },
+  { value: 'removeNonDigits', label: 'Nicht-Ziffern entfernen' },
+  { value: 'uppercase', label: 'in GROSS' },
+  { value: 'lowercase', label: 'in klein' },
+  { value: 'trim', label: 'Leerzeichen trimmen' }
+]
+
 export default function DataImportModal({
   isOpen,
   onClose,
@@ -79,6 +103,8 @@ export default function DataImportModal({
     parseError,
     validationErrors,
     warnings,
+    previewLimit,
+    setPreviewLimit,
     getImportResult,
     getImportState
   } = useDataImport({ allowMultipleValueColumns, requireDatasets, initialData, chartType, isScatterBubble, isCoordinate })
@@ -214,12 +240,39 @@ export default function DataImportModal({
   const filters = transformations.filters || []
   const grouping = transformations.grouping || {}
   const aggregations = transformations.aggregations || {}
+  const valueRules = transformations.valueRules || []
 
   const handleAddFilter = () => {
     const id = createUniqueId('filter')
     updateTransformations((prev) => ({
       ...prev,
       filters: [...(prev.filters || []), { id, column: '', operator: 'equals', value: '', enabled: true, logicOperator: 'and' }]
+    }))
+  }
+
+  // Value rules handlers
+  const handleAddValueRule = () => {
+    const id = createUniqueId('vrule')
+    updateTransformations((prev) => ({
+      ...prev,
+      valueRules: [
+        ...(prev.valueRules || []),
+        { id, column: '', when: { operator: 'containsText', value: '' }, action: { type: 'replaceText', search: '', value: '' }, enabled: true }
+      ]
+    }))
+  }
+
+  const handleValueRuleChange = (id, changes) => {
+    updateTransformations((prev) => ({
+      ...prev,
+      valueRules: (prev.valueRules || []).map((r) => (r.id === id ? { ...r, ...changes } : r))
+    }))
+  }
+
+  const handleRemoveValueRule = (id) => {
+    updateTransformations((prev) => ({
+      ...prev,
+      valueRules: (prev.valueRules || []).filter((r) => r.id !== id)
     }))
   }
 
@@ -811,7 +864,19 @@ export default function DataImportModal({
                     <section className="space-y-2">
                       <div className="flex items-center justify-between">
                         <h4 className="text-sm font-semibold text-dark-textLight">Originaldaten Vorschau</h4>
-                        <span className="text-xs text-dark-textGray">{totalRows} Zeilen erkannt</span>
+                        <div className="flex items-center gap-3 text-xs text-dark-textGray">
+                          <span>{totalRows} Zeilen erkannt</span>
+                          <label className="flex items-center gap-1">
+                            <span className="hidden sm:inline">Zeilen:</span>
+                            <select value={String(previewLimit)} onChange={(e) => setPreviewLimit(e.target.value === 'all' ? 'all' : Number(e.target.value))} className="rounded-md border border-gray-700 bg-dark-bg px-1.5 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none">
+                              <option value={5}>5</option>
+                              <option value={10}>10</option>
+                              <option value={50}>50</option>
+                              <option value={100}>100</option>
+                              <option value="all">alle</option>
+                            </select>
+                          </label>
+                        </div>
                       </div>
                       <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
                         <table className="min-w-full divide-y divide-gray-700 text-sm">
@@ -854,6 +919,71 @@ export default function DataImportModal({
                   </div>
 
                   <div className="space-y-4">
+                    <div className="space-y-3 rounded-lg border border-gray-700 bg-dark-bg/40 p-4">
+                      <h4 className="text-sm font-semibold text-dark-textLight">Wert-Regeln (vor Filter/Gruppierung)</h4>
+                      <p className="text-[11px] text-dark-textGray">Regelbasiertes Umformen. Originaldaten bleiben erhalten.</p>
+                      <div className="space-y-2">
+                        {valueRules.length === 0 ? (
+                          <p className="text-xs text-dark-textGray">Keine Regeln hinzugefügt.</p>
+                        ) : (
+                          valueRules.map((rule) => (
+                            <div key={rule.id} className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto] items-center rounded-md border border-gray-700 bg-dark-bg/60 p-3">
+                              <select value={rule.column || ''} onChange={(e) => handleValueRuleChange(rule.id, { column: e.target.value })} className="rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none">
+                                <option value="">Spalte wählen…</option>
+                                {columns.map((c) => (
+                                  <option key={c.key} value={c.key}>{c.key}</option>
+                                ))}
+                              </select>
+                              <div className="flex gap-2">
+                                <select value={rule.when?.operator || 'containsText'} onChange={(e) => handleValueRuleChange(rule.id, { when: { ...(rule.when || {}), operator: e.target.value } })} className="w-full rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none">
+                                  {VALUE_RULE_CONDITIONS.map((o) => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                  ))}
+                                </select>
+                                {['containsText','notContainsText','equalsText','matchesRegex'].includes(rule.when?.operator) && (
+                                  <input type="text" value={rule.when?.value || ''} onChange={(e) => handleValueRuleChange(rule.id, { when: { ...(rule.when || {}), value: e.target.value } })} placeholder={rule.when?.operator === 'matchesRegex' ? 'Regex Muster' : 'Wert'} className="w-full rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none" />
+                                )}
+                                {rule.when?.operator === 'matchesRegex' && (
+                                  <input type="text" value={rule.when?.flags || ''} onChange={(e) => handleValueRuleChange(rule.id, { when: { ...(rule.when || {}), flags: e.target.value } })} placeholder="Flags" className="w-24 rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none" />
+                                )}
+                              </div>
+                              <div className="flex gap-2">
+                                <select value={rule.action?.type || 'replaceText'} onChange={(e) => handleValueRuleChange(rule.id, { action: { ...(rule.action || {}), type: e.target.value } })} className="w-full rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none">
+                                  {VALUE_RULE_ACTIONS.map((o) => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                  ))}
+                                </select>
+                                {['replaceText'].includes(rule.action?.type) && (
+                                  <>
+                                    <input type="text" value={rule.action?.search || ''} onChange={(e) => handleValueRuleChange(rule.id, { action: { ...(rule.action || {}), search: e.target.value } })} placeholder="suche" className="w-28 rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none" />
+                                    <input type="text" value={rule.action?.value || ''} onChange={(e) => handleValueRuleChange(rule.id, { action: { ...(rule.action || {}), value: e.target.value } })} placeholder="ersetzen durch" className="w-32 rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none" />
+                                  </>
+                                )}
+                                {['regexReplace'].includes(rule.action?.type) && (
+                                  <>
+                                    <input type="text" value={rule.action?.pattern || ''} onChange={(e) => handleValueRuleChange(rule.id, { action: { ...(rule.action || {}), pattern: e.target.value } })} placeholder="Regex" className="w-28 rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none" />
+                                    <input type="text" value={rule.action?.flags || ''} onChange={(e) => handleValueRuleChange(rule.id, { action: { ...(rule.action || {}), flags: e.target.value } })} placeholder="Flags" className="w-16 rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none" />
+                                    <input type="text" value={rule.action?.value || ''} onChange={(e) => handleValueRuleChange(rule.id, { action: { ...(rule.action || {}), value: e.target.value } })} placeholder="ersetzen durch" className="w-32 rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none" />
+                                  </>
+                                )}
+                                {['setText'].includes(rule.action?.type) && (
+                                  <input type="text" value={rule.action?.value || ''} onChange={(e) => handleValueRuleChange(rule.id, { action: { ...(rule.action || {}), value: e.target.value } })} placeholder="Text" className="w-36 rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none" />
+                                )}
+                                {['multiply','divide'].includes(rule.action?.type) && (
+                                  <input type="number" step="any" value={rule.action?.factor || ''} onChange={(e) => handleValueRuleChange(rule.id, { action: { ...(rule.action || {}), factor: e.target.value } })} placeholder="Faktor" className="w-28 rounded-md border border-gray-700 bg-dark-secondary px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none" />
+                                )}
+                              </div>
+                              <div className="flex justify-end">
+                                <button type="button" onClick={() => handleRemoveValueRule(rule.id)} className="rounded-md border border-red-600 px-2 py-1 text-xs text-red-200 hover:bg-red-900/40">Entfernen</button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <div>
+                        <button type="button" onClick={handleAddValueRule} className="rounded-md border border-gray-700 px-2 py-1 text-xs text-dark-textLight hover:bg-dark-bg/60">Regel hinzufügen</button>
+                      </div>
+                    </div>
                     <div className="space-y-3 rounded-lg border border-gray-700 bg-dark-bg/40 p-4">
                       <div className="flex items-center justify-between">
                         <h4 className="text-sm font-semibold text-dark-textLight">Filter</h4>
@@ -1346,9 +1476,19 @@ export default function DataImportModal({
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <h4 className="text-sm font-semibold text-dark-textLight">Transformierte Daten</h4>
-                          <span className="text-xs text-dark-textGray">
-                            {transformedRowCount} Zeilen nach Transformation
-                          </span>
+                          <div className="flex items-center gap-3 text-xs text-dark-textGray">
+                            <span>{transformedRowCount} Zeilen nach Transformation</span>
+                            <label className="flex items-center gap-1">
+                              <span className="hidden sm:inline">Zeilen:</span>
+                              <select value={String(previewLimit)} onChange={(e) => setPreviewLimit(e.target.value === 'all' ? 'all' : Number(e.target.value))} className="rounded-md border border-gray-700 bg-dark-bg px-1.5 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none">
+                                <option value={5}>5</option>
+                                <option value={10}>10</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                                <option value="all">alle</option>
+                              </select>
+                            </label>
+                          </div>
                         </div>
                         <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
                           <table className="min-w-full divide-y divide-gray-700 text-sm">

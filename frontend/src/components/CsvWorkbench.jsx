@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 import Papa from 'papaparse'
-import useDataImport from '../hooks/useDataImport'
+import useDataImport, { createSearchConfig, rowMatchesQuery } from '../hooks/useDataImport'
+import CsvFindReplaceModal from './CsvFindReplaceModal'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -84,6 +85,40 @@ const renderHighlightedValue = (value, matches) => {
   }
 
   return segments
+}
+
+const escapeForReplacement = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const applyReplacementToText = (value, searchConfig, replacement) => {
+  if (!searchConfig?.isActive) {
+    return value
+  }
+
+  const text = value === null || value === undefined ? '' : String(value)
+  if (!text) {
+    return text
+  }
+
+  try {
+    if (searchConfig.mode === 'regex' && searchConfig.regexSource) {
+      const regex = new RegExp(searchConfig.regexSource, searchConfig.regexFlags || 'giu')
+      return text.replace(regex, replacement)
+    }
+
+    if (searchConfig.mode === 'whole' && searchConfig.regexSource) {
+      const regex = new RegExp(searchConfig.regexSource, searchConfig.regexFlags || 'giu')
+      return text.replace(regex, () => replacement)
+    }
+
+    const pattern = searchConfig.query || ''
+    if (!pattern) {
+      return text
+    }
+    const regex = new RegExp(escapeForReplacement(pattern), 'giu')
+    return text.replace(regex, () => replacement)
+  } catch (_error) {
+    return text
+  }
 }
 
 const formatSamplePreview = (value) => {
@@ -388,6 +423,45 @@ export default function CsvWorkbench({
   const [correlationSortKey, setCorrelationSortKey] = useState('')
   const [hoveredCorrelationCell, setHoveredCorrelationCell] = useState(null)
   const correlationMatrix = profilingMeta?.correlationMatrix || null
+  const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false)
+  const [findReplaceData, setFindReplaceData] = useState({
+    raw: { matches: [], total: 0 },
+    transformed: { matches: [], total: 0 }
+  })
+  const findReplaceHistoryRef = useRef([])
+  const activeSearchConfig = useMemo(
+    () => createSearchConfig({ query: searchQuery, mode: searchMode, columns: searchColumns }),
+    [searchQuery, searchMode, searchColumns]
+  )
+  const availableColumnsForModal = useMemo(
+    () => columns.map((column) => ({ key: column.key, label: column.key })),
+    [columns]
+  )
+  const transformedScopeDisabledReason = useMemo(() => {
+    if (!Array.isArray(transformedRows) || transformedRows.length === 0) {
+      if (totalRows === 0) {
+        return 'Keine Daten vorhanden.'
+      }
+      return 'Transformationsvorschau enthält keine Zeilen.'
+    }
+    if (!transformationMeta) {
+      return ''
+    }
+    if ((transformationMeta.filteredOut ?? 0) > 0) {
+      return 'Aktive Filter verändern die Zeilenanzahl. Ersetzen im Transformationspfad ist deaktiviert.'
+    }
+    const aggregatedFrom = transformationMeta.aggregatedFrom ?? transformedRows.length
+    const aggregatedTo = transformationMeta.aggregatedTo ?? transformedRows.length
+    if (aggregatedFrom !== aggregatedTo) {
+      return 'Gruppierung oder Aggregation verändern die Zeilenanzahl.'
+    }
+    if (transformedRows.length !== totalRows && totalRows > 0) {
+      return 'Transformationsdaten und Originalzeilen stimmen nicht überein.'
+    }
+    return ''
+  }, [transformationMeta, transformedRows, totalRows])
+  const canReplaceInTransformed = transformedScopeDisabledReason === ''
+  const canOpenFindReplace = activeSearchConfig?.isActive && totalRows > 0
 
   useEffect(() => {
     if (!correlationMatrix || !Array.isArray(correlationMatrix.columns) || correlationMatrix.columns.length === 0) {
@@ -410,6 +484,70 @@ export default function CsvWorkbench({
     })
     setCorrelationSortKey((prev) => (prev && availableColumns.includes(prev) ? prev : ''))
   }, [correlationMatrix])
+
+  const computeMatchesForRows = useCallback(
+    (rowsSource, scopeLabel) => {
+      if (!activeSearchConfig?.isActive || !Array.isArray(rowsSource)) {
+        return { matches: [], total: 0 }
+      }
+      const columnKeys = new Set(columns.map((column) => column.key))
+      const matches = []
+      rowsSource.forEach((row, rowIndex) => {
+        if (!row) return
+        const result = rowMatchesQuery(row, activeSearchConfig)
+        const entries = Object.entries(result.matchesByColumn || {})
+        entries.forEach(([columnKey, positions]) => {
+          if (!columnKeys.has(columnKey)) return
+          if (!Array.isArray(positions) || positions.length === 0) return
+          const rawValue = row[columnKey]
+          const formattedRaw = formatCellValue(rawValue)
+          const formattedValue =
+            formattedRaw === null || formattedRaw === undefined
+              ? ''
+              : typeof formattedRaw === 'string'
+                ? formattedRaw
+                : String(formattedRaw)
+          matches.push({
+            scope: scopeLabel,
+            rowIndex,
+            columnKey,
+            positions,
+            formattedValue,
+            rawValue
+          })
+        })
+      })
+      const total = matches.reduce((sum, entry) => sum + (entry.positions?.length || 0), 0)
+      return { matches, total }
+    },
+    [activeSearchConfig, columns, rowMatchesQuery]
+  )
+
+  useEffect(() => {
+    if (!isFindReplaceOpen) {
+      return
+    }
+
+    if (!activeSearchConfig?.isActive) {
+      setFindReplaceData({ raw: { matches: [], total: 0 }, transformed: { matches: [], total: 0 } })
+      return
+    }
+
+    const state = getImportState()
+    const rawRows = Array.isArray(state?.rows) ? state.rows : []
+    const rawResult = computeMatchesForRows(rawRows, 'raw')
+    const transformedResult = canReplaceInTransformed
+      ? computeMatchesForRows(transformedRows || [], 'transformed')
+      : { matches: [], total: 0 }
+    setFindReplaceData({ raw: rawResult, transformed: transformedResult })
+  }, [
+    isFindReplaceOpen,
+    activeSearchConfig,
+    getImportState,
+    computeMatchesForRows,
+    canReplaceInTransformed,
+    transformedRows
+  ])
 
   const correlationDisplayIndices = useMemo(() => {
     if (!correlationMatrix || !Array.isArray(correlationMatrix.columns) || correlationMatrix.columns.length === 0) {
@@ -1294,6 +1432,103 @@ export default function CsvWorkbench({
     }, 0)
   }, [onImportStateChange, getImportState])
 
+  const handleOpenFindReplace = useCallback(() => {
+    if (!canOpenFindReplace) {
+      return
+    }
+    setIsFindReplaceOpen(true)
+  }, [canOpenFindReplace])
+
+  const handleFindReplaceConfirm = useCallback(
+    ({ scope, replacement }) => {
+      if (!activeSearchConfig?.isActive) {
+        return { applied: false, reason: 'Suchkonfiguration ist inaktiv.' }
+      }
+
+      const targetScope = scope === 'transformed' && canReplaceInTransformed ? 'transformed' : 'raw'
+      const scopeMatches =
+        targetScope === 'transformed' ? findReplaceData.transformed.matches : findReplaceData.raw.matches
+
+      if (!Array.isArray(scopeMatches) || scopeMatches.length === 0) {
+        return { applied: false, reason: 'Keine Treffer im ausgewählten Pfad.' }
+      }
+
+      const state = getImportState()
+      const rawRows = Array.isArray(state?.rows) ? state.rows : []
+      if (rawRows.length === 0) {
+        return { applied: false, reason: 'Keine Datenzeilen vorhanden.' }
+      }
+
+      const updates = []
+      const previousValues = []
+
+      scopeMatches.forEach((match) => {
+        const { rowIndex, columnKey } = match
+        if (rowIndex < 0 || rowIndex >= rawRows.length) {
+          return
+        }
+        const formattedCurrent =
+          match.formattedValue === null || match.formattedValue === undefined
+            ? ''
+            : typeof match.formattedValue === 'string'
+              ? match.formattedValue
+              : String(match.formattedValue)
+        const nextValue = applyReplacementToText(formattedCurrent, activeSearchConfig, replacement)
+        if (nextValue === formattedCurrent) {
+          return
+        }
+
+        const originalValue = rawRows[rowIndex]?.[columnKey]
+        const normalizedNext = typeof nextValue === 'string' ? nextValue : String(nextValue)
+        const trimmedNext = normalizedNext.trim()
+
+        if (typeof originalValue === 'number' && trimmedNext !== '') {
+          const numericCandidate = Number(normalizedNext)
+          if (Number.isFinite(numericCandidate)) {
+            updates.push({ rowIndex, columnKey, value: numericCandidate })
+            previousValues.push({ rowIndex, columnKey, previousValue: originalValue })
+            return
+          }
+        }
+
+        updates.push({ rowIndex, columnKey, value: normalizedNext })
+        previousValues.push({ rowIndex, columnKey, previousValue: originalValue })
+      })
+
+      if (updates.length === 0) {
+        return { applied: false, reason: 'Keine ersetzbaren Werte gefunden.' }
+      }
+
+      updateCell({ type: 'set', updates })
+      findReplaceHistoryRef.current = [
+        ...findReplaceHistoryRef.current,
+        {
+          type: 'bulkReplace',
+          timestamp: Date.now(),
+          scope: targetScope,
+          searchQuery,
+          searchMode,
+          searchColumns,
+          replacement,
+          updates,
+          previousValues
+        }
+      ]
+      setIsFindReplaceOpen(false)
+      return { applied: true, updatedCells: updates.length }
+    },
+    [
+      activeSearchConfig,
+      canReplaceInTransformed,
+      findReplaceData,
+      getImportState,
+      searchColumns,
+      searchMode,
+      searchQuery,
+      updateCell
+    ]
+  )
+
   const parseFile = useCallback(
     async (file) => {
       if (!file) return
@@ -2074,7 +2309,27 @@ export default function CsvWorkbench({
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <CsvFindReplaceModal
+        isOpen={isFindReplaceOpen}
+        onClose={() => setIsFindReplaceOpen(false)}
+        onConfirm={handleFindReplaceConfirm}
+        searchQuery={searchQuery}
+        searchMode={searchMode}
+        onSearchModeChange={handleSearchModeChange}
+        searchColumns={searchColumns}
+        onToggleColumn={handleSearchColumnToggle}
+        onResetColumns={handleSearchColumnsReset}
+        availableColumns={availableColumnsForModal}
+        searchConfig={activeSearchConfig}
+        rawMatches={findReplaceData.raw.matches}
+        transformedMatches={findReplaceData.transformed.matches}
+        totalRawMatches={findReplaceData.raw.total}
+        totalTransformedMatches={findReplaceData.transformed.total}
+        canReplaceInTransformed={canReplaceInTransformed}
+        transformedScopeDisabledReason={transformedScopeDisabledReason}
+      />
+      <div className="space-y-6">
       <div className="rounded-xl border border-gray-700 bg-dark-secondary shadow-lg">
         <div className="flex flex-col gap-2 border-b border-gray-700 px-6 py-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -2606,6 +2861,18 @@ export default function CsvWorkbench({
                             />
                             <span className="pointer-events-none absolute left-2 top-1.5 text-dark-textGray/80">🔍</span>
                           </div>
+                          <button
+                            type="button"
+                            onClick={handleOpenFindReplace}
+                            disabled={!canOpenFindReplace}
+                            className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                              canOpenFindReplace
+                                ? 'border-dark-accent1/40 text-dark-accent1 hover:bg-dark-accent1/10'
+                                : 'cursor-not-allowed border-gray-700 text-dark-textGray'
+                            }`}
+                          >
+                            <span>Ersetzen…</span>
+                          </button>
                         </div>
                         {searchError && (
                           <p className="text-[11px] text-red-300">Regex-Fehler: {searchError}</p>
@@ -4293,6 +4560,7 @@ export default function CsvWorkbench({
         </div>
       </div>
     </div>
+    </>
   )
 }
 

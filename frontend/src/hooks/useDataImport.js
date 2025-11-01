@@ -38,6 +38,129 @@ const defaultSortConfig = []
 const MAX_COLUMN_SAMPLES = 5
 const TEXT_FREQUENCY_TRACK_LIMIT = 50
 const NUMERIC_OUTLIER_SIGMA = 3
+const MIN_COLUMN_WIDTH = 60
+
+const createColumnDisplay = (index = 0) => ({
+  order: index,
+  width: null,
+  isVisible: true,
+  pinned: null
+})
+
+const normalizeColumnDisplay = (column, index = 0) => {
+  const display = column?.display || {}
+  const normalized = {
+    order: typeof display.order === 'number' ? display.order : index,
+    width:
+      typeof display.width === 'number' && Number.isFinite(display.width)
+        ? Math.max(MIN_COLUMN_WIDTH, display.width)
+        : null,
+    isVisible: display.isVisible !== false,
+    pinned: display.pinned === 'left' || display.pinned === 'right' ? display.pinned : null
+  }
+  return { ...column, display: normalized }
+}
+
+const normalizeColumnsState = (columns) => {
+  if (!Array.isArray(columns)) {
+    return []
+  }
+
+  const normalized = columns.map((column, index) => normalizeColumnDisplay(column, index))
+  normalized.sort((a, b) => {
+    const orderA = typeof a.display?.order === 'number' ? a.display.order : 0
+    const orderB = typeof b.display?.order === 'number' ? b.display.order : 0
+    if (orderA === orderB) {
+      return a.key.localeCompare(b.key)
+    }
+    return orderA - orderB
+  })
+
+  let resequenced = false
+  const result = normalized.map((column, index) => {
+    if (column.display.order !== index) {
+      resequenced = true
+      return { ...column, display: { ...column.display, order: index } }
+    }
+    return column
+  })
+
+  return resequenced ? result : normalized
+}
+
+const mergeColumnsWithDisplay = (nextColumns, previousColumns) => {
+  const previousMap = new Map()
+  if (Array.isArray(previousColumns)) {
+    previousColumns.forEach((column, index) => {
+      const normalized = normalizeColumnDisplay(column, index)
+      previousMap.set(column.key, normalized.display)
+    })
+  }
+
+  const merged = Array.isArray(nextColumns)
+    ? nextColumns.map((column, index) => {
+        const previousDisplay = previousMap.get(column.key)
+        if (previousDisplay) {
+          return normalizeColumnDisplay({ ...column, display: previousDisplay }, previousDisplay.order)
+        }
+        return normalizeColumnDisplay({ ...column, display: createColumnDisplay(index) }, index)
+      })
+    : []
+
+  return normalizeColumnsState(merged)
+}
+
+const cleanupRowDisplaySource = (source, limit) => {
+  if (!source || typeof source !== 'object') {
+    return {}
+  }
+  const result = {}
+  Object.entries(source).forEach(([rawKey, value]) => {
+    const index = Number(rawKey)
+    if (!Number.isInteger(index) || index < 0 || (typeof limit === 'number' && index >= limit)) {
+      return
+    }
+    const hidden = value?.hidden === true
+    const pinned = value?.pinned === true
+    const normalized = {
+      hidden: hidden && !pinned,
+      pinned
+    }
+    if (!normalized.hidden && !normalized.pinned) {
+      return
+    }
+    result[index] = normalized
+  })
+  return result
+}
+
+const normalizeRowDisplayState = (value) => {
+  if (!value || typeof value !== 'object') {
+    return { raw: {}, transformed: {} }
+  }
+  const raw = cleanupRowDisplaySource(value.raw, undefined)
+  const transformed = cleanupRowDisplaySource(value.transformed, undefined)
+  return { raw, transformed }
+}
+
+const rowDisplaySourcesEqual = (a, b) => {
+  const keysA = Object.keys(a || {})
+  const keysB = Object.keys(b || {})
+  if (keysA.length !== keysB.length) {
+    return false
+  }
+  for (const key of keysA) {
+    if (!Object.prototype.hasOwnProperty.call(b || {}, key)) {
+      return false
+    }
+    const entryA = a[key]
+    const entryB = b[key]
+    if (!entryB || entryA.hidden !== entryB.hidden || entryA.pinned !== entryB.pinned) {
+      return false
+    }
+  }
+  return true
+}
 
 const normalizeSortConfig = (value) => {
   if (!value) {
@@ -1912,6 +2035,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [fileName, setFileName] = useState('')
   const [rows, setRows] = useState([])
   const [columns, setColumns] = useState([])
+  const [rowDisplay, setRowDisplay] = useState(() => ({ raw: {}, transformed: {} }))
   const [mapping, setMapping] = useState(defaultMapping)
   const [transformations, setTransformations] = useState(() => createDefaultTransformations())
   const [previewLimit, setPreviewLimit] = useState(5)
@@ -1980,7 +2104,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
 
     setFileName(initialData.fileName || '')
     setRows(initialData.rows || [])
-    setColumns(initialData.columns || [])
+    setColumns(normalizeColumnsState(initialData.columns || []))
+    setRowDisplay(normalizeRowDisplayState(initialData.rowDisplay))
     setMapping(initialData.mapping || defaultMapping)
     setTransformations(initialData.transformations || createDefaultTransformations())
     setPreviewLimit(initialData.previewLimit ?? 5)
@@ -2021,6 +2146,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setFileName('')
     setRows([])
     setColumns([])
+    setRowDisplay({ raw: {}, transformed: {} })
     setMapping(defaultMapping)
     setTransformations(createDefaultTransformations())
     setPreviewLimit(5)
@@ -2059,7 +2185,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         const cleaned = cleanRows(parsedRows)
         setRows(cleaned)
         const analyzed = analyzeColumns(cleaned)
-        setColumns(analyzed)
+        setColumns(normalizeColumnsState(analyzed))
+        setRowDisplay({ raw: {}, transformed: {} })
         setFileName(file.name)
         setAnalysisWarnings(summarizeColumnWarnings(analyzed))
         setTransformations(createDefaultTransformations())
@@ -2112,6 +2239,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         console.error('Fehler beim Lesen der Datei:', error)
         setRows([])
         setColumns([])
+        setRowDisplay({ raw: {}, transformed: {} })
         setMapping(defaultMapping)
         setTransformations(createDefaultTransformations())
         setAnalysisWarnings([])
@@ -2147,6 +2275,177 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     })
     setValidationErrors([])
   }, [])
+
+  const reorderColumns = useCallback((orderedKeys) => {
+    if (!Array.isArray(orderedKeys) || orderedKeys.length === 0) {
+      return
+    }
+    setColumns((prev) => {
+      if (!prev || prev.length === 0) {
+        return prev
+      }
+      const existingKeys = prev.map((column) => column.key)
+      const seen = new Set()
+      const combined = []
+      orderedKeys.forEach((key) => {
+        if (existingKeys.includes(key) && !seen.has(key)) {
+          combined.push(key)
+          seen.add(key)
+        }
+      })
+      existingKeys.forEach((key) => {
+        if (!seen.has(key)) {
+          combined.push(key)
+          seen.add(key)
+        }
+      })
+      const orderMap = new Map(combined.map((key, index) => [key, index]))
+      let changed = false
+      const updated = prev.map((column) => {
+        const desiredOrder = orderMap.get(column.key)
+        if (desiredOrder === undefined || column.display.order === desiredOrder) {
+          return column
+        }
+        changed = true
+        return { ...column, display: { ...column.display, order: desiredOrder } }
+      })
+      if (!changed) {
+        return prev
+      }
+      const sorted = [...updated].sort((a, b) => a.display.order - b.display.order)
+      let resequence = false
+      const resequenced = sorted.map((column, index) => {
+        if (column.display.order !== index) {
+          resequence = true
+          return { ...column, display: { ...column.display, order: index } }
+        }
+        return column
+      })
+      return resequence ? resequenced : sorted
+    })
+  }, [])
+
+  const setColumnWidth = useCallback((columnKey, width) => {
+    setColumns((prev) => {
+      if (!prev || prev.length === 0) {
+        return prev
+      }
+      const normalizedWidth =
+        typeof width === 'number' && Number.isFinite(width)
+          ? Math.max(MIN_COLUMN_WIDTH, Math.round(width))
+          : null
+      let changed = false
+      const updated = prev.map((column) => {
+        if (column.key !== columnKey) {
+          return column
+        }
+        if (column.display.width === normalizedWidth) {
+          return column
+        }
+        changed = true
+        return { ...column, display: { ...column.display, width: normalizedWidth } }
+      })
+      return changed ? updated : prev
+    })
+  }, [])
+
+  const setColumnVisibility = useCallback((columnKey, isVisible) => {
+    setColumns((prev) => {
+      if (!prev || prev.length === 0) {
+        return prev
+      }
+      const nextVisible = isVisible !== false
+      let changed = false
+      const updated = prev.map((column) => {
+        if (column.key !== columnKey) {
+          return column
+        }
+        if (column.display.isVisible === nextVisible) {
+          return column
+        }
+        changed = true
+        return { ...column, display: { ...column.display, isVisible: nextVisible } }
+      })
+      return changed ? updated : prev
+    })
+  }, [])
+
+  const setColumnPinned = useCallback((columnKey, pinned) => {
+    setColumns((prev) => {
+      if (!prev || prev.length === 0) {
+        return prev
+      }
+      const normalizedPinned = pinned === 'left' || pinned === 'right' ? pinned : null
+      let changed = false
+      const updated = prev.map((column) => {
+        if (column.key !== columnKey) {
+          return column
+        }
+        if (column.display.pinned === normalizedPinned) {
+          return column
+        }
+        changed = true
+        return { ...column, display: { ...column.display, pinned: normalizedPinned } }
+      })
+      return changed ? updated : prev
+    })
+  }, [])
+
+  const updateRowState = useCallback((source, rowIndex, updates) => {
+    const sourceKey = source === 'transformed' ? 'transformed' : 'raw'
+    if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+      return
+    }
+    setRowDisplay((prev) => {
+      const sourceState = prev[sourceKey] || {}
+      const current = sourceState[rowIndex] || { hidden: false, pinned: false }
+      const next = { ...current, ...updates }
+      if (next.pinned) {
+        next.hidden = false
+      } else {
+        next.hidden = next.hidden === true
+      }
+      next.pinned = next.pinned === true
+
+      if (!next.hidden && !next.pinned) {
+        if (!sourceState[rowIndex]) {
+          return prev
+        }
+        const nextSource = { ...sourceState }
+        delete nextSource[rowIndex]
+        if (Object.keys(nextSource).length === Object.keys(sourceState).length) {
+          return prev
+        }
+        return { ...prev, [sourceKey]: nextSource }
+      }
+
+      if (current.hidden === next.hidden && current.pinned === next.pinned) {
+        return prev
+      }
+
+      return {
+        ...prev,
+        [sourceKey]: {
+          ...sourceState,
+          [rowIndex]: next
+        }
+      }
+    })
+  }, [])
+
+  const setRowHidden = useCallback(
+    (source, rowIndex, hidden) => {
+      updateRowState(source, rowIndex, { hidden })
+    },
+    [updateRowState]
+  )
+
+  const setRowPinned = useCallback(
+    (source, rowIndex, pinned) => {
+      updateRowState(source, rowIndex, { pinned })
+    },
+    [updateRowState]
+  )
 
   const normalizeUpdateInput = useCallback((input, fallbackColumnKey, fallbackValue) => {
     if (typeof input === 'number') {
@@ -2378,7 +2677,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         })
 
         const analyzed = analyzeColumns(nextRows)
-        setColumns(analyzed)
+        setColumns((prevColumns) => mergeColumnsWithDisplay(analyzed, prevColumns))
         setAnalysisWarnings(summarizeColumnWarnings(analyzed))
         return nextRows
       })
@@ -2427,8 +2726,16 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   }, [mapping.label, mapping.valueColumns])
 
   const totalRows = rows.length
+  const rowDisplayRaw = rowDisplay.raw || {}
+  const rowDisplayTransformed = rowDisplay.transformed || {}
 
-  const baseEntries = useMemo(() => rows.map((row, index) => ({ row, index })), [rows])
+  const baseEntries = useMemo(
+    () =>
+      rows
+        .map((row, index) => ({ row, index }))
+        .filter((entry) => !(rowDisplayRaw[entry.index]?.hidden)),
+    [rows, rowDisplayRaw]
+  )
   const filteredEntries = useMemo(
     () => applySearchToEntries(baseEntries, searchConfig),
     [baseEntries, searchConfig]
@@ -2450,8 +2757,11 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const transformedRows = transformationSummary.rows
   const transformationWarnings = transformationSummary.warnings
   const transformedEntries = useMemo(
-    () => transformedRows.map((row, index) => ({ row, index })),
-    [transformedRows]
+    () =>
+      transformedRows
+        .map((row, index) => ({ row, index }))
+        .filter((entry) => !(rowDisplayTransformed[entry.index]?.hidden)),
+    [transformedRows, rowDisplayTransformed]
   )
   const filteredTransformedEntries = useMemo(
     () => applySearchToEntries(transformedEntries, searchConfig),
@@ -2468,6 +2778,19 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         : sortedTransformedEntries.slice(0, Number(previewLimit) || 5),
     [sortedTransformedEntries, previewLimit]
   )
+
+  useEffect(() => {
+    setRowDisplay((prev) => {
+      const cleanedRaw = cleanupRowDisplaySource(prev.raw, rows.length)
+      const cleanedTransformed = cleanupRowDisplaySource(prev.transformed, transformedRows.length)
+      const rawUnchanged = rowDisplaySourcesEqual(cleanedRaw, prev.raw || {})
+      const transformedUnchanged = rowDisplaySourcesEqual(cleanedTransformed, prev.transformed || {})
+      if (rawUnchanged && transformedUnchanged) {
+        return prev
+      }
+      return { raw: cleanedRaw, transformed: cleanedTransformed }
+    })
+  }, [rows.length, transformedRows.length])
   const transformedPreviewRows = useMemo(
     () => transformedPreviewEntries.map((entry) => entry.row),
     [transformedPreviewEntries]
@@ -2741,9 +3064,10 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       searchQuery,
       searchMode,
       searchColumns,
-      sortConfig: normalizeSortConfig(sortConfig)
+      sortConfig: normalizeSortConfig(sortConfig),
+      rowDisplay
     }
-  }, [fileName, rows, columns, mapping, transformations, previewLimit, searchQuery, searchMode, searchColumns, sortConfig])
+  }, [fileName, rows, columns, mapping, transformations, previewLimit, searchQuery, searchMode, searchColumns, sortConfig, rowDisplay])
 
   return {
     fileName,
@@ -2753,6 +3077,13 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     transformations,
     updateTransformations,
     toggleValueColumn,
+    reorderColumns,
+    setColumnWidth,
+    setColumnVisibility,
+    setColumnPinned,
+    rowDisplay,
+    setRowHidden,
+    setRowPinned,
     updateCell,
     parseFile,
     reset,

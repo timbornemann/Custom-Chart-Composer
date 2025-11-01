@@ -266,18 +266,163 @@ const toDateTime = (value) => {
   return null
 }
 
-const normalizeSearchText = (value) => {
-  if (value === null || value === undefined) return ''
-  if (typeof value === 'string') return value.toLowerCase()
-  if (typeof value === 'number') return String(value)
-  if (value instanceof Date) return value.toISOString().toLowerCase()
-  return String(value).toLowerCase()
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const normalizeSearchColumns = (value) => {
+  if (!value) return []
+  const source = Array.isArray(value) ? value : [value]
+  const seen = new Set()
+  const result = []
+  source.forEach((entry) => {
+    if (typeof entry !== 'string') return
+    const trimmed = entry.trim()
+    if (!trimmed || seen.has(trimmed)) return
+    seen.add(trimmed)
+    result.push(trimmed)
+  })
+  return result
 }
 
-const rowMatchesQuery = (row, query) => {
-  const normalizedQuery = query.trim().toLowerCase()
-  if (!normalizedQuery) return true
-  return Object.values(row).some((cell) => normalizeSearchText(cell).includes(normalizedQuery))
+const arraysEqual = (a, b) => {
+  if (a === b) return true
+  if (!Array.isArray(a) || !Array.isArray(b)) return false
+  if (a.length !== b.length) return false
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) {
+      return false
+    }
+  }
+  return true
+}
+
+const MAX_MATCHES_PER_CELL = 50
+
+const createSearchConfig = ({ query, mode, columns }) => {
+  const trimmedQuery = typeof query === 'string' ? query.trim() : ''
+  const normalizedMode = mode === 'regex' || mode === 'whole' ? mode : 'normal'
+  const normalizedColumns = Array.isArray(columns)
+    ? columns.filter((key) => typeof key === 'string' && key.trim())
+    : []
+  const uniqueColumns = normalizedColumns.length > 0 ? Array.from(new Set(normalizedColumns)) : []
+  const baseConfig = {
+    mode: normalizedMode,
+    query: trimmedQuery,
+    columns: uniqueColumns
+  }
+
+  if (!trimmedQuery) {
+    return { ...baseConfig, isActive: false }
+  }
+
+  if (normalizedMode === 'regex') {
+    try {
+      // Compile once to validate pattern – actual matching creates a fresh RegExp each time
+      new RegExp(trimmedQuery, 'giu')
+      return {
+        ...baseConfig,
+        isActive: true,
+        regexSource: trimmedQuery,
+        regexFlags: 'giu'
+      }
+    } catch (error) {
+      return {
+        ...baseConfig,
+        isActive: false,
+        error: error instanceof Error ? error.message : 'Ungültiger regulärer Ausdruck.'
+      }
+    }
+  }
+
+  if (normalizedMode === 'whole') {
+    const escapedQuery = escapeRegExp(trimmedQuery)
+    return {
+      ...baseConfig,
+      isActive: true,
+      regexSource: `\\b${escapedQuery}\\b`,
+      regexFlags: 'giu',
+      lowerQuery: trimmedQuery.toLowerCase(),
+      queryLength: trimmedQuery.length
+    }
+  }
+
+  return {
+    ...baseConfig,
+    isActive: true,
+    mode: 'normal',
+    lowerQuery: trimmedQuery.toLowerCase(),
+    queryLength: trimmedQuery.length
+  }
+}
+
+const getCellMatchPositions = (value, searchConfig) => {
+  if (!searchConfig?.isActive) {
+    return []
+  }
+
+  const raw = value === null || value === undefined ? '' : typeof value === 'string' ? value.trim() : String(value)
+  if (!raw) {
+    return []
+  }
+
+  const matches = []
+
+  if (searchConfig.mode === 'normal') {
+    const lowerText = raw.toLowerCase()
+    const query = searchConfig.lowerQuery
+    const length = searchConfig.queryLength || query.length
+    if (!query || length === 0) {
+      return []
+    }
+    let index = lowerText.indexOf(query)
+    while (index !== -1 && matches.length < MAX_MATCHES_PER_CELL) {
+      matches.push({ start: index, end: index + length })
+      index = lowerText.indexOf(query, index + length)
+    }
+    return matches
+  }
+
+  if (!searchConfig.regexSource) {
+    return []
+  }
+
+  const regex = new RegExp(searchConfig.regexSource, searchConfig.regexFlags || 'giu')
+  let match
+  while ((match = regex.exec(raw)) !== null && matches.length < MAX_MATCHES_PER_CELL) {
+    const text = match[0] || ''
+    if (!text) {
+      // Prevent infinite loops for zero-length matches
+      if (regex.lastIndex === match.index) {
+        regex.lastIndex += 1
+      }
+      continue
+    }
+    matches.push({ start: match.index, end: match.index + text.length })
+  }
+
+  return matches
+}
+
+const rowMatchesQuery = (row, searchConfig) => {
+  if (!searchConfig?.isActive) {
+    return { isMatch: true, matchesByColumn: {} }
+  }
+
+  const matchesByColumn = {}
+  const columnsToCheck = searchConfig.columns && searchConfig.columns.length > 0
+    ? searchConfig.columns
+    : Object.keys(row)
+
+  for (const key of columnsToCheck) {
+    if (!Object.prototype.hasOwnProperty.call(row, key)) {
+      continue
+    }
+    const positions = getCellMatchPositions(row[key], searchConfig)
+    if (positions.length > 0) {
+      matchesByColumn[key] = positions
+    }
+  }
+
+  return { isMatch: Object.keys(matchesByColumn).length > 0, matchesByColumn }
 }
 
 const getColumnType = (columns, key) => {
@@ -313,11 +458,20 @@ const compareCellValues = (aValue, bValue, type) => {
   return aText.localeCompare(bText)
 }
 
-const applySearchToEntries = (entries, query) => {
-  if (!query || !query.trim()) {
+const applySearchToEntries = (entries, searchConfig) => {
+  if (!searchConfig?.isActive) {
     return entries
   }
-  return entries.filter((entry) => rowMatchesQuery(entry.row, query))
+
+  const filtered = []
+  for (const entry of entries) {
+    const matchResult = rowMatchesQuery(entry.row, searchConfig)
+    if (!matchResult.isMatch) {
+      continue
+    }
+    filtered.push({ ...entry, matchInfo: matchResult.matchesByColumn })
+  }
+  return filtered
 }
 
 const applySortToEntries = (entries, sortConfig, columns) => {
@@ -1599,7 +1753,30 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [transformations, setTransformations] = useState(() => createDefaultTransformations())
   const [previewLimit, setPreviewLimit] = useState(5)
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchModeState, setSearchModeState] = useState('normal')
+  const [searchColumnsState, setSearchColumnsState] = useState([])
   const [sortConfig, rawSetSortConfig] = useState(defaultSortConfig)
+  const searchMode = searchModeState
+  const setSearchMode = useCallback((value) => {
+    setSearchModeState((prev) => {
+      const nextValue = value === 'regex' || value === 'whole' ? value : 'normal'
+      if (prev === nextValue) {
+        return prev
+      }
+      return nextValue
+    })
+  }, [])
+  const searchColumns = searchColumnsState
+  const setSearchColumns = useCallback((value) => {
+    setSearchColumnsState((prev) => {
+      const nextValue = typeof value === 'function' ? value(prev) : value
+      const normalized = normalizeSearchColumns(nextValue)
+      if (arraysEqual(prev, normalized)) {
+        return prev
+      }
+      return normalized
+    })
+  }, [])
   const setSortConfig = useCallback((value) => {
     rawSetSortConfig((prev) => {
       const base = normalizeSortConfig(prev)
@@ -1613,6 +1790,12 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [analysisWarnings, setAnalysisWarnings] = useState([])
   const [resultWarnings, setResultWarnings] = useState([])
   const initialDataSignatureRef = useRef(null)
+
+  const searchConfig = useMemo(
+    () => createSearchConfig({ query: searchQuery, mode: searchMode, columns: searchColumns }),
+    [searchQuery, searchMode, searchColumns]
+  )
+  const searchError = searchConfig.error || ''
 
   // Load initial data when provided
   useEffect(() => {
@@ -1639,6 +1822,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setTransformations(initialData.transformations || createDefaultTransformations())
     setPreviewLimit(initialData.previewLimit ?? 5)
     setSearchQuery(initialData.searchQuery || '')
+    setSearchMode(initialData.searchMode || 'normal')
+    setSearchColumns(initialData.searchColumns || [])
     setSortConfig(initialData.sortConfig)
 
     if (initialData.columns && initialData.columns.length > 0) {
@@ -1652,6 +1837,20 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     }
   }, [initialData])
 
+  useEffect(() => {
+    setSearchColumnsState((prev) => {
+      if (!prev || prev.length === 0) {
+        return prev
+      }
+      const available = new Set(columns.map((column) => column.key))
+      const filtered = prev.filter((key) => available.has(key))
+      if (arraysEqual(prev, filtered)) {
+        return prev
+      }
+      return filtered
+    })
+  }, [columns])
+
   const reset = useCallback(() => {
     setFileName('')
     setRows([])
@@ -1660,6 +1859,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setTransformations(createDefaultTransformations())
     setPreviewLimit(5)
     setSearchQuery('')
+    setSearchMode('normal')
+    setSearchColumns([])
     setSortConfig([])
     setIsLoading(false)
     setParseError('')
@@ -1838,8 +2039,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
 
   const baseEntries = useMemo(() => rows.map((row, index) => ({ row, index })), [rows])
   const filteredEntries = useMemo(
-    () => applySearchToEntries(baseEntries, searchQuery),
-    [baseEntries, searchQuery]
+    () => applySearchToEntries(baseEntries, searchConfig),
+    [baseEntries, searchConfig]
   )
   const sortedEntries = useMemo(
     () => applySortToEntries(filteredEntries, sortConfig, columns),
@@ -1862,8 +2063,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     [transformedRows]
   )
   const filteredTransformedEntries = useMemo(
-    () => applySearchToEntries(transformedEntries, searchQuery),
-    [transformedEntries, searchQuery]
+    () => applySearchToEntries(transformedEntries, searchConfig),
+    [transformedEntries, searchConfig]
   )
   const sortedTransformedEntries = useMemo(
     () => applySortToEntries(filteredTransformedEntries, sortConfig, columns),
@@ -2147,9 +2348,11 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       transformations,
       previewLimit,
       searchQuery,
+      searchMode,
+      searchColumns,
       sortConfig: normalizeSortConfig(sortConfig)
     }
-  }, [fileName, rows, columns, mapping, transformations, previewLimit, searchQuery, sortConfig])
+  }, [fileName, rows, columns, mapping, transformations, previewLimit, searchQuery, searchMode, searchColumns, sortConfig])
 
   return {
     fileName,
@@ -2183,6 +2386,11 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setPreviewLimit,
     searchQuery,
     setSearchQuery,
+    searchMode,
+    setSearchMode,
+    searchColumns,
+    setSearchColumns,
+    searchError,
     sortConfig,
     setSortConfig,
     getImportResult,

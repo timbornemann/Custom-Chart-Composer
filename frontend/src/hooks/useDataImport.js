@@ -35,6 +35,10 @@ const createDefaultTransformations = () => ({
 
 const defaultSortConfig = []
 
+const MAX_COLUMN_SAMPLES = 5
+const TEXT_FREQUENCY_TRACK_LIMIT = 50
+const NUMERIC_OUTLIER_SIGMA = 3
+
 const normalizeSortConfig = (value) => {
   if (!value) {
     return []
@@ -517,43 +521,195 @@ const analyzeColumns = (rows) => {
     })
   })
 
-  return columnOrder.map((key) => {
-    let emptyCount = 0
-    let numericCount = 0
-    let textCount = 0
+  const columnStats = new Map()
+  columnOrder.forEach((key) => {
+    columnStats.set(key, {
+      key,
+      emptyCount: 0,
+      filledCount: 0,
+      numericCount: 0,
+      textCount: 0,
+      samples: [],
+      numeric: {
+        count: 0,
+        sum: 0,
+        mean: 0,
+        m2: 0,
+        min: null,
+        max: null
+      },
+      textFrequencies: new Map()
+    })
+  })
 
-    rows.forEach((row) => {
+  rows.forEach((row) => {
+    columnOrder.forEach((key) => {
+      const stats = columnStats.get(key)
+      if (!stats) return
+
       const value = row?.[key]
+
+      if (stats.samples.length < MAX_COLUMN_SAMPLES) {
+        stats.samples.push(value)
+      }
+
       if (isEmptyValue(value)) {
-        emptyCount += 1
+        stats.emptyCount += 1
         return
       }
-      const numeric = toNumber(value)
-      if (numeric === null) {
-        textCount += 1
-      } else {
-        numericCount += 1
-      }
-    })
 
-    const filledCount = rows.length - emptyCount
+      stats.filledCount += 1
+
+      const numericValue = toNumber(value)
+      if (numericValue === null) {
+        stats.textCount += 1
+
+        const normalizedText = normalizeLabel(value)
+        if (normalizedText) {
+          const frequencies = stats.textFrequencies
+          const nextCount = (frequencies.get(normalizedText) || 0) + 1
+          frequencies.set(normalizedText, nextCount)
+
+          if (frequencies.size > TEXT_FREQUENCY_TRACK_LIMIT) {
+            let lowestKey = null
+            let lowestCount = Infinity
+            frequencies.forEach((count, currentKey) => {
+              if (count < lowestCount) {
+                lowestCount = count
+                lowestKey = currentKey
+              }
+            })
+            if (lowestKey !== null && lowestKey !== undefined) {
+              frequencies.delete(lowestKey)
+            }
+          }
+        }
+
+        return
+      }
+
+      stats.numericCount += 1
+
+      const numeric = stats.numeric
+      numeric.count += 1
+      numeric.sum += numericValue
+      if (numeric.min === null || numericValue < numeric.min) {
+        numeric.min = numericValue
+      }
+      if (numeric.max === null || numericValue > numeric.max) {
+        numeric.max = numericValue
+      }
+
+      const delta = numericValue - numeric.mean
+      numeric.mean += delta / numeric.count
+      const delta2 = numericValue - numeric.mean
+      numeric.m2 += delta * delta2
+    })
+  })
+
+  return columnOrder.map((key) => {
+    const stats = columnStats.get(key)
+    if (!stats) {
+      return {
+        key,
+        type: 'string',
+        emptyCount: 0,
+        filledCount: 0,
+        numericCount: 0,
+        textCount: 0,
+        samples: []
+      }
+    }
+
     let type = 'string'
-    if (numericCount > 0 && textCount === 0) {
+    if (stats.numericCount > 0 && stats.textCount === 0) {
       type = 'number'
-    } else if (numericCount === 0) {
+    } else if (stats.numericCount === 0) {
       type = 'string'
     } else {
-      type = numericCount >= textCount ? 'number' : 'string'
+      type = stats.numericCount >= stats.textCount ? 'number' : 'string'
+    }
+
+    let numericStatistics = null
+    if (stats.numeric.count > 0) {
+      const variance = stats.numeric.count > 1 ? stats.numeric.m2 / (stats.numeric.count - 1) : 0
+      const stdDev = variance > 0 ? Math.sqrt(variance) : 0
+      numericStatistics = {
+        count: stats.numeric.count,
+        sum: stats.numeric.sum,
+        min: stats.numeric.min,
+        max: stats.numeric.max,
+        mean: stats.numeric.mean,
+        variance,
+        stdDev
+      }
+    }
+
+    let textStatistics = null
+    if (stats.textCount > 0 && stats.textFrequencies.size > 0) {
+      const topValues = Array.from(stats.textFrequencies.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([value, count]) => ({
+          value,
+          count,
+          ratio: stats.textCount > 0 ? count / stats.textCount : 0
+        }))
+
+      textStatistics = {
+        topValues
+      }
+    }
+
+    const warnings = []
+
+    if (numericStatistics) {
+      const { stdDev, mean, max, min } = numericStatistics
+      if (stdDev > 0) {
+        const highThreshold = mean + NUMERIC_OUTLIER_SIGMA * stdDev
+        const lowThreshold = mean - NUMERIC_OUTLIER_SIGMA * stdDev
+        if (Number.isFinite(max) && max > highThreshold) {
+          warnings.push(`Spalte "${key}" enthält potenzielle Ausreißer mit sehr hohen Werten (max: ${max}).`)
+        }
+        if (Number.isFinite(min) && min < lowThreshold) {
+          warnings.push(`Spalte "${key}" enthält potenzielle Ausreißer mit sehr niedrigen Werten (min: ${min}).`)
+        }
+      }
+
+      if (
+        numericStatistics.count > 0 &&
+        numericStatistics.min !== null &&
+        numericStatistics.max !== null &&
+        numericStatistics.max === numericStatistics.min &&
+        stats.filledCount > 1
+      ) {
+        warnings.push(`Spalte "${key}" enthält nur einen Zahlenwert und bietet keine Varianz.`)
+      }
+    }
+
+    if (textStatistics?.topValues?.length > 0) {
+      const dominant = textStatistics.topValues[0]
+      if (dominant?.ratio >= 0.95 && stats.textCount >= 5) {
+        const dominantPercent = Math.round(dominant.ratio * 100)
+        warnings.push(
+          `Spalte "${key}" besteht zu ${dominantPercent}% aus dem Text "${dominant.value}".`
+        )
+      }
     }
 
     return {
       key,
       type,
-      emptyCount,
-      filledCount,
-      numericCount,
-      textCount,
-      samples: rows.slice(0, 5).map((row) => row?.[key])
+      emptyCount: stats.emptyCount,
+      filledCount: stats.filledCount,
+      numericCount: stats.numericCount,
+      textCount: stats.textCount,
+      samples: stats.samples,
+      statistics: {
+        numeric: numericStatistics,
+        text: textStatistics
+      },
+      warnings
     }
   })
 }
@@ -562,14 +718,21 @@ const summarizeColumnWarnings = (columns) => {
   const warnings = []
 
   columns.forEach((column) => {
-    if (column.filledCount === 0) {
+    const filledCount = column.filledCount ?? 0
+    const numericCount = column.numericCount ?? column.statistics?.numeric?.count ?? 0
+    const textCount = column.textCount ?? 0
+
+    if (filledCount === 0) {
       warnings.push(`Spalte "${column.key}" enthält keine Werte und wird ignoriert.`)
       return
     }
-    if (column.numericCount > 0 && column.textCount > 0) {
+    if (numericCount > 0 && textCount > 0) {
       warnings.push(
-        `Spalte "${column.key}" enthält ${column.textCount} Einträge, die keine gültigen Zahlen sind. Sie werden beim Import übersprungen.`
+        `Spalte "${column.key}" enthält ${textCount} Einträge, die keine gültigen Zahlen sind. Sie werden beim Import übersprungen.`
       )
+    }
+    if (Array.isArray(column.warnings)) {
+      column.warnings.filter(Boolean).forEach((warning) => warnings.push(warning))
     }
   })
 
@@ -1830,8 +1993,11 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       const analyzed = initialData.columns.map((col) => ({
         key: col.key,
         type: col.type || 'string',
-        filledCount: col.filledCount || 0,
-        emptyCount: col.emptyCount || 0
+        filledCount: col.filledCount ?? 0,
+        emptyCount: col.emptyCount ?? 0,
+        numericCount: col.numericCount ?? col.statistics?.numeric?.count ?? 0,
+        textCount: col.textCount ?? 0,
+        warnings: Array.isArray(col.warnings) ? col.warnings : []
       }))
       setAnalysisWarnings(summarizeColumnWarnings(analyzed))
     }

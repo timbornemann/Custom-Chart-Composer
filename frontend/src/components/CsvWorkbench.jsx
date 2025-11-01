@@ -16,6 +16,30 @@ const formatCellValue = (value) => {
 
 const MAX_HIGHLIGHT_SEGMENTS = 100
 
+const STAT_NUMBER_FORMAT = new Intl.NumberFormat('de-DE', {
+  maximumFractionDigits: 3,
+  minimumFractionDigits: 0
+})
+
+const STAT_PERCENT_FORMAT = new Intl.NumberFormat('de-DE', {
+  style: 'percent',
+  maximumFractionDigits: 1
+})
+
+const formatStatNumber = (value) => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '–'
+  }
+  return STAT_NUMBER_FORMAT.format(value)
+}
+
+const formatStatPercentage = (value) => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '–'
+  }
+  return STAT_PERCENT_FORMAT.format(value)
+}
+
 const renderHighlightedValue = (value, matches) => {
   const formatted = formatCellValue(value)
   const text = formatted === null || formatted === undefined ? '' : String(formatted)
@@ -53,6 +77,15 @@ const renderHighlightedValue = (value, matches) => {
   }
 
   return segments
+}
+
+const formatSamplePreview = (value) => {
+  const formatted = formatCellValue(value)
+  if (formatted === null || formatted === undefined) {
+    return '∅'
+  }
+  const asString = typeof formatted === 'string' ? formatted : String(formatted)
+  return asString.trim() === '' ? '∅' : formatted
 }
 
 const FILTER_OPERATORS = [
@@ -194,6 +227,7 @@ export default function CsvWorkbench({
   const [selectionState, setSelectionState] = useState({ anchor: null, focus: null })
   const [isSelecting, setIsSelecting] = useState(false)
   const pendingFocusRef = useRef(null)
+  const [profilingColumnKey, setProfilingColumnKey] = useState(null)
 
   const columnIndexMap = useMemo(() => {
     const map = new Map()
@@ -202,6 +236,42 @@ export default function CsvWorkbench({
     })
     return map
   }, [columns])
+
+  useEffect(() => {
+    if (columns.length === 0) {
+      if (profilingColumnKey !== null) {
+        setProfilingColumnKey(null)
+      }
+      return
+    }
+
+    const exists = columns.some((column) => column.key === profilingColumnKey)
+    if (!exists) {
+      setProfilingColumnKey(columns[0].key)
+    }
+  }, [columns, profilingColumnKey])
+
+  const profilingColumn = useMemo(
+    () => columns.find((column) => column.key === profilingColumnKey) || null,
+    [columns, profilingColumnKey]
+  )
+
+  const profilingFilledCount = profilingColumn?.filledCount ?? 0
+  const profilingEmptyCount = profilingColumn?.emptyCount ?? 0
+  const profilingNumericStats = profilingColumn?.statistics?.numeric ?? null
+  const profilingTextStats = profilingColumn?.statistics?.text ?? null
+  const hasNumericStats = Boolean(profilingNumericStats)
+  const hasTextFrequencies = Boolean(profilingTextStats?.topValues?.length)
+  const profilingTotalCount = profilingFilledCount + profilingEmptyCount
+  const profilingFilledRatio = profilingTotalCount > 0 ? profilingFilledCount / profilingTotalCount : null
+  const profilingNumericRatio =
+    profilingFilledCount > 0
+      ? (profilingColumn?.numericCount ?? 0) / profilingFilledCount
+      : null
+  const profilingTextRatio =
+    profilingFilledCount > 0
+      ? (profilingColumn?.textCount ?? 0) / profilingFilledCount
+      : null
 
   const focusCellElement = useCallback((rowIndex, columnKey) => {
     if (typeof document === 'undefined') return
@@ -1894,6 +1964,147 @@ export default function CsvWorkbench({
                           <p className="text-[11px] text-red-300">Regex-Fehler: {searchError}</p>
                         )}
                       </div>
+                      {profilingColumn && (
+                        <div className="mb-4 rounded-lg border border-gray-700 bg-dark-bg/40 p-3 text-[11px] text-dark-textLight">
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <h4 className="text-sm font-semibold text-dark-textLight">Spaltenprofil</h4>
+                            <select
+                              value={profilingColumnKey || ''}
+                              onChange={(event) => setProfilingColumnKey(event.target.value)}
+                              className="rounded-md border border-gray-700 bg-dark-bg px-2 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                            >
+                              {columns.map((column) => (
+                                <option key={column.key} value={column.key}>
+                                  {column.key}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div>
+                              <h5 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-dark-textGray">Allgemein</h5>
+                              <ul className="space-y-1">
+                                <li>
+                                  <span className="text-dark-textGray">Typ:</span>{' '}
+                                  <span className="text-dark-textLight">{profilingColumn.type === 'number' ? 'Zahl' : 'Text'}</span>
+                                </li>
+                                <li>
+                                  <span className="text-dark-textGray">Ausgefüllt:</span>{' '}
+                                  <span className="text-dark-textLight">
+                                    {profilingFilledCount} / {profilingTotalCount}{' '}
+                                    {profilingFilledRatio !== null && profilingTotalCount > 0 && (
+                                      <span className="text-dark-textGray">
+                                        ({formatStatPercentage(profilingFilledRatio)})
+                                      </span>
+                                    )}
+                                  </span>
+                                </li>
+                                <li>
+                                  <span className="text-dark-textGray">Zahlenwerte:</span>{' '}
+                                  <span className="text-dark-textLight">
+                                    {profilingColumn.numericCount ?? 0}
+                                    {profilingNumericRatio !== null && profilingFilledCount > 0 && (
+                                      <span className="text-dark-textGray">
+                                        {' '}
+                                        ({formatStatPercentage(profilingNumericRatio)})
+                                      </span>
+                                    )}
+                                  </span>
+                                </li>
+                                <li>
+                                  <span className="text-dark-textGray">Textwerte:</span>{' '}
+                                  <span className="text-dark-textLight">
+                                    {profilingColumn.textCount ?? 0}
+                                    {profilingTextRatio !== null && profilingFilledCount > 0 && (
+                                      <span className="text-dark-textGray">
+                                        {' '}
+                                        ({formatStatPercentage(profilingTextRatio)})
+                                      </span>
+                                    )}
+                                  </span>
+                                </li>
+                              </ul>
+                              {profilingColumn.samples?.length > 0 && (
+                                <div className="mt-2">
+                                  <h6 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-dark-textGray">Beispiele</h6>
+                                  <div className="flex flex-wrap gap-1">
+                                    {profilingColumn.samples.slice(0, 5).map((sample, index) => (
+                                      <span
+                                        key={`${profilingColumn.key}-sample-${index}`}
+                                        className="rounded border border-gray-700/60 bg-dark-secondary/40 px-1.5 py-0.5 text-[10px] text-dark-textLight/90"
+                                      >
+                                        {formatSamplePreview(sample)}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              {hasNumericStats && (
+                                <div>
+                                  <h5 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-dark-textGray">Numerische Kennzahlen</h5>
+                                  <ul className="space-y-1">
+                                    <li>
+                                      <span className="text-dark-textGray">Minimum:</span>{' '}
+                                      <span className="text-dark-textLight">{formatStatNumber(profilingNumericStats.min)}</span>
+                                    </li>
+                                    <li>
+                                      <span className="text-dark-textGray">Maximum:</span>{' '}
+                                      <span className="text-dark-textLight">{formatStatNumber(profilingNumericStats.max)}</span>
+                                    </li>
+                                    <li>
+                                      <span className="text-dark-textGray">Durchschnitt:</span>{' '}
+                                      <span className="text-dark-textLight">{formatStatNumber(profilingNumericStats.mean)}</span>
+                                    </li>
+                                    <li>
+                                      <span className="text-dark-textGray">Summe:</span>{' '}
+                                      <span className="text-dark-textLight">{formatStatNumber(profilingNumericStats.sum)}</span>
+                                    </li>
+                                    <li>
+                                      <span className="text-dark-textGray">Std.-Abweichung:</span>{' '}
+                                      <span className="text-dark-textLight">{formatStatNumber(profilingNumericStats.stdDev)}</span>
+                                    </li>
+                                  </ul>
+                                </div>
+                              )}
+                              {hasTextFrequencies && (
+                                <div className={hasNumericStats ? 'mt-3' : ''}>
+                                  <h5 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-dark-textGray">Häufigste Texte</h5>
+                                  <ul className="space-y-1">
+                                    {profilingTextStats.topValues.map((entry) => (
+                                      <li key={`${profilingColumn.key}-text-${entry.value || 'empty'}`}>
+                                        <span className="text-dark-textLight">{entry.value || '∅ (leer)'}</span>{' '}
+                                        <span className="text-dark-textGray">
+                                          – {entry.count} ({formatStatPercentage(entry.ratio)})
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {!hasTextFrequencies && profilingColumn.textCount > 0 && (
+                                <p className={`${hasNumericStats ? 'mt-3' : ''} text-dark-textGray`}>
+                                  Keine dominanten Textwerte ermittelt.
+                                </p>
+                              )}
+                              {!hasNumericStats && !hasTextFrequencies && profilingFilledCount === 0 && (
+                                <p className="text-dark-textGray">Keine detaillierten Kennzahlen verfügbar.</p>
+                              )}
+                            </div>
+                          </div>
+                          {profilingColumn.warnings?.length > 0 && (
+                            <div className="mt-3 rounded border border-yellow-600/40 bg-yellow-900/20 p-2 text-[11px] text-yellow-100">
+                              <div className="mb-1 font-semibold uppercase tracking-wide text-yellow-200">Warnungen</div>
+                              <ul className="list-disc space-y-1 pl-4">
+                                {profilingColumn.warnings.map((warning, index) => (
+                                  <li key={`${profilingColumn.key}-warning-${index}`}>{warning}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {hasSelection && (
                         <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
                           <span className="rounded-md border border-dark-accent1/40 bg-dark-secondary/40 px-2 py-1 text-dark-textLight/80">

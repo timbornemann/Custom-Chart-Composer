@@ -14,6 +14,47 @@ const formatCellValue = (value) => {
   return String(value)
 }
 
+const MAX_HIGHLIGHT_SEGMENTS = 100
+
+const renderHighlightedValue = (value, matches) => {
+  const formatted = formatCellValue(value)
+  const text = formatted === null || formatted === undefined ? '' : String(formatted)
+  if (!matches || matches.length === 0 || !text) {
+    return text
+  }
+
+  const segments = []
+  let cursor = 0
+  const sortedMatches = [...matches].sort((a, b) => a.start - b.start)
+
+  for (let index = 0; index < sortedMatches.length && segments.length < MAX_HIGHLIGHT_SEGMENTS * 2; index += 1) {
+    const match = sortedMatches[index]
+    if (!match) continue
+    const start = Math.max(0, Math.min(match.start, text.length))
+    const end = Math.max(start, Math.min(match.end, text.length))
+    if (start > cursor) {
+      segments.push(text.slice(cursor, start))
+    }
+    if (end > start) {
+      segments.push(
+        <mark key={`highlight-${start}-${index}`} className="rounded bg-yellow-500/30 px-0.5 text-dark-textLight">
+          {text.slice(start, end)}
+        </mark>
+      )
+    }
+    cursor = end
+    if (cursor >= text.length) {
+      break
+    }
+  }
+
+  if (cursor < text.length) {
+    segments.push(text.slice(cursor))
+  }
+
+  return segments
+}
+
 const FILTER_OPERATORS = [
   // Text operators
   { value: 'equalsText', label: 'Text ist gleich' },
@@ -132,6 +173,11 @@ export default function CsvWorkbench({
     getImportState,
     searchQuery,
     setSearchQuery,
+    searchMode,
+    setSearchMode,
+    searchColumns,
+    setSearchColumns,
+    searchError,
     sortConfig,
     setSortConfig,
     previewEntries,
@@ -213,6 +259,32 @@ export default function CsvWorkbench({
     },
     [setSearchQuery]
   )
+
+  const handleSearchModeChange = useCallback(
+    (event) => {
+      setSearchMode(event.target.value)
+      schedulePersist()
+    },
+    [setSearchMode, schedulePersist]
+  )
+
+  const handleSearchColumnToggle = useCallback(
+    (columnKey, enabled) => {
+      setSearchColumns((previous) => {
+        if (enabled) {
+          return [...previous, columnKey]
+        }
+        return previous.filter((key) => key !== columnKey)
+      })
+      schedulePersist()
+    },
+    [setSearchColumns, schedulePersist]
+  )
+
+  const handleSearchColumnsReset = useCallback(() => {
+    setSearchColumns([])
+    schedulePersist()
+  }, [setSearchColumns, schedulePersist])
 
   const handleSortToggle = useCallback(
     (columnKey, event) => {
@@ -621,9 +693,19 @@ export default function CsvWorkbench({
     [sortConfig]
   )
 
+  const searchColumnSummary = useMemo(() => {
+    if (!searchColumns || searchColumns.length === 0) {
+      return 'Alle Spalten'
+    }
+    if (searchColumns.length === 1) {
+      return searchColumns[0]
+    }
+    return `${searchColumns.length} Spalten`
+  }, [searchColumns])
+
   const transformedColumns = useMemo(() => {
     const keys = []
-    
+
     // For coordinate charts, show longitude and latitude columns
     if (isCoordinate) {
       if (mapping.longitudeColumn) {
@@ -1366,17 +1448,75 @@ export default function CsvWorkbench({
                               <option value="all">alle</option>
                             </select>
                           </label>
-                          <div className="relative">
+                          <label className="flex items-center gap-1">
+                            <span>Modus:</span>
+                            <select
+                              value={searchMode}
+                              onChange={handleSearchModeChange}
+                              className="rounded-md border border-gray-700 bg-dark-bg px-1.5 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                            >
+                              <option value="normal">Normal</option>
+                              <option value="whole">Ganzwort</option>
+                              <option value="regex">Regex</option>
+                            </select>
+                          </label>
+                          <details className="relative">
+                            <summary className="flex cursor-pointer select-none items-center gap-1 rounded-md border border-gray-700 bg-dark-bg px-2 py-1 text-dark-textLight shadow-sm outline-none transition-colors hover:border-dark-accent1 focus:outline-none">
+                              <span>Spalten:</span>
+                              <span className="text-dark-textGray">{searchColumnSummary}</span>
+                            </summary>
+                            <div className="absolute right-0 z-20 mt-1 w-60 rounded-md border border-gray-700 bg-dark-bg p-3 text-dark-textLight shadow-xl">
+                              <div className="mb-2 flex items-center justify-between text-[11px] text-dark-textGray">
+                                <span>Suchbereich einschränken</span>
+                                <button
+                                  type="button"
+                                  onClick={handleSearchColumnsReset}
+                                  className="rounded border border-gray-700 px-1 py-0.5 text-[10px] text-dark-textLight transition-colors hover:border-dark-accent1"
+                                >
+                                  Alle
+                                </button>
+                              </div>
+                              <div className="max-h-48 overflow-y-auto pr-1">
+                                {columns.length === 0 ? (
+                                  <p className="text-[11px] text-dark-textGray">Keine Spalten verfügbar.</p>
+                                ) : (
+                                  columns.map((column) => {
+                                    const isSelected = searchColumns.includes(column.key)
+                                    return (
+                                      <label
+                                        key={column.key}
+                                        className="flex items-center gap-2 py-0.5 text-xs text-dark-textLight"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={(event) =>
+                                            handleSearchColumnToggle(column.key, event.target.checked)
+                                          }
+                                          className="h-3 w-3 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
+                                        />
+                                        <span className="truncate">{column.key}</span>
+                                      </label>
+                                    )
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          </details>
+                          <div className="relative flex-1 sm:flex-initial">
                             <input
                               type="text"
                               value={searchQuery}
                               onChange={handleSearchChange}
                               placeholder="Suchen …"
-                              className="rounded-md border border-gray-700 bg-dark-bg pl-7 pr-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                              className="w-full rounded-md border border-gray-700 bg-dark-bg py-1.5 pl-7 pr-2 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
                             />
                             <span className="pointer-events-none absolute left-2 top-1.5 text-dark-textGray/80">🔍</span>
                           </div>
                         </div>
+                        {searchError && (
+                          <p className="text-[11px] text-red-300">Regex-Fehler: {searchError}</p>
+                        )}
                       </div>
                       <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
                         <table className="min-w-full divide-y divide-gray-700 text-sm">
@@ -1418,6 +1558,11 @@ export default function CsvWorkbench({
                                 {columns.map((column) => {
                                   const isEditing =
                                     editingCell?.rowIndex === entry.index && editingCell.columnKey === column.key
+                                  const matches = entry.matchInfo?.[column.key]
+                                  const highlightedValue = renderHighlightedValue(entry.row[column.key], matches)
+                                  const hasContent = Array.isArray(highlightedValue)
+                                    ? highlightedValue.length > 0
+                                    : Boolean(highlightedValue)
                                   return (
                                     <td key={column.key} className="px-3 py-2 text-xs text-dark-textLight/90">
                                       {isEditing ? (
@@ -1446,7 +1591,9 @@ export default function CsvWorkbench({
                                           }}
                                           className="w-full text-left text-dark-textLight/90 hover:text-dark-textLight"
                                         >
-                                          {formatCellValue(entry.row[column.key]) || (
+                                          {hasContent ? (
+                                            highlightedValue
+                                          ) : (
                                             <span className="text-dark-textGray/60">–</span>
                                           )}
                                         </button>
@@ -2219,11 +2366,22 @@ export default function CsvWorkbench({
                             <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
                               {transformedPreviewEntries.map((entry) => (
                                 <tr key={entry.index}>
-                                  {transformedColumns.map((column) => (
-                                    <td key={column} className="px-3 py-2 text-xs text-dark-textLight/90">
-                                      {formatCellValue(entry.row[column]) || <span className="text-dark-textGray/60">–</span>}
-                                    </td>
-                                  ))}
+                                  {transformedColumns.map((column) => {
+                                    const matches = entry.matchInfo?.[column]
+                                    const highlightedValue = renderHighlightedValue(entry.row[column], matches)
+                                    const hasContent = Array.isArray(highlightedValue)
+                                      ? highlightedValue.length > 0
+                                      : Boolean(highlightedValue)
+                                    return (
+                                      <td key={column} className="px-3 py-2 text-xs text-dark-textLight/90">
+                                        {hasContent ? (
+                                          highlightedValue
+                                        ) : (
+                                          <span className="text-dark-textGray/60">–</span>
+                                        )}
+                                      </td>
+                                    )
+                                  })}
                                 </tr>
                               ))}
                             </tbody>

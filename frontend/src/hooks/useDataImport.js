@@ -41,6 +41,149 @@ const NUMERIC_OUTLIER_SIGMA = 3
 const MIN_COLUMN_WIDTH = 60
 const MAX_CORRELATION_SAMPLES = 2000
 const MAX_CORRELATION_COLUMNS = 30
+const DUPLICATE_KEY_SEPARATOR = '\u241F'
+const DUPLICATE_EMPTY_TOKEN = '__EMPTY__'
+
+const normalizeDuplicateValue = (value) => {
+  if (value === null || value === undefined) {
+    return { normalized: DUPLICATE_EMPTY_TOKEN, display: '∅', isEmpty: true }
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return { normalized: DUPLICATE_EMPTY_TOKEN, display: '∅', isEmpty: true }
+    }
+    const text = String(value)
+    return { normalized: text, display: text, isEmpty: false }
+  }
+  if (value instanceof Date) {
+    const time = value.getTime()
+    if (!Number.isFinite(time)) {
+      return { normalized: DUPLICATE_EMPTY_TOKEN, display: '∅', isEmpty: true }
+    }
+    const iso = value.toISOString()
+    return { normalized: iso, display: iso, isEmpty: false }
+  }
+  const text = String(value).trim()
+  if (!text) {
+    return { normalized: DUPLICATE_EMPTY_TOKEN, display: '∅', isEmpty: true }
+  }
+  return { normalized: text, display: text, isEmpty: false }
+}
+
+const createDuplicateSignature = (row, keyColumns) => {
+  if (!row || !Array.isArray(keyColumns) || keyColumns.length === 0) {
+    return null
+  }
+  const parts = keyColumns.map((columnKey) => {
+    const normalized = normalizeDuplicateValue(row[columnKey])
+    return { columnKey, ...normalized }
+  })
+  const signature = parts.map((part) => part.normalized).join(DUPLICATE_KEY_SEPARATOR)
+  return { signature, parts }
+}
+
+const computeDuplicateGroups = (rows, keyColumns) => {
+  const normalizedColumns = Array.isArray(keyColumns)
+    ? keyColumns
+        .map((key) => (key === null || key === undefined ? '' : String(key).trim()))
+        .filter(Boolean)
+    : []
+
+  if (!Array.isArray(rows) || rows.length === 0 || normalizedColumns.length === 0) {
+    return {
+      keyColumns: normalizedColumns,
+      groups: [],
+      flaggedIndices: [],
+      flaggedIndexSet: new Set(),
+      indexToGroup: new Map()
+    }
+  }
+
+  const signatureMap = new Map()
+  rows.forEach((row, index) => {
+    const signature = createDuplicateSignature(row, normalizedColumns)
+    if (!signature) {
+      return
+    }
+    const existing = signatureMap.get(signature.signature)
+    if (existing) {
+      existing.indices.push(index)
+    } else {
+      signatureMap.set(signature.signature, {
+        key: signature.signature,
+        keyParts: signature.parts,
+        indices: [index]
+      })
+    }
+  })
+
+  const groups = []
+  const flaggedIndices = []
+  const flaggedIndexSet = new Set()
+  const indexToGroup = new Map()
+
+  signatureMap.forEach((entry) => {
+    if (entry.indices.length > 1) {
+      const sortedIndices = [...entry.indices].sort((a, b) => a - b)
+      const group = {
+        key: entry.key,
+        keyParts: entry.keyParts,
+        keyColumns: normalizedColumns,
+        indices: sortedIndices,
+        primaryIndex: sortedIndices[0],
+        duplicateIndices: sortedIndices.slice(1)
+      }
+      groups.push(group)
+      sortedIndices.forEach((rowIndex, position) => {
+        flaggedIndices.push(rowIndex)
+        flaggedIndexSet.add(rowIndex)
+        indexToGroup.set(rowIndex, {
+          key: entry.key,
+          keyParts: entry.keyParts,
+          keyColumns: normalizedColumns,
+          primaryIndex: group.primaryIndex,
+          position,
+          isPrimary: rowIndex === group.primaryIndex,
+          groupSize: sortedIndices.length
+        })
+      })
+    }
+  })
+
+  groups.sort((a, b) => a.primaryIndex - b.primaryIndex)
+
+  return {
+    keyColumns: normalizedColumns,
+    groups,
+    flaggedIndices,
+    flaggedIndexSet,
+    indexToGroup
+  }
+}
+
+const shallowRowEqual = (a, b) => {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b) {
+    return false
+  }
+  const keysA = Object.keys(a)
+  const keysB = Object.keys(b)
+  if (keysA.length !== keysB.length) {
+    return false
+  }
+  for (let index = 0; index < keysA.length; index += 1) {
+    const key = keysA[index]
+    if (!Object.prototype.hasOwnProperty.call(b, key)) {
+      return false
+    }
+    if (!Object.is(a[key], b[key])) {
+      return false
+    }
+  }
+  return true
+}
 
 const createColumnDisplay = (index = 0) => ({
   order: index,
@@ -2190,6 +2333,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [searchQuery, setSearchQuery] = useState('')
   const [searchModeState, setSearchModeState] = useState('normal')
   const [searchColumnsState, setSearchColumnsState] = useState([])
+  const [duplicateKeyColumnsState, setDuplicateKeyColumnsState] = useState([])
   const [sortConfig, rawSetSortConfig] = useState(defaultSortConfig)
   const searchMode = searchModeState
   const setSearchMode = useCallback((value) => {
@@ -2212,6 +2356,25 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       return normalized
     })
   }, [])
+  const duplicateKeyColumns = duplicateKeyColumnsState
+  const setDuplicateKeyColumns = useCallback(
+    (value) => {
+      const availableColumns = new Set(columns.map((column) => column.key))
+      setDuplicateKeyColumnsState((prev) => {
+        const nextValue = typeof value === 'function' ? value(prev) : value
+        const normalized = Array.isArray(nextValue)
+          ? nextValue
+              .map((key) => (key === null || key === undefined ? '' : String(key).trim()))
+              .filter((key) => key && availableColumns.has(key))
+          : []
+        if (arraysEqual(prev, normalized)) {
+          return prev
+        }
+        return normalized
+      })
+    },
+    [columns]
+  )
   const setSortConfig = useCallback((value) => {
     rawSetSortConfig((prev) => {
       const base = normalizeSortConfig(prev)
@@ -2262,6 +2425,18 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setSearchMode(initialData.searchMode || 'normal')
     setSearchColumns(initialData.searchColumns || [])
     setSortConfig(initialData.sortConfig)
+    const initialDuplicateKeys = Array.isArray(initialData.duplicateKeyColumns)
+      ? initialData.duplicateKeyColumns
+          .map((key) => (key === null || key === undefined ? '' : String(key).trim()))
+          .filter(Boolean)
+      : []
+    if (initialDuplicateKeys.length > 0) {
+      const availableColumns = new Set((initialData.columns || []).map((column) => column.key))
+      const filteredKeys = initialDuplicateKeys.filter((key) => availableColumns.has(key))
+      setDuplicateKeyColumnsState(filteredKeys)
+    } else {
+      setDuplicateKeyColumnsState([])
+    }
     setProfilingMeta(
       initialData.profilingMeta
         ? { ...createDefaultProfilingMeta(), ...initialData.profilingMeta }
@@ -2296,6 +2471,20 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     })
   }, [columns])
 
+  useEffect(() => {
+    setDuplicateKeyColumnsState((prev) => {
+      if (!prev || prev.length === 0) {
+        return prev
+      }
+      const available = new Set(columns.map((column) => column.key))
+      const filtered = prev.filter((key) => available.has(key))
+      if (arraysEqual(prev, filtered)) {
+        return prev
+      }
+      return filtered
+    })
+  }, [columns])
+
   const reset = useCallback(() => {
     setFileName('')
     setRows([])
@@ -2303,6 +2492,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setRowDisplay({ raw: {}, transformed: {} })
     setMapping(defaultMapping)
     setTransformations(createDefaultTransformations())
+    setDuplicateKeyColumnsState([])
     setPreviewLimit(5)
     setSearchQuery('')
     setSearchMode('normal')
@@ -2969,6 +3159,120 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     () => [...analysisWarnings, ...transformationWarnings, ...resultWarnings],
     [analysisWarnings, transformationWarnings, resultWarnings]
   )
+  const duplicateInfo = useMemo(
+    () => computeDuplicateGroups(rows, duplicateKeyColumns),
+    [rows, duplicateKeyColumns]
+  )
+
+  const replaceRows = useCallback(
+    (nextRowsInput) => {
+      if (!nextRowsInput) {
+        return false
+      }
+      let analysisResult = null
+      let changed = false
+      setRows((prev) => {
+        const currentRows = Array.isArray(prev) ? prev : []
+        const nextCandidate =
+          typeof nextRowsInput === 'function' ? nextRowsInput(currentRows) : nextRowsInput
+        if (!Array.isArray(nextCandidate)) {
+          return prev
+        }
+        const normalizedRows = nextCandidate.map((row) => ({ ...(row || {}) }))
+        if (normalizedRows.length === currentRows.length) {
+          let identical = true
+          for (let index = 0; index < normalizedRows.length; index += 1) {
+            if (!shallowRowEqual(normalizedRows[index], currentRows[index])) {
+              identical = false
+              break
+            }
+          }
+          if (identical) {
+            return prev
+          }
+        }
+        changed = true
+        analysisResult = analyzeColumns(normalizedRows)
+        return normalizedRows
+      })
+      if (changed) {
+        const analyzedColumns = analysisResult?.columns || []
+        setColumns((prevColumns) => mergeColumnsWithDisplay(analyzedColumns, prevColumns))
+        setAnalysisWarnings(summarizeColumnWarnings(analyzedColumns))
+        setProfilingMeta(
+          analysisResult?.profiling
+            ? { ...createDefaultProfilingMeta(), ...analysisResult.profiling }
+            : createDefaultProfilingMeta()
+        )
+        setValidationErrors([])
+        setResultWarnings([])
+      }
+      return changed
+    },
+    [
+      setRows,
+      setColumns,
+      setAnalysisWarnings,
+      setProfilingMeta,
+      setValidationErrors,
+      setResultWarnings
+    ]
+  )
+
+  const resolveDuplicates = useCallback(
+    (mode = 'keep-oldest') => {
+      const normalizedMode = mode === 'merge' ? 'merge' : 'keep-oldest'
+      const groups = duplicateInfo.groups || []
+      if (groups.length === 0) {
+        return { changed: false, removed: 0, mergedCells: 0, groups: 0, mode: normalizedMode }
+      }
+
+      const nextRows = rows.map((row) => ({ ...(row || {}) }))
+      const rowsToRemove = new Set()
+      let mergedCells = 0
+
+      groups.forEach((group) => {
+        const sortedIndices = [...group.indices].sort((a, b) => a - b)
+        const primaryIndex = sortedIndices[0]
+        const primaryRow = nextRows[primaryIndex]
+        if (!primaryRow) {
+          return
+        }
+        if (normalizedMode === 'merge') {
+          sortedIndices.slice(1).forEach((rowIndex) => {
+            const candidate = nextRows[rowIndex]
+            if (!candidate) {
+              return
+            }
+            Object.keys(candidate).forEach((columnKey) => {
+              const currentValue = primaryRow[columnKey]
+              const candidateValue = candidate[columnKey]
+              if (isEmptyValue(currentValue) && !isEmptyValue(candidateValue)) {
+                primaryRow[columnKey] = candidateValue
+                mergedCells += 1
+              }
+            })
+          })
+        }
+        sortedIndices.slice(1).forEach((rowIndex) => rowsToRemove.add(rowIndex))
+      })
+
+      if (rowsToRemove.size === 0 && normalizedMode !== 'merge') {
+        return { changed: false, removed: 0, mergedCells: 0, groups: groups.length, mode: normalizedMode }
+      }
+
+      const filteredRows = nextRows.filter((_, index) => !rowsToRemove.has(index))
+      const changed = replaceRows(filteredRows)
+      return {
+        changed,
+        removed: rowsToRemove.size,
+        mergedCells: normalizedMode === 'merge' ? mergedCells : 0,
+        groups: groups.length,
+        mode: normalizedMode
+      }
+    },
+    [duplicateInfo, rows, replaceRows]
+  )
 
   const getImportResult = useCallback((overrideMapping = null) => {
     if (rows.length === 0) {
@@ -3237,7 +3541,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       searchColumns,
       sortConfig: normalizeSortConfig(sortConfig),
       rowDisplay,
-      profilingMeta
+      profilingMeta,
+      duplicateKeyColumns
     }
   }, [
     fileName,
@@ -3251,7 +3556,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     searchColumns,
     sortConfig,
     rowDisplay,
-    profilingMeta
+    profilingMeta,
+    duplicateKeyColumns
   ])
 
   return {
@@ -3302,6 +3608,10 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setSortConfig,
     getImportResult,
     getImportState,
-    profilingMeta
+    profilingMeta,
+    duplicateKeyColumns,
+    setDuplicateKeyColumns,
+    duplicateInfo,
+    resolveDuplicates
   }
 }

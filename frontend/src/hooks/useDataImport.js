@@ -2678,6 +2678,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [rows, setRows] = useState([])
   const [columns, setColumns] = useState([])
   const [rowDisplay, setRowDisplay] = useState(() => ({ raw: {}, transformed: {} }))
+  const [manualEditMap, setManualEditMap] = useState(() => ({}))
+  const [manualEditHistory, setManualEditHistory] = useState(() => [])
   const [mapping, setMapping] = useState(defaultMapping)
   const [transformations, setTransformations] = useState(() => createDefaultTransformations())
   const [previewLimit, setPreviewLimit] = useState(5)
@@ -2769,6 +2771,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setRows(initialData.rows || [])
     setColumns(normalizeColumnsState(initialData.columns || []))
     setRowDisplay(normalizeRowDisplayState(initialData.rowDisplay))
+    setManualEditMap(initialData.manualEdits || {})
+    setManualEditHistory([])
     setMapping(initialData.mapping || defaultMapping)
     setTransformations(mergeTransformationsWithDefaults(initialData.transformations))
     setPreviewLimit(initialData.previewLimit ?? 5)
@@ -2836,6 +2840,50 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     })
   }, [columns])
 
+  useEffect(() => {
+    const availableColumns = new Set(columns.map((column) => column.key))
+    setManualEditMap((prev) => {
+      let changed = false
+      const next = {}
+      Object.entries(prev || {}).forEach(([rowKey, columnEntries]) => {
+        const rowIndex = Number(rowKey)
+        if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= rows.length) {
+          changed = true
+          return
+        }
+        const currentEntries = columnEntries || {}
+        const filteredEntries = {}
+        let entryChanged = false
+        Object.entries(currentEntries).forEach(([columnKey, entry]) => {
+          if (availableColumns.has(columnKey)) {
+            filteredEntries[columnKey] = entry
+          } else {
+            entryChanged = true
+          }
+        })
+        const hasEntries = Object.keys(filteredEntries).length > 0
+        if (hasEntries) {
+          if (entryChanged || Object.keys(currentEntries).length !== Object.keys(filteredEntries).length) {
+            changed = true
+          }
+          next[rowKey] = filteredEntries
+        } else if (Object.keys(currentEntries).length > 0) {
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+    setManualEditHistory((prev) => {
+      if (!Array.isArray(prev) || prev.length === 0) {
+        return prev
+      }
+      const filtered = prev.filter(
+        (entry) => Number.isInteger(entry?.rowIndex) && entry.rowIndex >= 0 && entry.rowIndex < rows.length && availableColumns.has(entry.columnKey)
+      )
+      return filtered.length === prev.length ? prev : filtered
+    })
+  }, [rows.length, columns])
+
   const reset = useCallback(() => {
     setFileName('')
     setRows([])
@@ -2855,6 +2903,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setAnalysisWarnings([])
     setResultWarnings([])
     setProfilingMeta(createDefaultProfilingMeta())
+    setManualEditMap({})
+    setManualEditHistory([])
   }, [])
 
   const parseFile = useCallback(
@@ -2891,6 +2941,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
             ? { ...createDefaultProfilingMeta(), ...analysis.profiling }
             : createDefaultProfilingMeta()
         )
+        setManualEditMap({})
+        setManualEditHistory([])
         setTransformations(createDefaultTransformations())
         setPreviewLimit(5)
         setSearchQuery('')
@@ -3396,6 +3448,107 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     [normalizeUpdateInput, columns]
   )
 
+  const updateCellValue = useCallback(
+    (rowIndex, columnKey, newValue, options = {}) => {
+      const normalizedKey = sanitizeKey(columnKey)
+      if (!normalizedKey || !Number.isInteger(rowIndex) || rowIndex < 0) {
+        return false
+      }
+      const targetRow = rows[rowIndex]
+      if (!targetRow) {
+        return false
+      }
+      const previousValue = targetRow[normalizedKey]
+      if (Object.is(previousValue, newValue)) {
+        return false
+      }
+
+      updateCell({
+        type: 'set',
+        updates: [
+          { rowIndex, columnKey: normalizedKey, value: newValue }
+        ]
+      })
+
+      setManualEditMap((prev) => {
+        const rowKey = String(rowIndex)
+        const existingRow = prev?.[rowKey] || {}
+        const existingEntry = existingRow[normalizedKey]
+        const originalValue = existingEntry ? existingEntry.originalValue : previousValue
+
+        if (Object.is(originalValue, newValue)) {
+          if (!existingEntry) {
+            return prev
+          }
+          const nextRowEntries = { ...existingRow }
+          delete nextRowEntries[normalizedKey]
+          const hasRemaining = Object.keys(nextRowEntries).length > 0
+          if (hasRemaining) {
+            return { ...prev, [rowKey]: nextRowEntries }
+          }
+          const next = { ...prev }
+          delete next[rowKey]
+          return next
+        }
+
+        const nextRowEntries = {
+          ...existingRow,
+          [normalizedKey]: {
+            originalValue,
+            currentValue: newValue,
+            lastUpdated: Date.now()
+          }
+        }
+        return { ...prev, [rowKey]: nextRowEntries }
+      })
+
+      if (!options?.skipHistory) {
+        setManualEditHistory((prev) => [
+          ...(Array.isArray(prev) ? prev : []),
+          { rowIndex, columnKey: normalizedKey, previousValue, newValue }
+        ])
+      }
+
+      return true
+    },
+    [rows, updateCell]
+  )
+
+  const undoLastManualEdit = useCallback(() => {
+    let entry = null
+    setManualEditHistory((prev) => {
+      if (!Array.isArray(prev) || prev.length === 0) {
+        return prev
+      }
+      entry = prev[prev.length - 1]
+      return prev.slice(0, -1)
+    })
+    if (!entry) {
+      return { undone: false }
+    }
+    const changed = updateCellValue(entry.rowIndex, entry.columnKey, entry.previousValue, { skipHistory: true })
+    return { undone: !!changed, entry }
+  }, [updateCellValue])
+
+  const manualEditCount = useMemo(() => {
+    let count = 0
+    Object.values(manualEditMap || {}).forEach((rowEntries) => {
+      count += Object.keys(rowEntries || {}).length
+    })
+    return count
+  }, [manualEditMap])
+
+  const manualEdits = useMemo(
+    () => ({
+      map: manualEditMap,
+      count: manualEditCount,
+      historyLength: manualEditHistory.length
+    }),
+    [manualEditMap, manualEditCount, manualEditHistory.length]
+  )
+
+  const canUndoManualEdit = manualEditHistory.length > 0
+
   useEffect(() => {
     setTransformations((prev) => {
       const nextPerColumn = {}
@@ -3889,12 +4042,13 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       previewLimit,
       searchQuery,
       searchMode,
-      searchColumns,
-      sortConfig: normalizeSortConfig(sortConfig),
-      rowDisplay,
-      profilingMeta,
-      duplicateKeyColumns
-    }
+    searchColumns,
+    sortConfig: normalizeSortConfig(sortConfig),
+    rowDisplay,
+    profilingMeta,
+    duplicateKeyColumns,
+    manualEdits: manualEditMap
+  }
   }, [
     fileName,
     rows,
@@ -3908,7 +4062,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     sortConfig,
     rowDisplay,
     profilingMeta,
-    duplicateKeyColumns
+    duplicateKeyColumns,
+    manualEditMap
   ])
 
   return {
@@ -3927,6 +4082,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setRowHidden,
     setRowPinned,
     updateCell,
+    updateCellValue,
     parseFile,
     reset,
     previewRows,
@@ -3963,6 +4119,9 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     duplicateKeyColumns,
     setDuplicateKeyColumns,
     duplicateInfo,
-    resolveDuplicates
+    resolveDuplicates,
+    manualEdits,
+    canUndoManualEdit,
+    undoLastManualEdit
   }
 }

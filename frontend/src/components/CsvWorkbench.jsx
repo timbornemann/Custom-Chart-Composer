@@ -456,11 +456,15 @@ export default function CsvWorkbench({
     transformedFilteredRowCount,
     transformedRows,
     updateCell: internalUpdateCell,
+    updateCellValue: internalUpdateCellValue,
     profilingMeta,
     duplicateKeyColumns,
     setDuplicateKeyColumns: internalSetDuplicateKeyColumns,
     duplicateInfo,
-    resolveDuplicates: internalResolveDuplicates
+    resolveDuplicates: internalResolveDuplicates,
+    manualEdits,
+    canUndoManualEdit,
+    undoLastManualEdit: internalUndoLastManualEdit
   } = useDataImport({ allowMultipleValueColumns, requireDatasets, initialData, chartType, isScatterBubble, isCoordinate })
 
   const [editingCell, setEditingCell] = useState(null)
@@ -886,6 +890,8 @@ export default function CsvWorkbench({
   const [resizingColumn, setResizingColumn] = useState(null)
   const rowDisplayRaw = rowDisplay?.raw || {}
   const rowDisplayTransformed = rowDisplay?.transformed || {}
+  const manualEditCount = manualEdits?.count || 0
+  const manualEditMap = manualEdits?.map || {}
 
   const registerColumnRef = useCallback((key, node) => {
     if (!key) return
@@ -1737,6 +1743,17 @@ export default function CsvWorkbench({
     [internalUpdateCell, schedulePersist]
   )
 
+  const updateCellValue = useCallback(
+    (rowIndex, columnKey, value, options) => {
+      const changed = internalUpdateCellValue(rowIndex, columnKey, value, options)
+      if (changed) {
+        schedulePersist()
+      }
+      return changed
+    },
+    [internalUpdateCellValue, schedulePersist]
+  )
+
   const setDuplicateKeyColumns = useCallback(
     (updater) => {
       internalSetDuplicateKeyColumns(updater)
@@ -1755,6 +1772,14 @@ export default function CsvWorkbench({
     },
     [internalResolveDuplicates, schedulePersist]
   )
+
+  const undoLastManualEdit = useCallback(() => {
+    const result = internalUndoLastManualEdit()
+    if (result?.undone) {
+      schedulePersist()
+    }
+    return result
+  }, [internalUndoLastManualEdit, schedulePersist])
 
   const handleResetWorkbench = useCallback(() => {
     reset()
@@ -1857,14 +1882,9 @@ export default function CsvWorkbench({
 
   const confirmEdit = useCallback(() => {
     if (!editingCell) return
-    updateCell({
-      type: 'set',
-      updates: [
-        { rowIndex: editingCell.rowIndex, columnKey: editingCell.columnKey, value: editingValue }
-      ]
-    })
+    updateCellValue(editingCell.rowIndex, editingCell.columnKey, editingValue)
     cancelEdit()
-  }, [editingCell, editingValue, updateCell, cancelEdit])
+  }, [editingCell, editingValue, updateCellValue, cancelEdit])
 
   const handleExportTransformed = useCallback(() => {
     if (!transformedRows || transformedRows.length === 0) {
@@ -3190,6 +3210,31 @@ export default function CsvWorkbench({
                             <span>Ersetzen…</span>
                           </button>
                         </div>
+                        {(manualEditCount > 0 || canUndoManualEdit) && (
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
+                            <span
+                              className={`rounded-md border px-2 py-1 ${
+                                manualEditCount > 0
+                                  ? 'border-dark-accent1/40 bg-dark-accent1/10 text-dark-accent1'
+                                  : 'border-gray-700 text-dark-textGray/70'
+                              }`}
+                            >
+                              {manualEditCount} manuelle Änderung{manualEditCount === 1 ? '' : 'en'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={undoLastManualEdit}
+                              disabled={!canUndoManualEdit}
+                              className={`rounded-md border px-2 py-1 transition-colors ${
+                                canUndoManualEdit
+                                  ? 'border-dark-accent1/60 text-dark-textLight hover:border-dark-accent1 hover:text-dark-textLight'
+                                  : 'cursor-not-allowed border-gray-700 text-dark-textGray'
+                              }`}
+                            >
+                              Rückgängig
+                            </button>
+                          </div>
+                        )}
                         {searchError && (
                           <p className="text-[11px] text-red-300">Regex-Fehler: {searchError}</p>
                         )}
@@ -3795,6 +3840,16 @@ export default function CsvWorkbench({
                                         cellStyle.zIndex = 20 + (isPinnedLeft || isPinnedRight ? 5 : 0) + (rowState.pinned ? 5 : 0)
                                         cellStyle.backgroundColor = 'rgba(17, 24, 39, 0.9)'
                                       }
+                                      const manualEditRow = manualEditMap?.[entry.index] || null
+                                      const manualEditInfo = manualEditRow ? manualEditRow[column.key] : null
+                                      const manualEditOriginalDisplay = manualEditInfo
+                                        ? formatCellValue(manualEditInfo.originalValue)
+                                        : ''
+                                      const manualEditTitle = manualEditInfo
+                                        ? `Manuell geändert (ursprünglich: ${
+                                            manualEditOriginalDisplay === '' ? '–' : manualEditOriginalDisplay
+                                          })`
+                                        : ''
                                       return (
                                         <td
                                           key={column.key}
@@ -3805,6 +3860,9 @@ export default function CsvWorkbench({
                                         >
                                           {isEditing ? (
                                             <input
+                                              type={column.type === 'number' ? 'number' : 'text'}
+                                              inputMode={column.type === 'number' ? 'decimal' : undefined}
+                                              step={column.type === 'number' ? 'any' : undefined}
                                               value={editingValue}
                                               onChange={(event) => setEditingValue(event.target.value)}
                                               onBlur={confirmEdit}
@@ -3819,24 +3877,58 @@ export default function CsvWorkbench({
                                               className="w-full rounded-md border border-dark-accent1/60 bg-dark-secondary px-2 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
                                             />
                                           ) : (
-                                            <button
-                                              type="button"
-                                              data-row-index={entry.index}
-                                              data-column-key={column.key}
-                                              onMouseDown={(event) => handleCellMouseDown(event, entry, rowPosition, column.key)}
-                                              onMouseEnter={() => handleCellMouseEnter(entry, rowPosition, column.key)}
-                                              onDoubleClick={() => startEditCell(entry, column.key, rowPosition)}
-                                              onKeyDown={(event) => handleCellKeyDown(event, entry, rowPosition, column.key)}
-                                              className={`w-full rounded px-1 text-left text-dark-textLight/90 transition-colors hover:text-dark-textLight ${
-                                                isSelected ? 'bg-dark-accent1/10' : ''
-                                              }`}
-                                            >
-                                              {hasContent ? (
-                                                highlightedValue
-                                              ) : (
-                                                <span className="text-dark-textGray/60">–</span>
+                                            <div className="group relative">
+                                              <button
+                                                type="button"
+                                                data-row-index={entry.index}
+                                                data-column-key={column.key}
+                                                onMouseDown={(event) => handleCellMouseDown(event, entry, rowPosition, column.key)}
+                                                onMouseEnter={() => handleCellMouseEnter(entry, rowPosition, column.key)}
+                                                onDoubleClick={() => startEditCell(entry, column.key, rowPosition)}
+                                                onKeyDown={(event) => handleCellKeyDown(event, entry, rowPosition, column.key)}
+                                                className={`w-full rounded px-1 pr-6 text-left text-dark-textLight/90 transition-colors hover:text-dark-textLight ${
+                                                  isSelected ? 'bg-dark-accent1/10' : ''
+                                                } focus:outline-none`}
+                                              >
+                                                {hasContent ? (
+                                                  highlightedValue
+                                                ) : (
+                                                  <span className="text-dark-textGray/60">–</span>
+                                                )}
+                                              </button>
+                                              <span
+                                                role="button"
+                                                tabIndex={0}
+                                                aria-label="Zelle bearbeiten"
+                                                title="Zelle bearbeiten"
+                                                onMouseDown={(event) => event.stopPropagation()}
+                                                onClick={(event) => {
+                                                  event.preventDefault()
+                                                  event.stopPropagation()
+                                                  startEditCell(entry, column.key, rowPosition)
+                                                }}
+                                                onKeyDown={(event) => {
+                                                  if (event.key === 'Enter' || event.key === ' ') {
+                                                    event.preventDefault()
+                                                    event.stopPropagation()
+                                                    startEditCell(entry, column.key, rowPosition)
+                                                  }
+                                                }}
+                                                className={`absolute inset-y-0 right-0 flex items-center px-1 text-[11px] transition-opacity ${
+                                                  isSelected ? 'opacity-100 text-dark-textLight' : 'opacity-0 text-dark-textGray/70'
+                                                } group-hover:opacity-100 group-focus-within:opacity-100`}
+                                              >
+                                                ✎
+                                              </span>
+                                              {manualEditInfo && (
+                                                <span
+                                                  className="pointer-events-none absolute top-0.5 right-3 text-[10px] text-dark-accent1"
+                                                  title={manualEditTitle}
+                                                >
+                                                  ●
+                                                </span>
                                               )}
-                                            </button>
+                                            </div>
                                           )}
                                         </td>
                                       )

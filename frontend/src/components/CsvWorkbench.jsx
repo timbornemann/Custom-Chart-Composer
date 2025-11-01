@@ -209,6 +209,12 @@ const VALUE_RULE_ACTIONS = [
   { value: 'trim', label: 'Leerzeichen trimmen' }
 ]
 
+const WORKBENCH_STEPS = [
+  { key: 'mapping', label: 'Zuordnung' },
+  { key: 'duplicates', label: 'Duplikate' },
+  { key: 'transformations', label: 'Transformation' }
+]
+
 function SortableHeaderCell({
   column,
   sortEntry,
@@ -408,7 +414,11 @@ export default function CsvWorkbench({
     transformedFilteredRowCount,
     transformedRows,
     updateCell: internalUpdateCell,
-    profilingMeta
+    profilingMeta,
+    duplicateKeyColumns,
+    setDuplicateKeyColumns: internalSetDuplicateKeyColumns,
+    duplicateInfo,
+    resolveDuplicates: internalResolveDuplicates
   } = useDataImport({ allowMultipleValueColumns, requireDatasets, initialData, chartType, isScatterBubble, isCoordinate })
 
   const [editingCell, setEditingCell] = useState(null)
@@ -429,6 +439,7 @@ export default function CsvWorkbench({
     transformed: { matches: [], total: 0 }
   })
   const findReplaceHistoryRef = useRef([])
+  const [duplicateActionFeedback, setDuplicateActionFeedback] = useState(null)
   const activeSearchConfig = useMemo(
     () => createSearchConfig({ query: searchQuery, mode: searchMode, columns: searchColumns }),
     [searchQuery, searchMode, searchColumns]
@@ -758,6 +769,72 @@ export default function CsvWorkbench({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const columnRefs = useRef(new Map())
   const rowRefs = useRef(new Map())
+  const duplicateGroups = duplicateInfo?.groups ?? []
+  const duplicateRowCount = duplicateInfo?.flaggedIndices?.length ?? 0
+  const duplicateMetaByIndex = duplicateInfo?.indexToGroup ?? new Map()
+  const hasDuplicateSelection = duplicateKeyColumns.length > 0
+  const hasDuplicates = duplicateGroups.length > 0
+
+  useEffect(() => {
+    setDuplicateActionFeedback(null)
+  }, [duplicateKeyColumns, duplicateGroups.length])
+
+  const handleDuplicateColumnToggle = useCallback(
+    (columnKey, enabled) => {
+      setDuplicateKeyColumns((previous) => {
+        const current = Array.isArray(previous) ? previous : []
+        if (enabled) {
+          if (current.includes(columnKey)) {
+            return current
+          }
+          return [...current, columnKey]
+        }
+        return current.filter((key) => key !== columnKey)
+      })
+    },
+    [setDuplicateKeyColumns]
+  )
+
+  const handleDuplicateSelectAll = useCallback(() => {
+    setDuplicateKeyColumns(columns.map((column) => column.key))
+  }, [setDuplicateKeyColumns, columns])
+
+  const handleDuplicateClear = useCallback(() => {
+    setDuplicateKeyColumns([])
+  }, [setDuplicateKeyColumns])
+
+  const handleResolveDuplicatesAction = useCallback(
+    (mode) => {
+      const result = resolveDuplicates(mode)
+      if (!result) {
+        setDuplicateActionFeedback({ type: 'info', message: 'Keine Duplikate zum Bearbeiten gefunden.' })
+        return
+      }
+      if (result.changed) {
+        const parts = []
+        if (result.removed > 0) {
+          parts.push(
+            `${result.removed} ${result.removed === 1 ? 'Zeile entfernt' : 'Zeilen entfernt'}`
+          )
+        }
+        if (result.mode === 'merge' && result.mergedCells > 0) {
+          parts.push(
+            `${result.mergedCells} ${result.mergedCells === 1 ? 'Wert übernommen' : 'Werte übernommen'}`
+          )
+        }
+        if (parts.length === 0) {
+          parts.push('Keine Anpassungen erforderlich')
+        }
+        setDuplicateActionFeedback({
+          type: 'success',
+          message: `Duplikatbereinigung abgeschlossen (${parts.join(', ')}).`
+        })
+      } else {
+        setDuplicateActionFeedback({ type: 'info', message: 'Keine Änderungen notwendig.' })
+      }
+    },
+    [resolveDuplicates]
+  )
   const [columnMeasurements, setColumnMeasurements] = useState({})
   const [rowMeasurements, setRowMeasurements] = useState({})
   const headerRef = useRef(null)
@@ -1618,6 +1695,25 @@ export default function CsvWorkbench({
     [internalUpdateCell, schedulePersist]
   )
 
+  const setDuplicateKeyColumns = useCallback(
+    (updater) => {
+      internalSetDuplicateKeyColumns(updater)
+      schedulePersist()
+    },
+    [internalSetDuplicateKeyColumns, schedulePersist]
+  )
+
+  const resolveDuplicates = useCallback(
+    (mode) => {
+      const result = internalResolveDuplicates(mode)
+      if (result?.changed) {
+        schedulePersist()
+      }
+      return result
+    },
+    [internalResolveDuplicates, schedulePersist]
+  )
+
   const handleResetWorkbench = useCallback(() => {
     reset()
     setEditingCell(null)
@@ -2388,12 +2484,9 @@ export default function CsvWorkbench({
           {totalRows > 0 && (
             <section className="space-y-4">
               <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-700 bg-dark-bg/40 p-2">
-                {[
-                  { key: 'mapping', label: 'Zuordnung' },
-                  { key: 'transformations', label: 'Transformation' }
-                ].map((step, index) => {
+                {WORKBENCH_STEPS.map((step, index) => {
                   const isActive = activeTab === step.key
-                  const isDisabled = step.key === 'transformations' && totalRows === 0
+                  const isDisabled = step.key !== 'mapping' && totalRows === 0
                   return (
                     <button
                       key={step.key}
@@ -3382,8 +3475,23 @@ export default function CsvWorkbench({
                               {previewEntries.map((entry, rowPosition) => {
                                 const rowState = rowDisplayRaw[entry.index] || {}
                                 const rowTop = rowState.pinned ? pinnedRawRowOffsets.get(entry.index) ?? headerHeight : undefined
+                                const duplicateMeta = duplicateMetaByIndex.get(entry.index)
+                                const rowHighlightClass = duplicateMeta
+                                  ? duplicateMeta.isPrimary
+                                    ? 'bg-emerald-900/10'
+                                    : 'bg-red-900/10'
+                                  : ''
+                                const duplicateBadgeTitle = duplicateMeta
+                                  ? `Duplikatgruppe (${duplicateMeta.keyParts
+                                      .map((part, index) => `${duplicateMeta.keyColumns?.[index] ?? `Spalte ${index + 1}`}: ${part.display}`)
+                                      .join(' · ')}) – ${duplicateMeta.isPrimary ? 'führende Zeile' : 'Duplikat'}`
+                                  : ''
                                 return (
-                                  <tr key={entry.index} ref={(node) => registerRowRef('raw', entry.index, node)}>
+                                  <tr
+                                    key={entry.index}
+                                    ref={(node) => registerRowRef('raw', entry.index, node)}
+                                    className={rowHighlightClass || undefined}
+                                  >
                                     <td
                                       className="sticky left-0 z-40 border-r border-gray-800 bg-dark-bg/90 px-2 py-2 text-[11px] text-dark-textGray"
                                       style={{
@@ -3393,7 +3501,21 @@ export default function CsvWorkbench({
                                       }}
                                     >
                                       <div className="flex items-center justify-between gap-2">
-                                        <span className="font-mono text-[10px] text-dark-textGray/80">#{entry.index + 1}</span>
+                                        <div className="flex items-center gap-1">
+                                          <span className="font-mono text-[10px] text-dark-textGray/80">#{entry.index + 1}</span>
+                                          {duplicateMeta && (
+                                            <span
+                                              className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold leading-none ${
+                                                duplicateMeta.isPrimary
+                                                  ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200'
+                                                  : 'border-red-500/60 bg-red-500/15 text-red-200'
+                                              }`}
+                                              title={duplicateBadgeTitle}
+                                            >
+                                              {duplicateMeta.isPrimary ? 'Prim' : 'Dup'}
+                                            </span>
+                                          )}
+                                        </div>
                                         <div className="flex items-center gap-1">
                                           <button
                                             type="button"
@@ -3509,6 +3631,156 @@ export default function CsvWorkbench({
                       Keine Daten zum Anzeigen. Laden Sie eine Datei oder passen Sie die Suchfilter an.
                     </p>
                   )}
+                </div>
+              )}
+
+              {activeTab === 'duplicates' && (
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-dark-textLight">Duplikate prüfen</h3>
+                    <p className="text-xs text-dark-textGray">
+                      Wählen Sie Schlüsselspalten, um doppelte Zeilen zu identifizieren und zu bereinigen.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4 rounded-lg border border-gray-700 bg-dark-bg/40 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-semibold text-dark-textLight">Schlüsselspalten</h4>
+                        <p className="text-[11px] text-dark-textGray">
+                          Die Kombination dieser Spalten dient als eindeutiger Schlüssel für Duplikate.
+                        </p>
+                      </div>
+                      <div className="flex gap-2 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={handleDuplicateSelectAll}
+                          className="rounded-md border border-gray-700 px-2 py-1 text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-accent1"
+                          disabled={columns.length === 0}
+                        >
+                          Alle
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDuplicateClear}
+                          className="rounded-md border border-gray-700 px-2 py-1 text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-accent1"
+                          disabled={duplicateKeyColumns.length === 0}
+                        >
+                          Keine
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                      {columns.length === 0 ? (
+                        <p className="col-span-full text-[11px] text-dark-textGray">
+                          Keine Spalten verfügbar.
+                        </p>
+                      ) : (
+                        columns.map((column) => {
+                          const checked = duplicateKeyColumns.includes(column.key)
+                          return (
+                            <label
+                              key={`duplicate-key-${column.key}`}
+                              className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                                checked
+                                  ? 'border-dark-accent1/70 bg-dark-secondary/60 text-dark-textLight'
+                                  : 'border-gray-700 bg-dark-secondary/30 text-dark-textLight hover:border-dark-accent1'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) => handleDuplicateColumnToggle(column.key, event.target.checked)}
+                                className="h-3.5 w-3.5 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
+                              />
+                              <span className="truncate">{column.key}</span>
+                            </label>
+                          )
+                        })
+                      )}
+                    </div>
+
+                    <div className="rounded-md border border-gray-700/60 bg-dark-secondary/30 p-3 text-[11px] text-dark-textGray">
+                      {!hasDuplicateSelection && <p>Wählen Sie mindestens eine Spalte aus, um nach Duplikaten zu suchen.</p>}
+                      {hasDuplicateSelection && !hasDuplicates && (
+                        <p className="text-dark-textLight/80">Für die ausgewählten Schlüssel wurden keine Duplikate gefunden.</p>
+                      )}
+                      {hasDuplicateSelection && hasDuplicates && (
+                        <div className="space-y-1 text-dark-textLight/90">
+                          <p>
+                            <span className="font-semibold text-dark-textLight">{duplicateGroups.length}</span>{' '}
+                            {duplicateGroups.length === 1 ? 'Gruppe' : 'Gruppen'} mit{' '}
+                            <span className="font-semibold text-dark-textLight">{duplicateRowCount}</span>{' '}
+                            {duplicateRowCount === 1 ? 'Zeile' : 'Zeilen'} gefunden.
+                          </p>
+                          <p className="text-dark-textGray">Duplikatzeilen sind im Raster markiert.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleResolveDuplicatesAction('keep-oldest')}
+                        className="rounded-md border border-gray-700 px-3 py-1.5 text-xs font-medium text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-accent1 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={!hasDuplicates}
+                      >
+                        Älteste Zeile behalten
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleResolveDuplicatesAction('merge')}
+                        className="rounded-md border border-gray-700 px-3 py-1.5 text-xs font-medium text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-accent1 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={!hasDuplicates}
+                      >
+                        Zusammenführen
+                      </button>
+                      {duplicateActionFeedback && (
+                        <span
+                          className={`text-xs ${
+                            duplicateActionFeedback.type === 'success' ? 'text-emerald-300' : 'text-dark-textGray'
+                          }`}
+                        >
+                          {duplicateActionFeedback.message}
+                        </span>
+                      )}
+                    </div>
+
+                    {hasDuplicates && (
+                      <div className="max-h-52 overflow-y-auto rounded-md border border-gray-700">
+                        <table className="min-w-full divide-y divide-gray-700 text-[11px]">
+                          <thead className="bg-dark-secondary/40 text-[10px] uppercase tracking-wide text-dark-textGray">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-semibold">Schlüssel</th>
+                              <th className="px-3 py-2 text-left font-semibold">Primärzeile</th>
+                              <th className="px-3 py-2 text-left font-semibold">Weitere Zeilen</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
+                            {duplicateGroups.map((group) => (
+                              <tr key={`duplicate-group-${group.primaryIndex}-${group.key}`}>
+                                <td className="px-3 py-2">
+                                  <div className="space-y-1">
+                                    {group.keyParts.map((part, index) => (
+                                      <div key={`${group.key}-part-${index}`} className="flex items-center gap-2">
+                                        <span className="text-dark-textGray">{group.keyColumns?.[index]}:</span>
+                                        <span className="font-mono text-dark-textLight/90">{part.display}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 font-mono text-dark-textGray">#{group.primaryIndex + 1}</td>
+                                <td className="px-3 py-2 font-mono text-dark-textGray">
+                                  {group.duplicateIndices.map((rowIndex) => `#${rowIndex + 1}`).join(', ')}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 import Papa from 'papaparse'
 import useDataImport from '../hooks/useDataImport'
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 const formatCellValue = (value) => {
   if (value === null || value === undefined) return ''
@@ -15,6 +18,10 @@ const formatCellValue = (value) => {
 }
 
 const MAX_HIGHLIGHT_SEGMENTS = 100
+const DEFAULT_COLUMN_WIDTH = 160
+const MIN_COLUMN_WIDTH = 60
+const ACTION_COLUMN_WIDTH = 72
+const DEFAULT_ROW_HEIGHT = 36
 
 const STAT_NUMBER_FORMAT = new Intl.NumberFormat('de-DE', {
   maximumFractionDigits: 3,
@@ -167,6 +174,146 @@ const VALUE_RULE_ACTIONS = [
   { value: 'trim', label: 'Leerzeichen trimmen' }
 ]
 
+function SortableHeaderCell({
+  column,
+  sortEntry,
+  sortIndex,
+  onSortToggle,
+  onToggleVisibility,
+  onTogglePinned,
+  onResizeStart,
+  registerRef,
+  isPinnedLeft,
+  isPinnedRight,
+  leftOffset,
+  rightOffset,
+  width
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.key })
+  const headerRef = useCallback(
+    (node) => {
+      registerRef(column.key, node)
+    },
+    [registerRef, column.key]
+  )
+
+  const dragStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    cursor: 'grab'
+  }
+
+  const stickyPosition = {}
+  if (isPinnedLeft) {
+    stickyPosition.left = leftOffset || 0
+  }
+  if (isPinnedRight) {
+    stickyPosition.right = rightOffset || 0
+  }
+
+  const computedWidth = width ? Math.max(width, ACTION_COLUMN_WIDTH) : null
+  const widthStyle = {
+    minWidth: computedWidth ? `${computedWidth}px` : `${DEFAULT_COLUMN_WIDTH}px`,
+    width: computedWidth ? `${computedWidth}px` : undefined
+  }
+
+  const headerStyle = {
+    ...widthStyle,
+    ...stickyPosition,
+    top: 0,
+    position: 'sticky',
+    zIndex: (isPinnedLeft || isPinnedRight ? 40 : 35) + (isDragging ? 5 : 0),
+    backgroundColor: 'rgba(17, 24, 39, 0.95)',
+    backdropFilter: 'blur(2px)'
+  }
+
+  const isSorted = Boolean(sortEntry)
+  const sortSymbol = sortEntry ? (sortEntry.direction === 'desc' ? '▼' : '▲') : ''
+
+  return (
+    <th ref={headerRef} style={headerStyle} className="group border-b border-gray-700 px-3 py-2 text-left text-xs uppercase tracking-wide text-dark-textGray">
+      <div
+        ref={setNodeRef}
+        style={dragStyle}
+        className={`flex items-center gap-2 ${isDragging ? 'opacity-80' : ''}`}
+      >
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="h-4 w-4 shrink-0 cursor-grab text-[10px] text-dark-textGray/60 transition-colors hover:text-dark-textLight focus:outline-none"
+          title="Spalte ziehen"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          ⋮⋮
+        </button>
+        <button
+          type="button"
+          onClick={(event) => onSortToggle(column.key, event)}
+          className={`flex flex-1 items-center gap-1 text-left transition-colors ${
+            isSorted ? 'text-dark-textLight' : 'text-dark-textGray'
+          } hover:text-dark-textLight focus:outline-none`}
+        >
+          <span className="truncate font-medium">{column.key}</span>
+          {isSorted && (
+            <span className="flex items-center gap-1 text-[10px]">
+              <span>{sortSymbol}</span>
+              <span className="rounded bg-dark-textGray/30 px-1 text-[9px] leading-none text-dark-textLight">{sortIndex + 1}</span>
+            </span>
+          )}
+        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onTogglePinned(column.key)
+            }}
+            className={`relative flex items-center justify-center rounded px-1 text-[10px] transition-colors ${
+              column.display?.pinned
+                ? 'text-dark-accent1'
+                : 'text-dark-textGray group-hover:text-dark-textLight'
+            } hover:text-dark-accent1 focus:outline-none`}
+            title={
+              column.display?.pinned === 'left'
+                ? 'Spalte rechts fixieren'
+                : column.display?.pinned === 'right'
+                ? 'Fixierung lösen'
+                : 'Spalte links fixieren'
+            }
+          >
+            <span className="leading-none">📌</span>
+            {column.display?.pinned && (
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-semibold">
+                {column.display.pinned === 'left' ? 'L' : 'R'}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onToggleVisibility(column.key)
+            }}
+            className="rounded px-1 text-[10px] text-dark-textGray transition-colors hover:text-dark-textLight focus:outline-none"
+            title="Spalte ausblenden"
+          >
+            👁
+          </button>
+          <button
+            type="button"
+            onPointerDown={(event) => onResizeStart(column.key, event)}
+            className="relative h-6 w-2 cursor-col-resize select-none text-dark-textGray/50 hover:text-dark-textLight focus:outline-none"
+            title="Spaltenbreite anpassen"
+          >
+            <span className="pointer-events-none block h-full w-px bg-dark-textGray/40" />
+          </button>
+        </div>
+      </div>
+    </th>
+  )
+}
+
 export default function CsvWorkbench({
   onApplyToChart,
   onImportStateChange,
@@ -182,12 +329,19 @@ export default function CsvWorkbench({
 
   const {
     fileName,
-    columns,
+    columns: rawColumns,
     mapping,
     transformations,
     updateMapping: internalUpdateMapping,
     updateTransformations: internalUpdateTransformations,
     toggleValueColumn: internalToggleValueColumn,
+    reorderColumns: internalReorderColumns,
+    setColumnWidth: internalSetColumnWidth,
+    setColumnVisibility: internalSetColumnVisibility,
+    setColumnPinned: internalSetColumnPinned,
+    rowDisplay,
+    setRowHidden: internalSetRowHidden,
+    setRowPinned: internalSetRowPinned,
     parseFile: internalParseFile,
     reset,
     previewRows,
@@ -229,13 +383,325 @@ export default function CsvWorkbench({
   const pendingFocusRef = useRef(null)
   const [profilingColumnKey, setProfilingColumnKey] = useState(null)
 
-  const columnIndexMap = useMemo(() => {
+  const orderedColumns = useMemo(() => {
+    if (!rawColumns || rawColumns.length === 0) {
+      return []
+    }
+    return [...rawColumns].sort((a, b) => {
+      const orderA = typeof a.display?.order === 'number' ? a.display.order : 0
+      const orderB = typeof b.display?.order === 'number' ? b.display.order : 0
+      if (orderA === orderB) {
+        return a.key.localeCompare(b.key)
+      }
+      return orderA - orderB
+    })
+  }, [rawColumns])
+
+  const columns = orderedColumns
+
+  const visibleColumns = useMemo(
+    () => columns.filter((column) => column.display?.isVisible !== false),
+    [columns]
+  )
+
+  const hiddenColumns = useMemo(
+    () => columns.filter((column) => column.display?.isVisible === false),
+    [columns]
+  )
+
+  const columnByKey = useMemo(() => {
     const map = new Map()
-    columns.forEach((column, index) => {
-      map.set(column.key, index)
+    columns.forEach((column) => {
+      map.set(column.key, column)
     })
     return map
   }, [columns])
+
+  const columnIndexMap = useMemo(() => {
+    const map = new Map()
+    visibleColumns.forEach((column, index) => {
+      map.set(column.key, index)
+    })
+    return map
+  }, [visibleColumns])
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const columnRefs = useRef(new Map())
+  const rowRefs = useRef(new Map())
+  const [columnMeasurements, setColumnMeasurements] = useState({})
+  const [rowMeasurements, setRowMeasurements] = useState({})
+  const headerRef = useRef(null)
+  const transformedHeaderRef = useRef(null)
+  const [headerHeight, setHeaderHeight] = useState(0)
+  const [transformedHeaderHeight, setTransformedHeaderHeight] = useState(0)
+  const [resizingColumn, setResizingColumn] = useState(null)
+  const rowDisplayRaw = rowDisplay?.raw || {}
+  const rowDisplayTransformed = rowDisplay?.transformed || {}
+
+  const registerColumnRef = useCallback((key, node) => {
+    if (!key) return
+    if (node) {
+      columnRefs.current.set(key, node)
+    } else {
+      columnRefs.current.delete(key)
+    }
+  }, [])
+
+  const registerRowRef = useCallback((source, index, node) => {
+    const key = `${source}-${index}`
+    if (node) {
+      rowRefs.current.set(key, node)
+    } else {
+      rowRefs.current.delete(key)
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    const measurements = {}
+    columnRefs.current.forEach((node, key) => {
+      const rect = node.getBoundingClientRect()
+      measurements[key] = Math.ceil(rect.width)
+    })
+    setColumnMeasurements((prev) => {
+      let changed = false
+      const next = {}
+      Object.entries(measurements).forEach(([key, value]) => {
+        next[key] = value
+        if (prev[key] !== value) {
+          changed = true
+        }
+      })
+      Object.keys(prev).forEach((key) => {
+        if (!(key in measurements)) {
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+  }, [visibleColumns, previewEntries, transformedPreviewEntries])
+
+  useLayoutEffect(() => {
+    const measurements = {}
+    rowRefs.current.forEach((node, key) => {
+      const rect = node.getBoundingClientRect()
+      measurements[key] = Math.ceil(rect.height)
+    })
+    setRowMeasurements((prev) => {
+      let changed = false
+      const next = {}
+      Object.entries(measurements).forEach(([key, value]) => {
+        next[key] = value
+        if (prev[key] !== value) {
+          changed = true
+        }
+      })
+      Object.keys(prev).forEach((key) => {
+        if (!(key in measurements)) {
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+  }, [previewEntries, transformedPreviewEntries])
+
+  useLayoutEffect(() => {
+    if (headerRef.current) {
+      const rect = headerRef.current.getBoundingClientRect()
+      setHeaderHeight(Math.ceil(rect.height))
+    }
+  }, [visibleColumns, columnMeasurements])
+
+  useLayoutEffect(() => {
+    if (transformedHeaderRef.current) {
+      const rect = transformedHeaderRef.current.getBoundingClientRect()
+      setTransformedHeaderHeight(Math.ceil(rect.height))
+    }
+  }, [visibleColumns, columnMeasurements, transformedPreviewEntries])
+
+  useEffect(() => {
+    if (!resizingColumn) {
+      return undefined
+    }
+
+    const handlePointerMove = (event) => {
+      event.preventDefault()
+      const delta = event.clientX - resizingColumn.startX
+      const nextWidth = resizingColumn.startWidth + delta
+      setColumnWidth(resizingColumn.columnKey, nextWidth)
+    }
+
+    const handlePointerUp = () => {
+      setResizingColumn(null)
+    }
+
+    if (typeof document !== 'undefined') {
+      const previous = document.body.style.userSelect
+      document.body.style.userSelect = 'none'
+      window.addEventListener('pointermove', handlePointerMove)
+      window.addEventListener('pointerup', handlePointerUp, { once: true })
+      return () => {
+        document.body.style.userSelect = previous
+        window.removeEventListener('pointermove', handlePointerMove)
+      }
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp, { once: true })
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [resizingColumn, setColumnWidth])
+
+  const getColumnWidth = useCallback(
+    (columnKey) => {
+      const column = columnByKey.get(columnKey)
+      if (!column) {
+        return DEFAULT_COLUMN_WIDTH
+      }
+      if (typeof column.display?.width === 'number' && Number.isFinite(column.display.width)) {
+        return Math.max(MIN_COLUMN_WIDTH, column.display.width)
+      }
+      return columnMeasurements[columnKey] ?? DEFAULT_COLUMN_WIDTH
+    },
+    [columnByKey, columnMeasurements]
+  )
+
+  const handleColumnResizeStart = useCallback(
+    (columnKey, event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      const startWidth = getColumnWidth(columnKey)
+      setResizingColumn({ columnKey, startX: event.clientX, startWidth })
+    },
+    [getColumnWidth]
+  )
+
+  const handleColumnDragEnd = useCallback(
+    (event) => {
+      const { active, over } = event
+      if (!active || !over || active.id === over.id) {
+        return
+      }
+      const currentIndex = visibleColumns.findIndex((column) => column.key === active.id)
+      const newIndex = visibleColumns.findIndex((column) => column.key === over.id)
+      if (currentIndex === -1 || newIndex === -1) {
+        return
+      }
+      const reordered = arrayMove(visibleColumns.map((column) => column.key), currentIndex, newIndex)
+      reorderColumns(reordered)
+    },
+    [visibleColumns, reorderColumns]
+  )
+
+  const pinnedLeftOffsets = useMemo(() => {
+    let offset = ACTION_COLUMN_WIDTH
+    const offsets = new Map()
+    visibleColumns.forEach((column) => {
+      if (column.display?.pinned === 'left') {
+        offsets.set(column.key, offset)
+        offset += getColumnWidth(column.key)
+      }
+    })
+    return offsets
+  }, [visibleColumns, getColumnWidth])
+
+  const pinnedRightOffsets = useMemo(() => {
+    let offset = 0
+    const offsets = new Map()
+    const reversed = [...visibleColumns].reverse()
+    reversed.forEach((column) => {
+      if (column.display?.pinned === 'right') {
+        offsets.set(column.key, offset)
+        offset += getColumnWidth(column.key)
+      }
+    })
+    return offsets
+  }, [visibleColumns, getColumnWidth])
+
+  const pinnedRawRowOffsets = useMemo(() => {
+    let offset = headerHeight
+    const offsets = new Map()
+    previewEntries.forEach((entry) => {
+      if (rowDisplayRaw[entry.index]?.pinned) {
+        const height = rowMeasurements[`raw-${entry.index}`] ?? DEFAULT_ROW_HEIGHT
+        offsets.set(entry.index, offset)
+        offset += height
+      }
+    })
+    return offsets
+  }, [previewEntries, rowDisplayRaw, rowMeasurements, headerHeight])
+
+  const pinnedTransformedRowOffsets = useMemo(() => {
+    let offset = transformedHeaderHeight
+    const offsets = new Map()
+    transformedPreviewEntries.forEach((entry) => {
+      if (rowDisplayTransformed[entry.index]?.pinned) {
+        const height = rowMeasurements[`transformed-${entry.index}`] ?? DEFAULT_ROW_HEIGHT
+        offsets.set(entry.index, offset)
+        offset += height
+      }
+    })
+    return offsets
+  }, [transformedPreviewEntries, rowDisplayTransformed, rowMeasurements, transformedHeaderHeight])
+
+  const hiddenRawRowIndices = useMemo(() => {
+    return Object.entries(rowDisplayRaw)
+      .filter(([, value]) => value?.hidden)
+      .map(([key]) => Number(key))
+      .filter((index) => Number.isInteger(index))
+      .sort((a, b) => a - b)
+  }, [rowDisplayRaw])
+
+  const hiddenTransformedRowIndices = useMemo(() => {
+    return Object.entries(rowDisplayTransformed)
+      .filter(([, value]) => value?.hidden)
+      .map(([key]) => Number(key))
+      .filter((index) => Number.isInteger(index))
+      .sort((a, b) => a - b)
+  }, [rowDisplayTransformed])
+
+  const handleToggleColumnPinned = useCallback(
+    (columnKey) => {
+      const column = columnByKey.get(columnKey)
+      const current = column?.display?.pinned
+      const nextPinned = current === 'left' ? 'right' : current === 'right' ? null : 'left'
+      setColumnPinned(columnKey, nextPinned)
+    },
+    [columnByKey, setColumnPinned]
+  )
+
+  const handleHideColumn = useCallback(
+    (columnKey) => {
+      setColumnVisibility(columnKey, false)
+    },
+    [setColumnVisibility]
+  )
+
+  const handleShowColumn = useCallback(
+    (columnKey) => {
+      setColumnVisibility(columnKey, true)
+    },
+    [setColumnVisibility]
+  )
+
+  const handleToggleRowHidden = useCallback(
+    (source, rowIndex) => {
+      const sourceState = source === 'transformed' ? rowDisplayTransformed : rowDisplayRaw
+      const isHidden = sourceState[rowIndex]?.hidden === true
+      setRowHidden(source, rowIndex, !isHidden)
+    },
+    [rowDisplayRaw, rowDisplayTransformed, setRowHidden]
+  )
+
+  const handleToggleRowPinned = useCallback(
+    (source, rowIndex) => {
+      const sourceState = source === 'transformed' ? rowDisplayTransformed : rowDisplayRaw
+      const isPinned = sourceState[rowIndex]?.pinned === true
+      setRowPinned(source, rowIndex, !isPinned)
+    },
+    [rowDisplayRaw, rowDisplayTransformed, setRowPinned]
+  )
 
   useEffect(() => {
     if (columns.length === 0) {
@@ -355,10 +821,11 @@ export default function CsvWorkbench({
         rowIndex,
         rowPosition,
         columnKey,
-        columnIndex: columnIndex === undefined ? columns.findIndex((column) => column.key === columnKey) : columnIndex
+        columnIndex:
+          columnIndex === undefined ? visibleColumns.findIndex((column) => column.key === columnKey) : columnIndex
       }
     },
-    [columnIndexMap, columns]
+    [columnIndexMap, visibleColumns]
   )
 
   const selectedRange = useMemo(() => {
@@ -391,7 +858,7 @@ export default function CsvWorkbench({
       const entry = previewEntries[rowPosition]
       if (!entry) continue
       for (let columnIndex = selectedRange.columnStart; columnIndex <= selectedRange.columnEnd; columnIndex += 1) {
-        const column = columns[columnIndex]
+        const column = visibleColumns[columnIndex]
         if (!column) continue
         targets.push({
           rowIndex: entry.index,
@@ -402,7 +869,7 @@ export default function CsvWorkbench({
       }
     }
     return targets
-  }, [selectedRange, previewEntries, columns])
+  }, [selectedRange, previewEntries, visibleColumns])
 
   const selectedCellSet = useMemo(() => {
     if (!selectedTargets || selectedTargets.length === 0) {
@@ -431,11 +898,11 @@ export default function CsvWorkbench({
         )
         const nextColumnIndex = Math.max(
           0,
-          Math.min(columns.length - 1, current.columnIndex + deltaColumn)
+          Math.min(visibleColumns.length - 1, current.columnIndex + deltaColumn)
         )
 
         const entry = previewEntries[nextRowPosition]
-        const column = columns[nextColumnIndex]
+        const column = visibleColumns[nextColumnIndex]
         if (!entry || !column) {
           return previous
         }
@@ -464,7 +931,7 @@ export default function CsvWorkbench({
         return { anchor, focus: nextTarget }
       })
     },
-    [previewEntries, columns]
+    [previewEntries, visibleColumns]
   )
 
   const handleCellMouseDown = useCallback(
@@ -538,7 +1005,7 @@ export default function CsvWorkbench({
     [moveSelection, startEditCell]
   )
 
-  const selectedColumnOrder = useMemo(() => columns.map((column) => column.key), [columns])
+  const selectedColumnOrder = useMemo(() => visibleColumns.map((column) => column.key), [visibleColumns])
 
   const handleFillSelection = useCallback(() => {
     if (!hasSelection) return
@@ -599,7 +1066,7 @@ export default function CsvWorkbench({
           if (direction === 'left') {
             const sourceColumnIndex = target.columnIndex - 1
             if (sourceColumnIndex < 0) return null
-            const sourceColumn = columns[sourceColumnIndex]
+            const sourceColumn = visibleColumns[sourceColumnIndex]
             if (!sourceColumn) return null
             return {
               rowIndex: target.rowIndex,
@@ -609,8 +1076,8 @@ export default function CsvWorkbench({
           }
           if (direction === 'right') {
             const sourceColumnIndex = target.columnIndex + 1
-            if (sourceColumnIndex >= columns.length) return null
-            const sourceColumn = columns[sourceColumnIndex]
+            if (sourceColumnIndex >= visibleColumns.length) return null
+            const sourceColumn = visibleColumns[sourceColumnIndex]
             if (!sourceColumn) return null
             return {
               rowIndex: target.rowIndex,
@@ -624,7 +1091,7 @@ export default function CsvWorkbench({
       if (updates.length === 0) return
       updateCell({ type: 'copy', updates, columnOrder: selectedColumnOrder, direction })
     },
-    [hasSelection, selectedTargets, previewEntries, columns, updateCell, selectedColumnOrder]
+    [hasSelection, selectedTargets, previewEntries, visibleColumns, updateCell, selectedColumnOrder]
   )
 
   const schedulePersist = useCallback(() => {
@@ -666,6 +1133,54 @@ export default function CsvWorkbench({
       schedulePersist()
     },
     [internalToggleValueColumn, schedulePersist]
+  )
+
+  const reorderColumns = useCallback(
+    (orderedKeys) => {
+      internalReorderColumns(orderedKeys)
+      schedulePersist()
+    },
+    [internalReorderColumns, schedulePersist]
+  )
+
+  const setColumnWidth = useCallback(
+    (columnKey, width) => {
+      internalSetColumnWidth(columnKey, width)
+      schedulePersist()
+    },
+    [internalSetColumnWidth, schedulePersist]
+  )
+
+  const setColumnVisibility = useCallback(
+    (columnKey, isVisible) => {
+      internalSetColumnVisibility(columnKey, isVisible)
+      schedulePersist()
+    },
+    [internalSetColumnVisibility, schedulePersist]
+  )
+
+  const setColumnPinned = useCallback(
+    (columnKey, pinned) => {
+      internalSetColumnPinned(columnKey, pinned)
+      schedulePersist()
+    },
+    [internalSetColumnPinned, schedulePersist]
+  )
+
+  const setRowHidden = useCallback(
+    (source, rowIndex, hidden) => {
+      internalSetRowHidden(source, rowIndex, hidden)
+      schedulePersist()
+    },
+    [internalSetRowHidden, schedulePersist]
+  )
+
+  const setRowPinned = useCallback(
+    (source, rowIndex, pinned) => {
+      internalSetRowPinned(source, rowIndex, pinned)
+      schedulePersist()
+    },
+    [internalSetRowPinned, schedulePersist]
   )
 
   const updateCell = useCallback(
@@ -1149,79 +1664,19 @@ export default function CsvWorkbench({
     return `${searchColumns.length} Spalten`
   }, [searchColumns])
 
-  const transformedColumns = useMemo(() => {
-    const keys = []
-
-    // For coordinate charts, show longitude and latitude columns
-    if (isCoordinate) {
-      if (mapping.longitudeColumn) {
-        keys.push(mapping.longitudeColumn)
-      }
-      if (mapping.latitudeColumn && !keys.includes(mapping.latitudeColumn)) {
-        keys.push(mapping.latitudeColumn)
-      }
-      if (mapping.datasetLabel && !keys.includes(mapping.datasetLabel)) {
-        keys.push(mapping.datasetLabel)
-      }
-      if (mapping.pointLabelColumn && !keys.includes(mapping.pointLabelColumn)) {
-        keys.push(mapping.pointLabelColumn)
-      }
-      // Add all other columns that exist in the data
-      if (transformedPreviewRows.length > 0) {
-        Object.keys(transformedPreviewRows[0] || {}).forEach((key) => {
-          if (!keys.includes(key)) {
-            keys.push(key)
-          }
-        })
-      }
-    } else if (isScatterBubble) {
-      // For scatter/bubble charts, show x, y, r columns
-      if (mapping.xColumn) {
-        keys.push(mapping.xColumn)
-      }
-      if (mapping.yColumn && !keys.includes(mapping.yColumn)) {
-        keys.push(mapping.yColumn)
-      }
-      if (mapping.rColumn && !keys.includes(mapping.rColumn)) {
-        keys.push(mapping.rColumn)
-      }
-      if (mapping.datasetLabel && !keys.includes(mapping.datasetLabel)) {
-        keys.push(mapping.datasetLabel)
-      }
-      if (mapping.pointLabelColumn && !keys.includes(mapping.pointLabelColumn)) {
-        keys.push(mapping.pointLabelColumn)
-      }
-      // Add all other columns that exist in the data
-      if (transformedPreviewRows.length > 0) {
-        Object.keys(transformedPreviewRows[0] || {}).forEach((key) => {
-          if (!keys.includes(key)) {
-            keys.push(key)
-          }
-        })
-      }
-    } else {
-      // Standard mapping for other chart types
-      if (mapping.label) {
-        keys.push(mapping.label)
-      }
-      if (mapping.datasetLabel && !keys.includes(mapping.datasetLabel)) {
-        keys.push(mapping.datasetLabel)
-      }
-      mapping.valueColumns.forEach((column) => {
-        if (column && !keys.includes(column)) {
-          keys.push(column)
+  const transformedExtraColumns = useMemo(() => {
+    const known = new Set(visibleColumns.map((column) => column.key))
+    const extras = []
+    transformedPreviewEntries.forEach((entry) => {
+      Object.keys(entry.row || {}).forEach((key) => {
+        if (!known.has(key)) {
+          known.add(key)
+          extras.push(key)
         }
       })
-      if (keys.length === 0 && transformedPreviewRows.length > 0) {
-        Object.keys(transformedPreviewRows[0] || {}).forEach((key) => {
-          if (!keys.includes(key)) {
-            keys.push(key)
-          }
-        })
-      }
-    }
-    return keys
-  }, [mapping, transformedPreviewRows, isCoordinate, isScatterBubble])
+    })
+    return extras
+  }, [visibleColumns, transformedPreviewEntries])
 
   if (!isOpen) {
     return null
@@ -2166,101 +2621,199 @@ export default function CsvWorkbench({
                           </div>
                         </div>
                       )}
-                      <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
-                        <table className="min-w-full divide-y divide-gray-700 text-sm">
-                          <thead className="bg-dark-bg/80 text-xs uppercase tracking-wide text-dark-textGray">
-                            <tr>
-                              {columns.map((column) => {
-                                const sortIndex = activeSorts.findIndex((entry) => entry.column === column.key)
-                                const sortEntry = sortIndex >= 0 ? activeSorts[sortIndex] : null
-                                const isSorted = Boolean(sortEntry)
-                                const sortSymbol = sortEntry ? (sortEntry.direction === 'desc' ? '▼' : '▲') : ''
-
-                                return (
-                                  <th key={column.key} className="px-3 py-2 text-left">
-                                    <button
-                                      type="button"
-                                      onClick={(event) => handleSortToggle(column.key, event)}
-                                      className={`flex items-center gap-1 text-dark-textGray transition-colors hover:text-dark-textLight ${
-                                        isSorted ? 'text-dark-textLight' : ''
-                                      }`}
+                      <div className="space-y-2">
+                        {hiddenColumns.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
+                            <span className="font-semibold text-dark-textLight">Versteckte Spalten:</span>
+                            {hiddenColumns.map((column) => (
+                              <button
+                                key={`show-column-${column.key}`}
+                                type="button"
+                                onClick={() => handleShowColumn(column.key)}
+                                className="rounded border border-gray-600 px-2 py-0.5 text-dark-textLight/80 transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                              >
+                                {column.key} einblenden
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {hiddenRawRowIndices.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
+                            <span className="font-semibold text-dark-textLight">Versteckte Zeilen:</span>
+                            {hiddenRawRowIndices.map((rowIndex) => (
+                              <button
+                                key={`show-row-${rowIndex}`}
+                                type="button"
+                                onClick={() => handleToggleRowHidden('raw', rowIndex)}
+                                className="rounded border border-gray-600 px-2 py-0.5 text-dark-textLight/80 transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                              >
+                                Zeile {rowIndex + 1} anzeigen
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
+                          <table className="min-w-full divide-y divide-gray-700 text-sm">
+                            <thead className="text-xs uppercase tracking-wide text-dark-textGray">
+                              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+                                <SortableContext items={visibleColumns.map((column) => column.key)} strategy={horizontalListSortingStrategy}>
+                                  <tr ref={headerRef}>
+                                    <th
+                                      className="sticky left-0 z-50 border-r border-gray-700 bg-dark-bg/90 px-3 py-2 text-left"
+                                      style={{ minWidth: `${ACTION_COLUMN_WIDTH}px`, width: `${ACTION_COLUMN_WIDTH}px`, top: 0 }}
                                     >
-                                      <span>{column.key}</span>
-                                      {isSorted && (
-                                        <span className="flex items-center gap-1 text-[10px]">
-                                          <span>{sortSymbol}</span>
-                                          <span className="rounded bg-dark-textGray/30 px-1 text-[9px] leading-none text-dark-textLight">
-                                            {sortIndex + 1}
-                                          </span>
-                                        </span>
-                                      )}
-                                    </button>
-                                  </th>
+                                      <span className="text-[10px] uppercase tracking-wide text-dark-textGray">Zeile</span>
+                                    </th>
+                                    {visibleColumns.map((column) => {
+                                      const sortIndex = activeSorts.findIndex((entry) => entry.column === column.key)
+                                      const sortEntry = sortIndex >= 0 ? activeSorts[sortIndex] : null
+                                      return (
+                                        <SortableHeaderCell
+                                          key={column.key}
+                                          column={column}
+                                          sortEntry={sortEntry}
+                                          sortIndex={sortIndex}
+                                          onSortToggle={handleSortToggle}
+                                          onToggleVisibility={handleHideColumn}
+                                          onTogglePinned={handleToggleColumnPinned}
+                                          onResizeStart={handleColumnResizeStart}
+                                          registerRef={registerColumnRef}
+                                          isPinnedLeft={column.display?.pinned === 'left'}
+                                          isPinnedRight={column.display?.pinned === 'right'}
+                                          leftOffset={pinnedLeftOffsets.get(column.key)}
+                                          rightOffset={pinnedRightOffsets.get(column.key)}
+                                          width={getColumnWidth(column.key)}
+                                        />
+                                      )
+                                    })}
+                                  </tr>
+                                </SortableContext>
+                              </DndContext>
+                            </thead>
+                            <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
+                              {previewEntries.map((entry, rowPosition) => {
+                                const rowState = rowDisplayRaw[entry.index] || {}
+                                const rowTop = rowState.pinned ? pinnedRawRowOffsets.get(entry.index) ?? headerHeight : undefined
+                                return (
+                                  <tr key={entry.index} ref={(node) => registerRowRef('raw', entry.index, node)}>
+                                    <td
+                                      className="sticky left-0 z-40 border-r border-gray-800 bg-dark-bg/90 px-2 py-2 text-[11px] text-dark-textGray"
+                                      style={{
+                                        minWidth: `${ACTION_COLUMN_WIDTH}px`,
+                                        width: `${ACTION_COLUMN_WIDTH}px`,
+                                        top: rowTop
+                                      }}
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="font-mono text-[10px] text-dark-textGray/80">#{entry.index + 1}</span>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleToggleRowPinned('raw', entry.index)}
+                                            className={`rounded px-1 text-[10px] transition-colors ${
+                                              rowState.pinned
+                                                ? 'text-dark-accent1'
+                                                : 'text-dark-textGray hover:text-dark-textLight'
+                                            }`}
+                                            title={rowState.pinned ? 'Fixierung lösen' : 'Zeile fixieren'}
+                                          >
+                                            📌
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleToggleRowHidden('raw', entry.index)}
+                                            className="rounded px-1 text-[10px] text-dark-textGray transition-colors hover:text-dark-textLight"
+                                            title="Zeile ausblenden"
+                                          >
+                                            🚫
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    {visibleColumns.map((column) => {
+                                      const isEditing =
+                                        editingCell?.rowIndex === entry.index && editingCell.columnKey === column.key
+                                      const matches = entry.matchInfo?.[column.key]
+                                      const highlightedValue = renderHighlightedValue(entry.row[column.key], matches)
+                                      const hasContent = Array.isArray(highlightedValue)
+                                        ? highlightedValue.length > 0
+                                        : Boolean(highlightedValue)
+                                      const isSelected = selectedCellSet.has(`${entry.index}::${column.key}`)
+                                      const isPinnedLeft = column.display?.pinned === 'left'
+                                      const isPinnedRight = column.display?.pinned === 'right'
+                                      const cellLeft = pinnedLeftOffsets.get(column.key)
+                                      const cellRight = pinnedRightOffsets.get(column.key)
+                                      const cellWidth = getColumnWidth(column.key)
+                                      const cellStyle = {
+                                        minWidth: `${Math.max(cellWidth, MIN_COLUMN_WIDTH)}px`,
+                                        width: column.display?.width ? `${Math.max(cellWidth, MIN_COLUMN_WIDTH)}px` : undefined
+                                      }
+                                      if (isPinnedLeft || isPinnedRight || rowState.pinned) {
+                                        cellStyle.position = 'sticky'
+                                        if (isPinnedLeft) {
+                                          cellStyle.left = cellLeft
+                                        }
+                                        if (isPinnedRight) {
+                                          cellStyle.right = cellRight
+                                        }
+                                        if (rowState.pinned) {
+                                          cellStyle.top = rowTop ?? headerHeight
+                                        }
+                                        cellStyle.zIndex = 20 + (isPinnedLeft || isPinnedRight ? 5 : 0) + (rowState.pinned ? 5 : 0)
+                                        cellStyle.backgroundColor = 'rgba(17, 24, 39, 0.9)'
+                                      }
+                                      return (
+                                        <td
+                                          key={column.key}
+                                          className={`px-3 py-2 text-xs text-dark-textLight/90 ${
+                                            isSelected ? 'bg-dark-accent1/20 text-dark-textLight ring-1 ring-dark-accent1/40' : ''
+                                          }`}
+                                          style={cellStyle}
+                                        >
+                                          {isEditing ? (
+                                            <input
+                                              value={editingValue}
+                                              onChange={(event) => setEditingValue(event.target.value)}
+                                              onBlur={confirmEdit}
+                                              onKeyDown={(event) => {
+                                                if (event.key === 'Enter') {
+                                                  confirmEdit()
+                                                } else if (event.key === 'Escape') {
+                                                  cancelEdit()
+                                                }
+                                              }}
+                                              autoFocus
+                                              className="w-full rounded-md border border-dark-accent1/60 bg-dark-secondary px-2 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                            />
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              data-row-index={entry.index}
+                                              data-column-key={column.key}
+                                              onMouseDown={(event) => handleCellMouseDown(event, entry, rowPosition, column.key)}
+                                              onMouseEnter={() => handleCellMouseEnter(entry, rowPosition, column.key)}
+                                              onDoubleClick={() => startEditCell(entry, column.key, rowPosition)}
+                                              onKeyDown={(event) => handleCellKeyDown(event, entry, rowPosition, column.key)}
+                                              className={`w-full rounded px-1 text-left text-dark-textLight/90 transition-colors hover:text-dark-textLight ${
+                                                isSelected ? 'bg-dark-accent1/10' : ''
+                                              }`}
+                                            >
+                                              {hasContent ? (
+                                                highlightedValue
+                                              ) : (
+                                                <span className="text-dark-textGray/60">–</span>
+                                              )}
+                                            </button>
+                                          )}
+                                        </td>
+                                      )
+                                    })}
+                                  </tr>
                                 )
                               })}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
-                            {previewEntries.map((entry, rowPosition) => (
-                              <tr key={entry.index}>
-                                {columns.map((column) => {
-                                  const isEditing =
-                                    editingCell?.rowIndex === entry.index && editingCell.columnKey === column.key
-                                  const matches = entry.matchInfo?.[column.key]
-                                  const highlightedValue = renderHighlightedValue(entry.row[column.key], matches)
-                                  const hasContent = Array.isArray(highlightedValue)
-                                    ? highlightedValue.length > 0
-                                    : Boolean(highlightedValue)
-                                  const isSelected = selectedCellSet.has(`${entry.index}::${column.key}`)
-                                  return (
-                                    <td
-                                      key={column.key}
-                                      className={`px-3 py-2 text-xs text-dark-textLight/90 ${
-                                        isSelected ? 'bg-dark-accent1/20 text-dark-textLight ring-1 ring-dark-accent1/40' : ''
-                                      }`}
-                                    >
-                                      {isEditing ? (
-                                        <input
-                                          value={editingValue}
-                                          onChange={(event) => setEditingValue(event.target.value)}
-                                          onBlur={confirmEdit}
-                                          onKeyDown={(event) => {
-                                            if (event.key === 'Enter') {
-                                              confirmEdit()
-                                            } else if (event.key === 'Escape') {
-                                              cancelEdit()
-                                            }
-                                          }}
-                                          autoFocus
-                                          className="w-full rounded-md border border-dark-accent1/60 bg-dark-secondary px-2 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                                        />
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          data-row-index={entry.index}
-                                          data-column-key={column.key}
-                                          onMouseDown={(event) => handleCellMouseDown(event, entry, rowPosition, column.key)}
-                                          onMouseEnter={() => handleCellMouseEnter(entry, rowPosition, column.key)}
-                                          onDoubleClick={() => startEditCell(entry, column.key, rowPosition)}
-                                          onKeyDown={(event) => handleCellKeyDown(event, entry, rowPosition, column.key)}
-                                          className={`w-full rounded px-1 text-left text-dark-textLight/90 transition-colors hover:text-dark-textLight ${
-                                            isSelected ? 'bg-dark-accent1/10' : ''
-                                          }`}
-                                        >
-                                          {hasContent ? (
-                                            highlightedValue
-                                          ) : (
-                                            <span className="text-dark-textGray/60">–</span>
-                                          )}
-                                        </button>
-                                      )}
-                                    </td>
-                                  )
-                                })}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </section>
                   ) : (
@@ -2985,63 +3538,192 @@ export default function CsvWorkbench({
                             </button>
                           </div>
                         </div>
-                        <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
-                          <table className="min-w-full divide-y divide-gray-700 text-sm">
-                            <thead className="bg-dark-bg/80 text-xs uppercase tracking-wide text-dark-textGray">
-                              <tr>
-                                {transformedColumns.map((column) => {
-                                  const sortIndex = activeSorts.findIndex((entry) => entry.column === column)
-                                  const sortEntry = sortIndex >= 0 ? activeSorts[sortIndex] : null
-                                  const isSorted = Boolean(sortEntry)
-                                  const sortSymbol = sortEntry ? (sortEntry.direction === 'desc' ? '▼' : '▲') : ''
-
-                                  return (
-                                    <th key={column} className="px-3 py-2 text-left">
-                                      <button
-                                        type="button"
-                                        onClick={(event) => handleSortToggle(column, event)}
-                                        className={`flex items-center gap-1 text-dark-textGray transition-colors hover:text-dark-textLight ${
-                                          isSorted ? 'text-dark-textLight' : ''
-                                        }`}
+                        <div className="space-y-2">
+                          {hiddenTransformedRowIndices.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
+                              <span className="font-semibold text-dark-textLight">Versteckte Zeilen:</span>
+                              {hiddenTransformedRowIndices.map((rowIndex) => (
+                                <button
+                                  key={`show-transformed-row-${rowIndex}`}
+                                  type="button"
+                                  onClick={() => handleToggleRowHidden('transformed', rowIndex)}
+                                  className="rounded border border-gray-600 px-2 py-0.5 text-dark-textLight/80 transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                                >
+                                  Zeile {rowIndex + 1} anzeigen
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
+                            <table className="min-w-full divide-y divide-gray-700 text-sm">
+                              <thead className="text-xs uppercase tracking-wide text-dark-textGray">
+                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+                                  <SortableContext items={visibleColumns.map((column) => column.key)} strategy={horizontalListSortingStrategy}>
+                                    <tr ref={transformedHeaderRef}>
+                                      <th
+                                        className="sticky left-0 z-50 border-r border-gray-700 bg-dark-bg/90 px-3 py-2 text-left"
+                                        style={{ minWidth: `${ACTION_COLUMN_WIDTH}px`, width: `${ACTION_COLUMN_WIDTH}px`, top: 0 }}
                                       >
-                                        <span>{column}</span>
-                                        {isSorted && (
-                                          <span className="flex items-center gap-1 text-[10px]">
-                                            <span>{sortSymbol}</span>
-                                            <span className="rounded bg-dark-textGray/30 px-1 text-[9px] leading-none text-dark-textLight">
-                                              {sortIndex + 1}
-                                            </span>
-                                          </span>
-                                        )}
-                                      </button>
-                                    </th>
+                                        <span className="text-[10px] uppercase tracking-wide text-dark-textGray">Zeile</span>
+                                      </th>
+                                      {visibleColumns.map((column) => {
+                                        const sortIndex = activeSorts.findIndex((entry) => entry.column === column.key)
+                                        const sortEntry = sortIndex >= 0 ? activeSorts[sortIndex] : null
+                                        return (
+                                          <SortableHeaderCell
+                                            key={`transformed-${column.key}`}
+                                            column={column}
+                                            sortEntry={sortEntry}
+                                            sortIndex={sortIndex}
+                                            onSortToggle={handleSortToggle}
+                                            onToggleVisibility={handleHideColumn}
+                                            onTogglePinned={handleToggleColumnPinned}
+                                            onResizeStart={handleColumnResizeStart}
+                                            registerRef={registerColumnRef}
+                                            isPinnedLeft={column.display?.pinned === 'left'}
+                                            isPinnedRight={column.display?.pinned === 'right'}
+                                            leftOffset={pinnedLeftOffsets.get(column.key)}
+                                            rightOffset={pinnedRightOffsets.get(column.key)}
+                                            width={getColumnWidth(column.key)}
+                                          />
+                                        )
+                                      })}
+                                      {transformedExtraColumns.map((columnKey) => {
+                                        const sortIndex = activeSorts.findIndex((entry) => entry.column === columnKey)
+                                        const sortEntry = sortIndex >= 0 ? activeSorts[sortIndex] : null
+                                        const isSorted = Boolean(sortEntry)
+                                        const sortSymbol = sortEntry ? (sortEntry.direction === 'desc' ? '▼' : '▲') : ''
+                                        const width = getColumnWidth(columnKey)
+                                        return (
+                                          <th
+                                            key={`extra-header-${columnKey}`}
+                                            className="px-3 py-2 text-left"
+                                            style={{ minWidth: `${Math.max(width, MIN_COLUMN_WIDTH)}px`, width: `${Math.max(width, MIN_COLUMN_WIDTH)}px` }}
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={(event) => handleSortToggle(columnKey, event)}
+                                              className={`flex items-center gap-1 text-dark-textGray transition-colors hover:text-dark-textLight ${
+                                                isSorted ? 'text-dark-textLight' : ''
+                                              }`}
+                                            >
+                                              <span>{columnKey}</span>
+                                              {isSorted && (
+                                                <span className="flex items-center gap-1 text-[10px]">
+                                                  <span>{sortSymbol}</span>
+                                                  <span className="rounded bg-dark-textGray/30 px-1 text-[9px] leading-none text-dark-textLight">
+                                                    {sortIndex + 1}
+                                                  </span>
+                                                </span>
+                                              )}
+                                            </button>
+                                          </th>
+                                        )
+                                      })}
+                                    </tr>
+                                  </SortableContext>
+                                </DndContext>
+                              </thead>
+                              <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
+                                {transformedPreviewEntries.map((entry) => {
+                                  const rowState = rowDisplayTransformed[entry.index] || {}
+                                  const rowTop = rowState.pinned
+                                    ? pinnedTransformedRowOffsets.get(entry.index) ?? transformedHeaderHeight
+                                    : undefined
+                                  return (
+                                    <tr key={entry.index} ref={(node) => registerRowRef('transformed', entry.index, node)}>
+                                      <td
+                                        className="sticky left-0 z-40 border-r border-gray-800 bg-dark-bg/90 px-2 py-2 text-[11px] text-dark-textGray"
+                                        style={{
+                                          minWidth: `${ACTION_COLUMN_WIDTH}px`,
+                                          width: `${ACTION_COLUMN_WIDTH}px`,
+                                          top: rowTop
+                                        }}
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="font-mono text-[10px] text-dark-textGray/80">#{entry.index + 1}</span>
+                                          <div className="flex items-center gap-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleToggleRowPinned('transformed', entry.index)}
+                                              className={`rounded px-1 text-[10px] transition-colors ${
+                                                rowState.pinned
+                                                  ? 'text-dark-accent1'
+                                                  : 'text-dark-textGray hover:text-dark-textLight'
+                                              }`}
+                                              title={rowState.pinned ? 'Fixierung lösen' : 'Zeile fixieren'}
+                                            >
+                                              📌
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleToggleRowHidden('transformed', entry.index)}
+                                              className="rounded px-1 text-[10px] text-dark-textGray transition-colors hover:text-dark-textLight"
+                                              title="Zeile ausblenden"
+                                            >
+                                              🚫
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </td>
+                                      {visibleColumns.map((column) => {
+                                        const isPinnedLeft = column.display?.pinned === 'left'
+                                        const isPinnedRight = column.display?.pinned === 'right'
+                                        const cellLeft = pinnedLeftOffsets.get(column.key)
+                                        const cellRight = pinnedRightOffsets.get(column.key)
+                                        const cellWidth = getColumnWidth(column.key)
+                                        const cellStyle = {
+                                          minWidth: `${Math.max(cellWidth, MIN_COLUMN_WIDTH)}px`,
+                                          width: column.display?.width ? `${Math.max(cellWidth, MIN_COLUMN_WIDTH)}px` : undefined
+                                        }
+                                        if (isPinnedLeft || isPinnedRight || rowState.pinned) {
+                                          cellStyle.position = 'sticky'
+                                          if (isPinnedLeft) {
+                                            cellStyle.left = cellLeft
+                                          }
+                                          if (isPinnedRight) {
+                                            cellStyle.right = cellRight
+                                          }
+                                          if (rowState.pinned) {
+                                            cellStyle.top = rowTop ?? transformedHeaderHeight
+                                          }
+                                          cellStyle.zIndex = 20 + (isPinnedLeft || isPinnedRight ? 5 : 0) + (rowState.pinned ? 5 : 0)
+                                          cellStyle.backgroundColor = 'rgba(17, 24, 39, 0.9)'
+                                        }
+                                        const matches = entry.matchInfo?.[column.key]
+                                        const highlightedValue = renderHighlightedValue(entry.row[column.key], matches)
+                                        const hasContent = Array.isArray(highlightedValue)
+                                          ? highlightedValue.length > 0
+                                          : Boolean(highlightedValue)
+                                        return (
+                                          <td key={`transformed-${column.key}`} className="px-3 py-2 text-xs text-dark-textLight/90" style={cellStyle}>
+                                            {hasContent ? highlightedValue : <span className="text-dark-textGray/60">–</span>}
+                                          </td>
+                                        )
+                                      })}
+                                      {transformedExtraColumns.map((columnKey) => {
+                                        const width = getColumnWidth(columnKey)
+                                        const matches = entry.matchInfo?.[columnKey]
+                                        const highlightedValue = renderHighlightedValue(entry.row[columnKey], matches)
+                                        const hasContent = Array.isArray(highlightedValue)
+                                          ? highlightedValue.length > 0
+                                          : Boolean(highlightedValue)
+                                        return (
+                                          <td
+                                            key={`extra-${entry.index}-${columnKey}`}
+                                            className="px-3 py-2 text-xs text-dark-textLight/90"
+                                            style={{ minWidth: `${Math.max(width, MIN_COLUMN_WIDTH)}px`, width: `${Math.max(width, MIN_COLUMN_WIDTH)}px` }}
+                                          >
+                                            {hasContent ? highlightedValue : <span className="text-dark-textGray/60">–</span>}
+                                          </td>
+                                        )
+                                      })}
+                                    </tr>
                                   )
                                 })}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
-                              {transformedPreviewEntries.map((entry) => (
-                                <tr key={entry.index}>
-                                  {transformedColumns.map((column) => {
-                                    const matches = entry.matchInfo?.[column]
-                                    const highlightedValue = renderHighlightedValue(entry.row[column], matches)
-                                    const hasContent = Array.isArray(highlightedValue)
-                                      ? highlightedValue.length > 0
-                                      : Boolean(highlightedValue)
-                                    return (
-                                      <td key={column} className="px-3 py-2 text-xs text-dark-textLight/90">
-                                        {hasContent ? (
-                                          highlightedValue
-                                        ) : (
-                                          <span className="text-dark-textGray/60">–</span>
-                                        )}
-                                      </td>
-                                    )
-                                  })}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       </div>
                     ) : (

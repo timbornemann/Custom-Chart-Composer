@@ -426,7 +426,7 @@ const arraysEqual = (a, b) => {
 
 const MAX_MATCHES_PER_CELL = 50
 
-const createSearchConfig = ({ query, mode, columns }) => {
+export const createSearchConfig = ({ query, mode, columns }) => {
   const trimmedQuery = typeof query === 'string' ? query.trim() : ''
   const normalizedMode = mode === 'regex' || mode === 'whole' ? mode : 'normal'
   const normalizedColumns = Array.isArray(columns)
@@ -483,7 +483,7 @@ const createSearchConfig = ({ query, mode, columns }) => {
   }
 }
 
-const getCellMatchPositions = (value, searchConfig) => {
+export const getCellMatchPositions = (value, searchConfig) => {
   if (!searchConfig?.isActive) {
     return []
   }
@@ -531,7 +531,7 @@ const getCellMatchPositions = (value, searchConfig) => {
   return matches
 }
 
-const rowMatchesQuery = (row, searchConfig) => {
+export const rowMatchesQuery = (row, searchConfig) => {
   if (!searchConfig?.isActive) {
     return { isMatch: true, matchesByColumn: {} }
   }

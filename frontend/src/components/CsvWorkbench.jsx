@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 import Papa from 'papaparse'
 import useDataImport from '../hooks/useDataImport'
@@ -191,6 +191,371 @@ export default function CsvWorkbench({
   const [editingCell, setEditingCell] = useState(null)
   const [editingValue, setEditingValue] = useState('')
   const [activeSection, setActiveSection] = useState('mapping')
+  const [selectionState, setSelectionState] = useState({ anchor: null, focus: null })
+  const [isSelecting, setIsSelecting] = useState(false)
+  const pendingFocusRef = useRef(null)
+
+  const columnIndexMap = useMemo(() => {
+    const map = new Map()
+    columns.forEach((column, index) => {
+      map.set(column.key, index)
+    })
+    return map
+  }, [columns])
+
+  const focusCellElement = useCallback((rowIndex, columnKey) => {
+    if (typeof document === 'undefined') return
+    const selector = `button[data-row-index="${rowIndex}"][data-column-key="${columnKey}"]`
+    const element = document.querySelector(selector)
+    if (element) {
+      element.focus()
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setIsSelecting(false)
+    }
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [])
+
+  useEffect(() => {
+    const pending = pendingFocusRef.current
+    if (pending) {
+      pendingFocusRef.current = null
+      focusCellElement(pending.rowIndex, pending.columnKey)
+    }
+  }, [selectionState, focusCellElement])
+
+  useEffect(() => {
+    setSelectionState((previous) => {
+      if (!previous.anchor || !previous.focus) {
+        return previous
+      }
+
+      const remapTarget = (target) => {
+        const rowPosition = previewEntries.findIndex((entry) => entry.index === target.rowIndex)
+        if (rowPosition === -1) {
+          return null
+        }
+        const columnIndex = columnIndexMap.get(target.columnKey)
+        if (columnIndex === undefined) {
+          return null
+        }
+        if (rowPosition === target.rowPosition && columnIndex === target.columnIndex) {
+          return target
+        }
+        return { ...target, rowPosition, columnIndex }
+      }
+
+      const anchor = remapTarget(previous.anchor)
+      const focus = remapTarget(previous.focus)
+
+      if (!anchor || !focus) {
+        return { anchor: null, focus: null }
+      }
+
+      if (
+        anchor === previous.anchor &&
+        focus === previous.focus
+      ) {
+        return previous
+      }
+
+      if (
+        anchor.rowPosition === previous.anchor.rowPosition &&
+        anchor.columnIndex === previous.anchor.columnIndex &&
+        focus.rowPosition === previous.focus.rowPosition &&
+        focus.columnIndex === previous.focus.columnIndex
+      ) {
+        return previous
+      }
+
+      return { anchor, focus }
+    })
+  }, [previewEntries, columnIndexMap])
+
+  const createCellTarget = useCallback(
+    (rowIndex, rowPosition, columnKey) => {
+      const columnIndex = columnIndexMap.get(columnKey)
+      return {
+        rowIndex,
+        rowPosition,
+        columnKey,
+        columnIndex: columnIndex === undefined ? columns.findIndex((column) => column.key === columnKey) : columnIndex
+      }
+    },
+    [columnIndexMap, columns]
+  )
+
+  const selectedRange = useMemo(() => {
+    if (!selectionState.anchor || !selectionState.focus) {
+      return null
+    }
+    const rowStart = Math.min(selectionState.anchor.rowPosition, selectionState.focus.rowPosition)
+    const rowEnd = Math.max(selectionState.anchor.rowPosition, selectionState.focus.rowPosition)
+    const columnStart = Math.min(selectionState.anchor.columnIndex, selectionState.focus.columnIndex)
+    const columnEnd = Math.max(selectionState.anchor.columnIndex, selectionState.focus.columnIndex)
+
+    if (rowStart < 0 || columnStart < 0) {
+      return null
+    }
+
+    return {
+      rowStart,
+      rowEnd,
+      columnStart,
+      columnEnd
+    }
+  }, [selectionState])
+
+  const selectedTargets = useMemo(() => {
+    if (!selectedRange) {
+      return []
+    }
+    const targets = []
+    for (let rowPosition = selectedRange.rowStart; rowPosition <= selectedRange.rowEnd; rowPosition += 1) {
+      const entry = previewEntries[rowPosition]
+      if (!entry) continue
+      for (let columnIndex = selectedRange.columnStart; columnIndex <= selectedRange.columnEnd; columnIndex += 1) {
+        const column = columns[columnIndex]
+        if (!column) continue
+        targets.push({
+          rowIndex: entry.index,
+          rowPosition,
+          columnKey: column.key,
+          columnIndex
+        })
+      }
+    }
+    return targets
+  }, [selectedRange, previewEntries, columns])
+
+  const selectedCellSet = useMemo(() => {
+    if (!selectedTargets || selectedTargets.length === 0) {
+      return new Set()
+    }
+    const cellSet = new Set()
+    selectedTargets.forEach((target) => {
+      cellSet.add(`${target.rowIndex}::${target.columnKey}`)
+    })
+    return cellSet
+  }, [selectedTargets])
+
+  const hasSelection = selectedTargets.length > 0
+
+  const moveSelection = useCallback(
+    (deltaRow, deltaColumn, extend) => {
+      setSelectionState((previous) => {
+        const current = previous.focus || previous.anchor
+        if (!current) {
+          return previous
+        }
+
+        const nextRowPosition = Math.max(
+          0,
+          Math.min(previewEntries.length - 1, current.rowPosition + deltaRow)
+        )
+        const nextColumnIndex = Math.max(
+          0,
+          Math.min(columns.length - 1, current.columnIndex + deltaColumn)
+        )
+
+        const entry = previewEntries[nextRowPosition]
+        const column = columns[nextColumnIndex]
+        if (!entry || !column) {
+          return previous
+        }
+
+        const nextTarget = {
+          rowIndex: entry.index,
+          rowPosition: nextRowPosition,
+          columnKey: column.key,
+          columnIndex: nextColumnIndex
+        }
+
+        pendingFocusRef.current = nextTarget
+
+        if (
+          previous.focus &&
+          previous.focus.rowIndex === nextTarget.rowIndex &&
+          previous.focus.columnKey === nextTarget.columnKey &&
+          previous.focus.rowPosition === nextTarget.rowPosition &&
+          previous.focus.columnIndex === nextTarget.columnIndex &&
+          extend
+        ) {
+          return previous
+        }
+
+        const anchor = extend && previous.anchor ? previous.anchor : nextTarget
+        return { anchor, focus: nextTarget }
+      })
+    },
+    [previewEntries, columns]
+  )
+
+  const handleCellMouseDown = useCallback(
+    (event, entry, rowPosition, columnKey) => {
+      const target = createCellTarget(entry.index, rowPosition, columnKey)
+      pendingFocusRef.current = target
+      setIsSelecting(true)
+      setSelectionState((previous) => {
+        const extend = Boolean(event.shiftKey && previous.anchor)
+        const anchor = extend && previous.anchor ? previous.anchor : target
+        if (
+          previous.focus &&
+          previous.focus.rowIndex === target.rowIndex &&
+          previous.focus.columnKey === target.columnKey &&
+          previous.focus.rowPosition === target.rowPosition &&
+          previous.focus.columnIndex === target.columnIndex &&
+          anchor === previous.anchor
+        ) {
+          return previous
+        }
+        return { anchor, focus: target }
+      })
+    },
+    [createCellTarget]
+  )
+
+  const handleCellMouseEnter = useCallback(
+    (entry, rowPosition, columnKey) => {
+      if (!isSelecting) return
+      const target = createCellTarget(entry.index, rowPosition, columnKey)
+      setSelectionState((previous) => {
+        if (!previous.anchor) {
+          return previous
+        }
+        if (
+          previous.focus &&
+          previous.focus.rowIndex === target.rowIndex &&
+          previous.focus.columnKey === target.columnKey &&
+          previous.focus.rowPosition === target.rowPosition &&
+          previous.focus.columnIndex === target.columnIndex
+        ) {
+          return previous
+        }
+        return { anchor: previous.anchor, focus: target }
+      })
+    },
+    [isSelecting, createCellTarget]
+  )
+
+  const handleCellKeyDown = useCallback(
+    (event, entry, rowPosition, columnKey) => {
+      if (event.key === 'Enter') {
+        startEditCell(entry, columnKey, rowPosition)
+        return
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        moveSelection(-1, 0, event.shiftKey)
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        moveSelection(1, 0, event.shiftKey)
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        moveSelection(0, -1, event.shiftKey)
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        moveSelection(0, 1, event.shiftKey)
+      }
+    },
+    [moveSelection, startEditCell]
+  )
+
+  const selectedColumnOrder = useMemo(() => columns.map((column) => column.key), [columns])
+
+  const handleFillSelection = useCallback(() => {
+    if (!hasSelection) return
+    const value = window.prompt('Welcher Wert soll in den ausgewählten Zellen gesetzt werden?', '')
+    if (value === null) return
+    const updates = selectedTargets.map((target) => ({ rowIndex: target.rowIndex, columnKey: target.columnKey, value }))
+    if (updates.length === 0) return
+    updateCell({ type: 'set', updates })
+  }, [hasSelection, selectedTargets, updateCell])
+
+  const handleClearSelection = useCallback(() => {
+    if (!hasSelection) return
+    const updates = selectedTargets.map((target) => ({ rowIndex: target.rowIndex, columnKey: target.columnKey, value: '' }))
+    if (updates.length === 0) return
+    updateCell({ type: 'set', updates })
+  }, [hasSelection, selectedTargets, updateCell])
+
+  const handleIncrementSelection = useCallback(() => {
+    if (!hasSelection) return
+    const input = window.prompt('Um welchen Wert sollen die ausgewählten Zellen inkrementiert werden?', '1')
+    if (input === null) return
+    const amount = Number(input)
+    if (!Number.isFinite(amount)) {
+      window.alert('Bitte geben Sie eine gültige Zahl ein.')
+      return
+    }
+    const updates = selectedTargets.map((target) => ({ rowIndex: target.rowIndex, columnKey: target.columnKey }))
+    updateCell({ type: 'increment', amount, updates })
+  }, [hasSelection, selectedTargets, updateCell])
+
+  const handleCopyFromDirection = useCallback(
+    (direction) => {
+      if (!hasSelection) return
+      const updates = selectedTargets
+        .map((target) => {
+          if (direction === 'up') {
+            const sourceRowPosition = target.rowPosition - 1
+            if (sourceRowPosition < 0) return null
+            const sourceEntry = previewEntries[sourceRowPosition]
+            if (!sourceEntry) return null
+            return {
+              rowIndex: target.rowIndex,
+              columnKey: target.columnKey,
+              source: { rowIndex: sourceEntry.index, columnKey: target.columnKey }
+            }
+          }
+          if (direction === 'down') {
+            const sourceRowPosition = target.rowPosition + 1
+            if (sourceRowPosition >= previewEntries.length) return null
+            const sourceEntry = previewEntries[sourceRowPosition]
+            if (!sourceEntry) return null
+            return {
+              rowIndex: target.rowIndex,
+              columnKey: target.columnKey,
+              source: { rowIndex: sourceEntry.index, columnKey: target.columnKey }
+            }
+          }
+          if (direction === 'left') {
+            const sourceColumnIndex = target.columnIndex - 1
+            if (sourceColumnIndex < 0) return null
+            const sourceColumn = columns[sourceColumnIndex]
+            if (!sourceColumn) return null
+            return {
+              rowIndex: target.rowIndex,
+              columnKey: target.columnKey,
+              source: { rowIndex: target.rowIndex, columnKey: sourceColumn.key }
+            }
+          }
+          if (direction === 'right') {
+            const sourceColumnIndex = target.columnIndex + 1
+            if (sourceColumnIndex >= columns.length) return null
+            const sourceColumn = columns[sourceColumnIndex]
+            if (!sourceColumn) return null
+            return {
+              rowIndex: target.rowIndex,
+              columnKey: target.columnKey,
+              source: { rowIndex: target.rowIndex, columnKey: sourceColumn.key }
+            }
+          }
+          return null
+        })
+        .filter(Boolean)
+      if (updates.length === 0) return
+      updateCell({ type: 'copy', updates, columnOrder: selectedColumnOrder, direction })
+    },
+    [hasSelection, selectedTargets, previewEntries, columns, updateCell, selectedColumnOrder]
+  )
 
   const schedulePersist = useCallback(() => {
     if (!onImportStateChange) return
@@ -234,8 +599,8 @@ export default function CsvWorkbench({
   )
 
   const updateCell = useCallback(
-    (rowIndex, columnKey, value) => {
-      internalUpdateCell(rowIndex, columnKey, value)
+    (config, columnKey, value) => {
+      internalUpdateCell(config, columnKey, value)
       schedulePersist()
     },
     [internalUpdateCell, schedulePersist]
@@ -322,12 +687,18 @@ export default function CsvWorkbench({
     [setSortConfig, schedulePersist]
   )
 
-  const startEditCell = useCallback((entry, columnKey) => {
-    if (!entry) return
-    setEditingCell({ rowIndex: entry.index, columnKey })
-    const currentValue = entry.row?.[columnKey]
-    setEditingValue(currentValue === undefined || currentValue === null ? '' : String(currentValue))
-  }, [])
+  const startEditCell = useCallback(
+    (entry, columnKey, rowPosition = 0) => {
+      if (!entry) return
+      const target = createCellTarget(entry.index, rowPosition, columnKey)
+      pendingFocusRef.current = target
+      setSelectionState({ anchor: target, focus: target })
+      setEditingCell({ rowIndex: entry.index, columnKey })
+      const currentValue = entry.row?.[columnKey]
+      setEditingValue(currentValue === undefined || currentValue === null ? '' : String(currentValue))
+    },
+    [createCellTarget]
+  )
 
   const cancelEdit = useCallback(() => {
     setEditingCell(null)
@@ -336,7 +707,12 @@ export default function CsvWorkbench({
 
   const confirmEdit = useCallback(() => {
     if (!editingCell) return
-    updateCell(editingCell.rowIndex, editingCell.columnKey, editingValue)
+    updateCell({
+      type: 'set',
+      updates: [
+        { rowIndex: editingCell.rowIndex, columnKey: editingCell.columnKey, value: editingValue }
+      ]
+    })
     cancelEdit()
   }, [editingCell, editingValue, updateCell, cancelEdit])
 
@@ -1518,6 +1894,67 @@ export default function CsvWorkbench({
                           <p className="text-[11px] text-red-300">Regex-Fehler: {searchError}</p>
                         )}
                       </div>
+                      {hasSelection && (
+                        <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
+                          <span className="rounded-md border border-dark-accent1/40 bg-dark-secondary/40 px-2 py-1 text-dark-textLight/80">
+                            {selectedTargets.length} Zellen ausgewählt
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            <button
+                              type="button"
+                              onClick={handleFillSelection}
+                              className="rounded border border-gray-600 px-2 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                            >
+                              Füllen …
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleClearSelection}
+                              className="rounded border border-gray-600 px-2 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                            >
+                              Löschen
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleIncrementSelection}
+                              className="rounded border border-gray-600 px-2 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                            >
+                              Inkrementieren …
+                            </button>
+                            <div className="flex items-center gap-1">
+                              <span className="text-dark-textGray/80">Kopieren von</span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyFromDirection('up')}
+                                className="rounded border border-gray-600 px-1.5 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyFromDirection('down')}
+                                className="rounded border border-gray-600 px-1.5 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                              >
+                                ↓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyFromDirection('left')}
+                                className="rounded border border-gray-600 px-1.5 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                              >
+                                ←
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyFromDirection('right')}
+                                className="rounded border border-gray-600 px-1.5 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                              >
+                                →
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
                         <table className="min-w-full divide-y divide-gray-700 text-sm">
                           <thead className="bg-dark-bg/80 text-xs uppercase tracking-wide text-dark-textGray">
@@ -1553,7 +1990,7 @@ export default function CsvWorkbench({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
-                            {previewEntries.map((entry) => (
+                            {previewEntries.map((entry, rowPosition) => (
                               <tr key={entry.index}>
                                 {columns.map((column) => {
                                   const isEditing =
@@ -1563,8 +2000,14 @@ export default function CsvWorkbench({
                                   const hasContent = Array.isArray(highlightedValue)
                                     ? highlightedValue.length > 0
                                     : Boolean(highlightedValue)
+                                  const isSelected = selectedCellSet.has(`${entry.index}::${column.key}`)
                                   return (
-                                    <td key={column.key} className="px-3 py-2 text-xs text-dark-textLight/90">
+                                    <td
+                                      key={column.key}
+                                      className={`px-3 py-2 text-xs text-dark-textLight/90 ${
+                                        isSelected ? 'bg-dark-accent1/20 text-dark-textLight ring-1 ring-dark-accent1/40' : ''
+                                      }`}
+                                    >
                                       {isEditing ? (
                                         <input
                                           value={editingValue}
@@ -1583,13 +2026,15 @@ export default function CsvWorkbench({
                                       ) : (
                                         <button
                                           type="button"
-                                          onDoubleClick={() => startEditCell(entry, column.key)}
-                                          onKeyDown={(event) => {
-                                            if (event.key === 'Enter') {
-                                              startEditCell(entry, column.key)
-                                            }
-                                          }}
-                                          className="w-full text-left text-dark-textLight/90 hover:text-dark-textLight"
+                                          data-row-index={entry.index}
+                                          data-column-key={column.key}
+                                          onMouseDown={(event) => handleCellMouseDown(event, entry, rowPosition, column.key)}
+                                          onMouseEnter={() => handleCellMouseEnter(entry, rowPosition, column.key)}
+                                          onDoubleClick={() => startEditCell(entry, column.key, rowPosition)}
+                                          onKeyDown={(event) => handleCellKeyDown(event, entry, rowPosition, column.key)}
+                                          className={`w-full rounded px-1 text-left text-dark-textLight/90 transition-colors hover:text-dark-textLight ${
+                                            isSelected ? 'bg-dark-accent1/10' : ''
+                                          }`}
                                         >
                                           {hasContent ? (
                                             highlightedValue

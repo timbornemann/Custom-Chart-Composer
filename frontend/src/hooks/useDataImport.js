@@ -1982,20 +1982,245 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setValidationErrors([])
   }, [])
 
-  const updateCell = useCallback((rowIndex, columnKey, value) => {
-    setRows((prev) => {
-      if (rowIndex < 0 || rowIndex >= prev.length) {
-        return prev
+  const normalizeUpdateInput = useCallback((input, fallbackColumnKey, fallbackValue) => {
+    if (typeof input === 'number') {
+      if (fallbackColumnKey === undefined) {
+        return null
       }
-      const next = prev.map((row, index) => (index === rowIndex ? { ...row, [columnKey]: value } : row))
-      const analyzed = analyzeColumns(next)
-      setColumns(analyzed)
-      setAnalysisWarnings(summarizeColumnWarnings(analyzed))
-      return next
-    })
-    setValidationErrors([])
-    setResultWarnings([])
+      return {
+        type: 'set',
+        value: fallbackValue,
+        updates: [
+          {
+            rowIndex: input,
+            columnKey: fallbackColumnKey,
+            value: fallbackValue
+          }
+        ]
+      }
+    }
+
+    if (Array.isArray(input)) {
+      if (!fallbackColumnKey) {
+        return null
+      }
+      return {
+        type: 'set',
+        value: fallbackValue,
+        updates: input
+          .map((update) => ({
+            rowIndex: update.rowIndex,
+            columnKey: update.columnKey ?? fallbackColumnKey,
+            value: update.value ?? fallbackValue
+          }))
+          .filter((update) => typeof update.rowIndex === 'number' && update.columnKey)
+      }
+    }
+
+    if (input && typeof input === 'object') {
+      const type = input.type || input.operation || 'set'
+      let updates = []
+      if (Array.isArray(input.updates)) {
+        updates = input.updates
+      } else if (Array.isArray(input.targets)) {
+        updates = input.targets.map((target) => ({
+          rowIndex: target.rowIndex,
+          columnKey: target.columnKey ?? fallbackColumnKey,
+          value: target.value
+        }))
+      } else if (typeof input.rowIndex === 'number') {
+        updates = [
+          {
+            rowIndex: input.rowIndex,
+            columnKey: input.columnKey ?? fallbackColumnKey,
+            value: input.value ?? fallbackValue
+          }
+        ]
+      }
+
+      const normalizedUpdates = Array.isArray(updates)
+        ? updates
+            .map((update) => ({
+              rowIndex: update.rowIndex,
+              columnKey: update.columnKey ?? fallbackColumnKey,
+              value: update.value,
+              amount: update.amount,
+              source: update.source,
+              direction: update.direction
+            }))
+            .filter((update) => typeof update.rowIndex === 'number' && update.columnKey)
+        : []
+
+      return {
+        ...input,
+        type,
+        value: input.value !== undefined ? input.value : fallbackValue,
+        updates: normalizedUpdates
+      }
+    }
+
+    if (typeof input === 'undefined' && typeof fallbackColumnKey === 'string') {
+      return {
+        type: 'set',
+        value: fallbackValue,
+        updates: []
+      }
+    }
+
+    return null
   }, [])
+
+  const updateCell = useCallback(
+    (input, columnKey, value) => {
+      const config = normalizeUpdateInput(input, columnKey, value)
+      if (!config || !Array.isArray(config.updates) || config.updates.length === 0) {
+        return
+      }
+
+      const columnOrder = Array.isArray(config.columnOrder)
+        ? config.columnOrder
+        : columns.map((column) => column.key)
+
+      setRows((prev) => {
+        if (!prev || prev.length === 0) {
+          return prev
+        }
+
+        const normalizedUpdates = config.updates
+          .map((update) => {
+            const targetColumnKey = update.columnKey ?? columnKey
+            if (typeof update.rowIndex !== 'number' || !targetColumnKey) {
+              return null
+            }
+            return {
+              rowIndex: update.rowIndex,
+              columnKey: targetColumnKey,
+              value: update.value,
+              amount: update.amount,
+              source: update.source,
+              direction: update.direction
+            }
+          })
+          .filter(Boolean)
+
+        if (normalizedUpdates.length === 0) {
+          return prev
+        }
+
+        const nextRows = [...prev]
+        const changedRows = new Map()
+        let hasChanges = false
+
+        const getWorkingRow = (rowIndex) => {
+          if (changedRows.has(rowIndex)) {
+            return changedRows.get(rowIndex)
+          }
+          const original = prev[rowIndex]
+          if (!original) {
+            return null
+          }
+          const copy = { ...original }
+          changedRows.set(rowIndex, copy)
+          return copy
+        }
+
+        const resolveSourceValue = (update) => {
+          if (update.source && typeof update.source.rowIndex === 'number' && update.source.columnKey) {
+            const sourceRow = prev[update.source.rowIndex]
+            if (sourceRow) {
+              return sourceRow[update.source.columnKey]
+            }
+            return undefined
+          }
+
+          const direction = update.direction || config.direction
+          if (!direction) {
+            return undefined
+          }
+
+          if (direction === 'up') {
+            const sourceRow = prev[update.rowIndex - 1]
+            return sourceRow ? sourceRow[update.columnKey] : undefined
+          }
+          if (direction === 'down') {
+            const sourceRow = prev[update.rowIndex + 1]
+            return sourceRow ? sourceRow[update.columnKey] : undefined
+          }
+          if (direction === 'left' || direction === 'right') {
+            const currentIndex = columnOrder.indexOf(update.columnKey)
+            if (currentIndex === -1) {
+              return undefined
+            }
+            const offset = direction === 'left' ? -1 : 1
+            const sourceColumnKey = columnOrder[currentIndex + offset]
+            if (!sourceColumnKey) {
+              return undefined
+            }
+            const sourceRow = prev[update.rowIndex]
+            return sourceRow ? sourceRow[sourceColumnKey] : undefined
+          }
+          return undefined
+        }
+
+        normalizedUpdates.forEach((update) => {
+          if (update.rowIndex < 0 || update.rowIndex >= prev.length) {
+            return
+          }
+
+          const workingRow = getWorkingRow(update.rowIndex)
+          if (!workingRow) {
+            return
+          }
+
+          const currentValue = workingRow[update.columnKey]
+          let nextValue = currentValue
+
+          if (config.type === 'set') {
+            const nextCandidate =
+              update.value !== undefined ? update.value : config.value !== undefined ? config.value : value
+            nextValue = nextCandidate
+          } else if (config.type === 'increment') {
+            const delta = Number(update.amount ?? config.amount ?? config.value ?? value)
+            if (!Number.isFinite(delta)) {
+              return
+            }
+            const numericCurrent = toNumber(currentValue)
+            const baseValue = numericCurrent === null ? 0 : numericCurrent
+            nextValue = baseValue + delta
+          } else if (config.type === 'copy') {
+            nextValue = resolveSourceValue(update)
+          } else if (typeof config.apply === 'function') {
+            nextValue = config.apply({
+              currentValue,
+              update,
+              rows: prev
+            })
+          }
+
+          if (!Object.is(nextValue, currentValue)) {
+            workingRow[update.columnKey] = nextValue
+            hasChanges = true
+          }
+        })
+
+        if (!hasChanges) {
+          return prev
+        }
+
+        changedRows.forEach((row, index) => {
+          nextRows[index] = row
+        })
+
+        const analyzed = analyzeColumns(nextRows)
+        setColumns(analyzed)
+        setAnalysisWarnings(summarizeColumnWarnings(analyzed))
+        return nextRows
+      })
+      setValidationErrors([])
+      setResultWarnings([])
+    },
+    [normalizeUpdateInput, columns]
+  )
 
   useEffect(() => {
     setTransformations((prev) => {

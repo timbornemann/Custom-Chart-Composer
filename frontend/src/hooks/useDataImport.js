@@ -39,6 +39,8 @@ const MAX_COLUMN_SAMPLES = 5
 const TEXT_FREQUENCY_TRACK_LIMIT = 50
 const NUMERIC_OUTLIER_SIGMA = 3
 const MIN_COLUMN_WIDTH = 60
+const MAX_CORRELATION_SAMPLES = 2000
+const MAX_CORRELATION_COLUMNS = 30
 
 const createColumnDisplay = (index = 0) => ({
   order: index,
@@ -631,6 +633,145 @@ const applySortToEntries = (entries, sortConfig, columns) => {
   return sortable
 }
 
+const createDefaultProfilingMeta = () => ({
+  correlationMatrix: null
+})
+
+const selectSampleIndices = (totalRows, maxSamples) => {
+  if (!Number.isFinite(totalRows) || totalRows <= 0) {
+    return []
+  }
+  if (!Number.isFinite(maxSamples) || maxSamples <= 0) {
+    return []
+  }
+  if (totalRows <= maxSamples) {
+    return Array.from({ length: totalRows }, (_value, index) => index)
+  }
+
+  const step = (totalRows - 1) / (maxSamples - 1)
+  const indices = new Set()
+  for (let i = 0; i < maxSamples; i += 1) {
+    const candidate = Math.floor(i * step)
+    if (candidate >= 0 && candidate < totalRows) {
+      indices.add(candidate)
+    }
+  }
+  indices.add(totalRows - 1)
+  return Array.from(indices).sort((a, b) => a - b)
+}
+
+const computePearsonCorrelation = (valuesA, valuesB) => {
+  let count = 0
+  let sumX = 0
+  let sumY = 0
+  let sumXY = 0
+  let sumX2 = 0
+  let sumY2 = 0
+
+  for (let index = 0; index < valuesA.length && index < valuesB.length; index += 1) {
+    const x = valuesA[index]
+    const y = valuesB[index]
+    if (x === null || y === null) {
+      continue
+    }
+
+    count += 1
+    sumX += x
+    sumY += y
+    sumXY += x * y
+    sumX2 += x * x
+    sumY2 += y * y
+  }
+
+  if (count < 2) {
+    return { correlation: null, count }
+  }
+
+  const numerator = count * sumXY - sumX * sumY
+  const denominator = Math.sqrt(
+    (count * sumX2 - sumX * sumX) * (count * sumY2 - sumY * sumY)
+  )
+
+  if (!Number.isFinite(denominator) || denominator === 0) {
+    return { correlation: null, count }
+  }
+
+  const value = numerator / denominator
+  if (!Number.isFinite(value)) {
+    return { correlation: null, count }
+  }
+
+  const clamped = Math.max(-1, Math.min(1, value))
+  return { correlation: clamped, count }
+}
+
+const computeCorrelationMatrix = (rows, columnSummaries) => {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return null
+  }
+
+  const numericColumns = (columnSummaries || []).filter((column) => {
+    const numericStats = column?.statistics?.numeric
+    const numericCount = numericStats?.count ?? column?.numericCount ?? 0
+    return column?.type === 'number' && numericCount >= 2
+  })
+
+  if (numericColumns.length < 2) {
+    return null
+  }
+
+  const limited = numericColumns.length > MAX_CORRELATION_COLUMNS
+  const activeColumns = limited ? numericColumns.slice(0, MAX_CORRELATION_COLUMNS) : numericColumns
+  const columnKeys = activeColumns.map((column) => column.key)
+  const sampleIndices = selectSampleIndices(rows.length, MAX_CORRELATION_SAMPLES)
+  const sampledRows = sampleIndices.length
+
+  const samplesPerColumn = activeColumns.map((column) =>
+    sampleIndices.map((rowIndex) => {
+      const value = toNumber(rows[rowIndex]?.[column.key])
+      return Number.isFinite(value) ? value : null
+    })
+  )
+
+  const matrix = activeColumns.map(() => Array(activeColumns.length).fill(null))
+  const pairCounts = activeColumns.map(() => Array(activeColumns.length).fill(0))
+
+  activeColumns.forEach((column, columnIndex) => {
+    const columnSamples = samplesPerColumn[columnIndex]
+    const validCount = columnSamples.filter((value) => value !== null).length
+    matrix[columnIndex][columnIndex] = validCount >= 2 ? 1 : null
+    pairCounts[columnIndex][columnIndex] = validCount
+
+    for (let otherIndex = columnIndex + 1; otherIndex < activeColumns.length; otherIndex += 1) {
+      const { correlation, count } = computePearsonCorrelation(
+        columnSamples,
+        samplesPerColumn[otherIndex]
+      )
+      matrix[columnIndex][otherIndex] = correlation
+      matrix[otherIndex][columnIndex] = correlation
+      pairCounts[columnIndex][otherIndex] = count
+      pairCounts[otherIndex][columnIndex] = count
+    }
+  })
+
+  const truncatedColumns = limited
+    ? numericColumns.slice(MAX_CORRELATION_COLUMNS).map((column) => column.key)
+    : []
+
+  return {
+    type: 'pearson',
+    columns: columnKeys,
+    matrix,
+    pairCounts,
+    sampleSize: sampledRows,
+    rowCount: rows.length,
+    sampled: rows.length > sampledRows,
+    truncatedColumns,
+    totalNumericColumns: numericColumns.length,
+    maxSamples: MAX_CORRELATION_SAMPLES
+  }
+}
+
 const analyzeColumns = (rows) => {
   const columnOrder = []
   const seen = new Set()
@@ -730,7 +871,7 @@ const analyzeColumns = (rows) => {
     })
   })
 
-  return columnOrder.map((key) => {
+  const columnSummaries = columnOrder.map((key) => {
     const stats = columnStats.get(key)
     if (!stats) {
       return {
@@ -835,6 +976,13 @@ const analyzeColumns = (rows) => {
       warnings
     }
   })
+
+  return {
+    columns: columnSummaries,
+    profiling: {
+      correlationMatrix: computeCorrelationMatrix(rows, columnSummaries)
+    }
+  }
 }
 
 const summarizeColumnWarnings = (columns) => {
@@ -2076,6 +2224,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [validationErrors, setValidationErrors] = useState([])
   const [analysisWarnings, setAnalysisWarnings] = useState([])
   const [resultWarnings, setResultWarnings] = useState([])
+  const [profilingMeta, setProfilingMeta] = useState(() => createDefaultProfilingMeta())
   const initialDataSignatureRef = useRef(null)
 
   const searchConfig = useMemo(
@@ -2113,6 +2262,11 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setSearchMode(initialData.searchMode || 'normal')
     setSearchColumns(initialData.searchColumns || [])
     setSortConfig(initialData.sortConfig)
+    setProfilingMeta(
+      initialData.profilingMeta
+        ? { ...createDefaultProfilingMeta(), ...initialData.profilingMeta }
+        : createDefaultProfilingMeta()
+    )
 
     if (initialData.columns && initialData.columns.length > 0) {
       const analyzed = initialData.columns.map((col) => ({
@@ -2159,6 +2313,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setValidationErrors([])
     setAnalysisWarnings([])
     setResultWarnings([])
+    setProfilingMeta(createDefaultProfilingMeta())
   }, [])
 
   const parseFile = useCallback(
@@ -2184,11 +2339,17 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
 
         const cleaned = cleanRows(parsedRows)
         setRows(cleaned)
-        const analyzed = analyzeColumns(cleaned)
-        setColumns(normalizeColumnsState(analyzed))
+        const analysis = analyzeColumns(cleaned)
+        const analyzedColumns = analysis.columns || []
+        setColumns(normalizeColumnsState(analyzedColumns))
         setRowDisplay({ raw: {}, transformed: {} })
         setFileName(file.name)
-        setAnalysisWarnings(summarizeColumnWarnings(analyzed))
+        setAnalysisWarnings(summarizeColumnWarnings(analyzedColumns))
+        setProfilingMeta(
+          analysis.profiling
+            ? { ...createDefaultProfilingMeta(), ...analysis.profiling }
+            : createDefaultProfilingMeta()
+        )
         setTransformations(createDefaultTransformations())
         setPreviewLimit(5)
         setSearchQuery('')
@@ -2196,7 +2357,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
 
         if (isCoordinate) {
           // For Coordinate, auto-detect longitude and latitude columns
-          const numericColumns = analyzed.filter((col) => col.type === 'number').map((col) => col.key)
+          const numericColumns = analyzedColumns.filter((col) => col.type === 'number').map((col) => col.key)
           const defaultLongitude = numericColumns.find((key) => key.toLowerCase().includes('long') || key.toLowerCase().includes('lon') || key.toLowerCase().includes('x')) || numericColumns[0] || ''
           const defaultLatitude = numericColumns.find((key) => key.toLowerCase().includes('lat') || key.toLowerCase().includes('y')) || numericColumns[1] || numericColumns[0] || ''
           
@@ -2208,10 +2369,10 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
           })
         } else if (isScatterBubble) {
           // For Scatter/Bubble/Matrix, auto-detect X and Y columns
-          const numericColumns = analyzed.filter((col) => col.type === 'number').map((col) => col.key)
-          const defaultX = numericColumns[0] || analyzed[0]?.key || ''
-          const defaultY = numericColumns[1] || numericColumns[0] || analyzed[0]?.key || ''
-          
+          const numericColumns = analyzedColumns.filter((col) => col.type === 'number').map((col) => col.key)
+          const defaultX = numericColumns[0] || analyzedColumns[0]?.key || ''
+          const defaultY = numericColumns[1] || numericColumns[0] || analyzedColumns[0]?.key || ''
+
           setMapping({
             ...defaultMapping,
             xColumn: defaultX,
@@ -2220,9 +2381,9 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
             datasetLabel: ''
           })
         } else {
-          const defaultLabel = analyzed.find((col) => col.type === 'string')?.key || analyzed[0]?.key || ''
-          const numericColumns = analyzed.filter((col) => col.type === 'number').map((col) => col.key)
-          const fallbackColumns = analyzed.filter((col) => col.key !== defaultLabel).map((col) => col.key)
+          const defaultLabel = analyzedColumns.find((col) => col.type === 'string')?.key || analyzedColumns[0]?.key || ''
+          const numericColumns = analyzedColumns.filter((col) => col.type === 'number').map((col) => col.key)
+          const fallbackColumns = analyzedColumns.filter((col) => col.key !== defaultLabel).map((col) => col.key)
 
           let defaultValues = numericColumns.length > 0 ? numericColumns : fallbackColumns
           if (!allowMultipleValueColumns) {
@@ -2243,6 +2404,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         setMapping(defaultMapping)
         setTransformations(createDefaultTransformations())
         setAnalysisWarnings([])
+        setProfilingMeta(createDefaultProfilingMeta())
         setParseError('Die Datei konnte nicht gelesen werden. Bitte prüfen Sie das Format.')
       } finally {
         setIsLoading(false)
@@ -2676,9 +2838,15 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
           nextRows[index] = row
         })
 
-        const analyzed = analyzeColumns(nextRows)
-        setColumns((prevColumns) => mergeColumnsWithDisplay(analyzed, prevColumns))
-        setAnalysisWarnings(summarizeColumnWarnings(analyzed))
+        const analysis = analyzeColumns(nextRows)
+        const analyzedColumns = analysis.columns || []
+        setColumns((prevColumns) => mergeColumnsWithDisplay(analyzedColumns, prevColumns))
+        setAnalysisWarnings(summarizeColumnWarnings(analyzedColumns))
+        setProfilingMeta(
+          analysis.profiling
+            ? { ...createDefaultProfilingMeta(), ...analysis.profiling }
+            : createDefaultProfilingMeta()
+        )
         return nextRows
       })
       setValidationErrors([])
@@ -3048,10 +3216,13 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         datasetLabelColumn: datasetLabel || null,
         transformations,
         transformationMeta,
-        mapping: activeMapping
+        mapping: activeMapping,
+        profiling: profilingMeta
+          ? { ...createDefaultProfilingMeta(), ...profilingMeta }
+          : createDefaultProfilingMeta()
       }
     }
-  }, [rows, mapping, transformations, requireDatasets, columns])
+  }, [rows, mapping, transformations, requireDatasets, columns, profilingMeta])
 
   const getImportState = useCallback(() => {
     return {
@@ -3065,9 +3236,23 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       searchMode,
       searchColumns,
       sortConfig: normalizeSortConfig(sortConfig),
-      rowDisplay
+      rowDisplay,
+      profilingMeta
     }
-  }, [fileName, rows, columns, mapping, transformations, previewLimit, searchQuery, searchMode, searchColumns, sortConfig, rowDisplay])
+  }, [
+    fileName,
+    rows,
+    columns,
+    mapping,
+    transformations,
+    previewLimit,
+    searchQuery,
+    searchMode,
+    searchColumns,
+    sortConfig,
+    rowDisplay,
+    profilingMeta
+  ])
 
   return {
     fileName,
@@ -3116,6 +3301,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     sortConfig,
     setSortConfig,
     getImportResult,
-    getImportState
+    getImportState,
+    profilingMeta
   }
 }

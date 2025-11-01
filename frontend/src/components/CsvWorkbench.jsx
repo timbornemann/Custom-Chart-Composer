@@ -372,7 +372,8 @@ export default function CsvWorkbench({
     transformedPreviewEntries,
     transformedFilteredRowCount,
     transformedRows,
-    updateCell: internalUpdateCell
+    updateCell: internalUpdateCell,
+    profilingMeta
   } = useDataImport({ allowMultipleValueColumns, requireDatasets, initialData, chartType, isScatterBubble, isCoordinate })
 
   const [editingCell, setEditingCell] = useState(null)
@@ -382,6 +383,197 @@ export default function CsvWorkbench({
   const [isSelecting, setIsSelecting] = useState(false)
   const pendingFocusRef = useRef(null)
   const [profilingColumnKey, setProfilingColumnKey] = useState(null)
+  const [correlationSelectedColumns, setCorrelationSelectedColumns] = useState([])
+  const [correlationThreshold, setCorrelationThreshold] = useState(0)
+  const [correlationSortKey, setCorrelationSortKey] = useState('')
+  const [hoveredCorrelationCell, setHoveredCorrelationCell] = useState(null)
+  const correlationMatrix = profilingMeta?.correlationMatrix || null
+
+  useEffect(() => {
+    if (!correlationMatrix || !Array.isArray(correlationMatrix.columns) || correlationMatrix.columns.length === 0) {
+      setCorrelationSelectedColumns([])
+      setCorrelationSortKey('')
+      return
+    }
+
+    const availableColumns = correlationMatrix.columns
+    setCorrelationSelectedColumns((prev) => {
+      if (!Array.isArray(prev) || prev.length === 0) {
+        return [...availableColumns]
+      }
+      const availableSet = new Set(availableColumns)
+      const filtered = prev.filter((key) => availableSet.has(key))
+      if (filtered.length === prev.length && filtered.length > 0) {
+        return filtered
+      }
+      return filtered.length > 0 ? filtered : [...availableColumns]
+    })
+    setCorrelationSortKey((prev) => (prev && availableColumns.includes(prev) ? prev : ''))
+  }, [correlationMatrix])
+
+  const correlationDisplayIndices = useMemo(() => {
+    if (!correlationMatrix || !Array.isArray(correlationMatrix.columns) || correlationMatrix.columns.length === 0) {
+      return []
+    }
+
+    const availableColumns = correlationMatrix.columns
+    const selectedColumns =
+      Array.isArray(correlationSelectedColumns) && correlationSelectedColumns.length > 0
+        ? correlationSelectedColumns.filter((key) => availableColumns.includes(key))
+        : availableColumns
+
+    if (selectedColumns.length === 0) {
+      return []
+    }
+
+    const uniqueIndices = Array.from(
+      new Set(selectedColumns.map((key) => availableColumns.indexOf(key)).filter((index) => index >= 0))
+    )
+
+    if (!Array.isArray(correlationMatrix.matrix) || correlationMatrix.matrix.length === 0) {
+      return uniqueIndices
+    }
+
+    if (correlationSortKey && availableColumns.includes(correlationSortKey)) {
+      const sortIndex = availableColumns.indexOf(correlationSortKey)
+      uniqueIndices.sort((a, b) => {
+        const valueA = correlationMatrix.matrix?.[a]?.[sortIndex] ?? null
+        const valueB = correlationMatrix.matrix?.[b]?.[sortIndex] ?? null
+        const absA = valueA === null ? -1 : Math.abs(valueA)
+        const absB = valueB === null ? -1 : Math.abs(valueB)
+        if (absA === absB) {
+          return availableColumns[a].localeCompare(availableColumns[b], undefined, { sensitivity: 'base' })
+        }
+        return absB - absA
+      })
+    } else {
+      uniqueIndices.sort((a, b) =>
+        availableColumns[a].localeCompare(availableColumns[b], undefined, { sensitivity: 'base' })
+      )
+    }
+
+    return uniqueIndices
+  }, [correlationMatrix, correlationSelectedColumns, correlationSortKey])
+
+  const correlationDisplayColumns = useMemo(() => {
+    if (!correlationMatrix || !Array.isArray(correlationMatrix.columns)) {
+      return []
+    }
+    return correlationDisplayIndices.map((index) => correlationMatrix.columns[index]).filter(Boolean)
+  }, [correlationMatrix, correlationDisplayIndices])
+
+  const hasCorrelationData = Boolean(correlationMatrix && correlationDisplayIndices.length > 0)
+  const correlationAvailableColumns = correlationMatrix?.columns || []
+  const correlationSelectionSummary = useMemo(() => {
+    if (!correlationMatrix || !Array.isArray(correlationMatrix.columns) || correlationMatrix.columns.length === 0) {
+      return '–'
+    }
+    const selectedCount = Array.isArray(correlationSelectedColumns) && correlationSelectedColumns.length > 0
+      ? correlationSelectedColumns.filter((key) => correlationMatrix.columns.includes(key)).length
+      : correlationMatrix.columns.length
+    return `${selectedCount}/${correlationMatrix.columns.length}`
+  }, [correlationMatrix, correlationSelectedColumns])
+  const correlationTruncatedColumns = correlationMatrix?.truncatedColumns || []
+  const correlationPairCounts = correlationMatrix?.pairCounts || []
+
+  const handleCorrelationColumnToggle = useCallback(
+    (columnKey, isSelected) => {
+      setCorrelationSelectedColumns((prev) => {
+        const availableSet = new Set(correlationAvailableColumns)
+        if (!availableSet.has(columnKey)) {
+          return prev
+        }
+
+        const previous = Array.isArray(prev) ? prev : []
+
+        if (previous.length === 0) {
+          if (isSelected) {
+            return previous
+          }
+          return correlationAvailableColumns.filter((key) => key !== columnKey)
+        }
+
+        if (isSelected) {
+          if (previous.includes(columnKey)) {
+            return previous
+          }
+          return [...previous, columnKey]
+        }
+
+        return previous.filter((key) => key !== columnKey)
+      })
+    },
+    [correlationAvailableColumns]
+  )
+
+  const handleCorrelationSelectionReset = useCallback(() => {
+    if (!correlationAvailableColumns || correlationAvailableColumns.length === 0) {
+      setCorrelationSelectedColumns([])
+      return
+    }
+    setCorrelationSelectedColumns([...correlationAvailableColumns])
+  }, [correlationAvailableColumns])
+
+  const handleCorrelationSelectionClear = useCallback(() => {
+    setCorrelationSelectedColumns([])
+  }, [])
+
+  const clampCorrelationThreshold = useCallback((value) => {
+    if (!Number.isFinite(value)) {
+      return 0
+    }
+    if (value < 0) {
+      return 0
+    }
+    if (value > 1) {
+      return 1
+    }
+    return value
+  }, [])
+
+  const handleCorrelationThresholdChange = useCallback(
+    (nextValue) => {
+      setCorrelationThreshold(clampCorrelationThreshold(nextValue))
+    },
+    [clampCorrelationThreshold]
+  )
+
+  const handleCorrelationThresholdInput = useCallback(
+    (event) => {
+      const raw = Number.parseFloat(event.target.value)
+      handleCorrelationThresholdChange(Number.isNaN(raw) ? 0 : raw)
+    },
+    [handleCorrelationThresholdChange]
+  )
+
+  const handleCorrelationSortChange = useCallback((event) => {
+    setCorrelationSortKey(event.target.value)
+  }, [])
+
+  const hoveredCorrelationRow = hoveredCorrelationCell?.row ?? null
+  const hoveredCorrelationColumn = hoveredCorrelationCell?.column ?? null
+
+  const formatCorrelationValue = useCallback((value) => {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '–'
+    }
+    return value.toFixed(2)
+  }, [])
+
+  const correlationColorForValue = useCallback((value) => {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return 'transparent'
+    }
+    const intensity = Math.min(1, Math.abs(value))
+    const opacity = 0.12 + intensity * 0.35
+    if (value > 0) {
+      return `rgba(34, 197, 94, ${opacity})`
+    }
+    if (value < 0) {
+      return `rgba(239, 68, 68, ${opacity})`
+    }
+    return 'transparent'
+  }, [])
 
   const orderedColumns = useMemo(() => {
     if (!rawColumns || rawColumns.length === 0) {
@@ -2548,22 +2740,251 @@ export default function CsvWorkbench({
                               )}
                             </div>
                           </div>
-                          {profilingColumn.warnings?.length > 0 && (
-                            <div className="mt-3 rounded border border-yellow-600/40 bg-yellow-900/20 p-2 text-[11px] text-yellow-100">
-                              <div className="mb-1 font-semibold uppercase tracking-wide text-yellow-200">Warnungen</div>
-                              <ul className="list-disc space-y-1 pl-4">
-                                {profilingColumn.warnings.map((warning, index) => (
-                                  <li key={`${profilingColumn.key}-warning-${index}`}>{warning}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
+                      {profilingColumn.warnings?.length > 0 && (
+                        <div className="mt-3 rounded border border-yellow-600/40 bg-yellow-900/20 p-2 text-[11px] text-yellow-100">
+                          <div className="mb-1 font-semibold uppercase tracking-wide text-yellow-200">Warnungen</div>
+                          <ul className="list-disc space-y-1 pl-4">
+                            {profilingColumn.warnings.map((warning, index) => (
+                              <li key={`${profilingColumn.key}-warning-${index}`}>{warning}</li>
+                            ))}
+                          </ul>
                         </div>
                       )}
-                      {hasSelection && (
-                        <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
-                          <span className="rounded-md border border-dark-accent1/40 bg-dark-secondary/40 px-2 py-1 text-dark-textLight/80">
-                            {selectedTargets.length} Zellen ausgewählt
+                    </div>
+                  )}
+                  {correlationMatrix && Array.isArray(correlationMatrix.columns) && correlationMatrix.columns.length > 1 && (
+                    <div className="rounded-lg border border-gray-700 bg-dark-bg/40 p-3 text-[11px] text-dark-textLight">
+                      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-semibold text-dark-textLight">Korrelationsanalyse</h4>
+                          <p className="text-xs text-dark-textGray">
+                            Pearson-Korrelation zwischen numerischen Spalten. Bewegen Sie die Maus, um Zeilen und Spalten zu
+                            markieren, oder sortieren Sie nach einer Referenzspalte.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-[10px] text-dark-textGray">
+                          <span className="rounded border border-gray-700/60 bg-dark-secondary/40 px-2 py-1">
+                            {correlationMatrix.type === 'pearson' ? 'Pearson' : correlationMatrix.type || 'Korrelation'} ·{' '}
+                            {correlationDisplayColumns.length}/{correlationMatrix.totalNumericColumns || correlationMatrix.columns.length}
+                          </span>
+                          {correlationMatrix.sampled && (
+                            <span className="rounded border border-gray-700/60 bg-dark-secondary/40 px-2 py-1">
+                              Sampling: {correlationMatrix.sampleSize} / {correlationMatrix.rowCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mb-3 flex flex-wrap items-center gap-3 text-xs text-dark-textGray">
+                        <details className="relative">
+                          <summary className="flex cursor-pointer select-none items-center gap-2 rounded-md border border-gray-700 bg-dark-bg px-2 py-1 text-dark-textLight shadow-sm transition-colors hover:border-dark-accent1">
+                            <span>Spalten</span>
+                            <span className="text-dark-textGray">{correlationSelectionSummary}</span>
+                          </summary>
+                          <div className="absolute right-0 z-30 mt-1 w-64 rounded-md border border-gray-700 bg-dark-bg p-3 text-dark-textLight shadow-2xl">
+                            <div className="mb-2 flex items-center justify-between text-[10px] text-dark-textGray">
+                              <span>Spaltenauswahl</span>
+                              <div className="flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={handleCorrelationSelectionReset}
+                                  className="rounded border border-gray-700 px-1 py-0.5 text-[10px] text-dark-textLight transition-colors hover:border-dark-accent1"
+                                >
+                                  Alle
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleCorrelationSelectionClear}
+                                  className="rounded border border-gray-700 px-1 py-0.5 text-[10px] text-dark-textLight transition-colors hover:border-dark-accent1"
+                                >
+                                  Keine
+                                </button>
+                              </div>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto pr-1">
+                              {correlationAvailableColumns.length === 0 ? (
+                                <p className="text-[10px] text-dark-textGray">Keine numerischen Spalten erkannt.</p>
+                              ) : (
+                                correlationAvailableColumns.map((columnKey) => {
+                                  const isSelected =
+                                    correlationSelectedColumns.length === 0
+                                      ? true
+                                      : correlationSelectedColumns.includes(columnKey)
+                                  return (
+                                    <label key={`correlation-column-${columnKey}`} className="flex items-center gap-2 py-0.5 text-xs text-dark-textLight">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={(event) => handleCorrelationColumnToggle(columnKey, event.target.checked)}
+                                        className="h-3 w-3 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
+                                      />
+                                      <span className="truncate">{columnKey}</span>
+                                    </label>
+                                  )
+                                })
+                              )}
+                            </div>
+                          </div>
+                        </details>
+
+                        <label className="flex items-center gap-2">
+                          <span>Schwelle:</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={correlationThreshold}
+                            onChange={(event) => handleCorrelationThresholdChange(Number(event.target.value))}
+                            className="h-2 w-24 cursor-pointer appearance-none rounded-full bg-gray-700"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={correlationThreshold.toFixed(2)}
+                            onChange={handleCorrelationThresholdInput}
+                            className="w-16 rounded border border-gray-700 bg-dark-bg px-2 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                          />
+                        </label>
+
+                        <label className="flex items-center gap-2">
+                          <span>Sortieren:</span>
+                          <select
+                            value={correlationSortKey}
+                            onChange={handleCorrelationSortChange}
+                            className="rounded-md border border-gray-700 bg-dark-bg px-2 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                          >
+                            <option value="">Keine</option>
+                            {correlationDisplayColumns.map((columnKey) => (
+                              <option key={`correlation-sort-${columnKey}`} value={columnKey}>
+                                {columnKey}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      {correlationTruncatedColumns.length > 0 && (
+                        <p className="mb-2 text-[10px] text-yellow-200">
+                          {correlationTruncatedColumns.length} weitere numerische Spalten wurden aus Performance-Gründen
+                          ausgeblendet.
+                        </p>
+                      )}
+
+                      {hasCorrelationData ? (
+                        <div
+                          className="overflow-x-auto"
+                          onMouseLeave={() => setHoveredCorrelationCell(null)}
+                        >
+                          <table className="min-w-full table-fixed border-collapse text-[11px]">
+                            <thead>
+                              <tr>
+                                <th className="sticky left-0 z-10 bg-dark-bg px-2 py-2 text-left font-semibold text-dark-textGray">
+                                  Spalte
+                                </th>
+                                {correlationDisplayColumns.map((columnKey, columnPosition) => {
+                                  const isSortColumn = correlationSortKey === columnKey
+                                  const isHovered = hoveredCorrelationColumn === columnPosition
+                                  return (
+                                    <th
+                                      key={`correlation-header-${columnKey}`}
+                                      className={`px-2 py-2 text-center text-[11px] font-semibold transition-colors ${
+                                        isHovered ? 'bg-dark-secondary/60 text-dark-textLight' : 'text-dark-textGray'
+                                      }`}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setCorrelationSortKey((prev) => (prev === columnKey ? '' : columnKey))
+                                        }
+                                        onMouseEnter={() => setHoveredCorrelationCell({ row: null, column: columnPosition })}
+                                        className={`flex w-full items-center justify-center gap-1 rounded px-2 py-1 transition-colors ${
+                                          isSortColumn ? 'bg-dark-accent1/30 text-dark-textLight' : 'hover:bg-dark-secondary/40'
+                                        }`}
+                                      >
+                                        <span className="truncate">{columnKey}</span>
+                                        {isSortColumn && <span aria-hidden="true">⇅</span>}
+                                      </button>
+                                    </th>
+                                  )
+                                })}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {correlationDisplayIndices.map((rowMatrixIndex, rowPosition) => {
+                                const rowKey = correlationMatrix.columns[rowMatrixIndex]
+                                const rowValues = correlationMatrix.matrix?.[rowMatrixIndex] || []
+                                const isHoveredRow = hoveredCorrelationRow === rowPosition
+                                return (
+                                  <tr key={`correlation-row-${rowKey}`} className={isHoveredRow ? 'bg-dark-secondary/30' : ''}>
+                                    <th
+                                      scope="row"
+                                      className={`sticky left-0 z-10 bg-dark-bg px-2 py-1 text-left font-semibold transition-colors ${
+                                        isHoveredRow ? 'text-dark-textLight' : 'text-dark-textGray'
+                                      }`}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setCorrelationSortKey((prev) => (prev === rowKey ? '' : rowKey))
+                                        }
+                                        onMouseEnter={() => setHoveredCorrelationCell({ row: rowPosition, column: null })}
+                                        className="flex w-full items-center justify-start gap-1 rounded px-2 py-1 text-left transition-colors hover:bg-dark-secondary/40"
+                                      >
+                                        <span className="truncate">{rowKey}</span>
+                                        {correlationSortKey === rowKey && <span aria-hidden="true">⇅</span>}
+                                      </button>
+                                    </th>
+                                    {correlationDisplayIndices.map((columnMatrixIndex, columnPosition) => {
+                                      const value = rowValues?.[columnMatrixIndex] ?? null
+                                      const count = correlationPairCounts?.[rowMatrixIndex]?.[columnMatrixIndex] ?? 0
+                                      const passesThreshold = value !== null && Math.abs(value) >= correlationThreshold
+                                      const displayValue = passesThreshold ? formatCorrelationValue(value) : '–'
+                                      const cellColor = passesThreshold ? correlationColorForValue(value) : 'transparent'
+                                      const isHoveredColumn = hoveredCorrelationColumn === columnPosition
+                                      const isActiveCell =
+                                        hoveredCorrelationRow === rowPosition && hoveredCorrelationColumn === columnPosition
+                                      const cellClasses = `px-2 py-1 text-center transition-colors ${
+                                        isHoveredColumn ? 'bg-dark-secondary/40' : ''
+                                      } ${isActiveCell ? 'ring-1 ring-dark-accent1' : ''}`
+                                      return (
+                                        <td
+                                          key={`correlation-cell-${rowKey}-${columnMatrixIndex}`}
+                                          className={cellClasses}
+                                          style={{ backgroundColor: cellColor }}
+                                          onMouseEnter={() =>
+                                            setHoveredCorrelationCell({ row: rowPosition, column: columnPosition })
+                                          }
+                                          title={
+                                            value !== null
+                                              ? `r = ${formatCorrelationValue(value)} · ${count} Werte`
+                                              : 'Keine gemeinsamen Werte'
+                                          }
+                                        >
+                                          <span className="font-mono text-[11px] text-dark-textLight">{displayValue}</span>
+                                        </td>
+                                      )
+                                    })}
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-dark-textGray">
+                          Nicht genügend überlappende Werte, um eine Korrelationsmatrix anzuzeigen. Reduzieren Sie ggf. die
+                          Schwelle oder wählen Sie weitere Spalten aus.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {hasSelection && (
+                    <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
+                      <span className="rounded-md border border-dark-accent1/40 bg-dark-secondary/40 px-2 py-1 text-dark-textLight/80">
+                        {selectedTargets.length} Zellen ausgewählt
                           </span>
                           <div className="flex flex-wrap gap-1">
                             <button

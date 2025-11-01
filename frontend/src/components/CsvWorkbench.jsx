@@ -48,6 +48,48 @@ const formatStatPercentage = (value) => {
   return STAT_PERCENT_FORMAT.format(value)
 }
 
+const DEFAULT_PIVOT_CONFIG = {
+  enabled: false,
+  indexColumns: [],
+  keyColumn: '',
+  valueColumn: '',
+  prefix: ''
+}
+
+const DEFAULT_UNPIVOT_CONFIG = {
+  enabled: false,
+  idColumns: [],
+  valueColumns: [],
+  variableColumn: 'Kategorie',
+  valueColumnName: 'Wert',
+  dropEmptyValues: true
+}
+
+const DEFAULT_PIVOT_META = {
+  enabled: false,
+  createdColumns: [],
+  groups: 0,
+  skippedMissingKey: 0,
+  skippedMissingValue: 0,
+  duplicateAssignments: 0,
+  indexColumns: [],
+  sourceColumn: '',
+  valueColumn: '',
+  fillValueUsed: false,
+  prefix: ''
+}
+
+const DEFAULT_UNPIVOT_META = {
+  enabled: false,
+  idColumns: [],
+  valueColumns: [],
+  variableColumn: 'Kategorie',
+  valueColumnName: 'Wert',
+  dropEmptyValues: true,
+  createdRows: 0,
+  skippedEmpty: 0
+}
+
 const renderHighlightedValue = (value, matches) => {
   const formatted = formatCellValue(value)
   const text = formatted === null || formatted === undefined ? '' : String(formatted)
@@ -2209,6 +2251,183 @@ export default function CsvWorkbench({
   const grouping = transformations.grouping || {}
   const aggregations = transformations.aggregations || {}
   const valueRules = transformations.valueRules || []
+  const pivotConfig = { ...DEFAULT_PIVOT_CONFIG, ...(transformations.pivot || {}) }
+  const unpivotConfig = { ...DEFAULT_UNPIVOT_CONFIG, ...(transformations.unpivot || {}) }
+  const pivotHasFillValue = Object.prototype.hasOwnProperty.call(transformations.pivot || {}, 'fillValue')
+  const pivotFillValueInput = pivotHasFillValue
+    ? String(pivotConfig.fillValue ?? '')
+    : ''
+  const pivotIndexColumnsSet = useMemo(
+    () => new Set(Array.isArray(pivotConfig.indexColumns) ? pivotConfig.indexColumns : []),
+    [pivotConfig.indexColumns]
+  )
+  const unpivotIdColumnsSet = useMemo(
+    () => new Set(Array.isArray(unpivotConfig.idColumns) ? unpivotConfig.idColumns : []),
+    [unpivotConfig.idColumns]
+  )
+  const unpivotValueColumnsSet = useMemo(
+    () => new Set(Array.isArray(unpivotConfig.valueColumns) ? unpivotConfig.valueColumns : []),
+    [unpivotConfig.valueColumns]
+  )
+
+  const handleTogglePivot = (enabled) => {
+    updateTransformations((prev) => ({
+      ...prev,
+      pivot: {
+        ...DEFAULT_PIVOT_CONFIG,
+        ...(prev.pivot || {}),
+        enabled
+      }
+    }))
+  }
+
+  const handlePivotKeyChange = (column) => {
+    updateTransformations((prev) => ({
+      ...prev,
+      pivot: {
+        ...DEFAULT_PIVOT_CONFIG,
+        ...(prev.pivot || {}),
+        keyColumn: column
+      }
+    }))
+  }
+
+  const handlePivotValueChange = (column) => {
+    updateTransformations((prev) => ({
+      ...prev,
+      pivot: {
+        ...DEFAULT_PIVOT_CONFIG,
+        ...(prev.pivot || {}),
+        valueColumn: column
+      }
+    }))
+  }
+
+  const handlePivotIndexToggle = (columnKey, checked) => {
+    updateTransformations((prev) => {
+      const current = Array.isArray(prev.pivot?.indexColumns) ? prev.pivot.indexColumns : []
+      const nextSet = new Set(current)
+      if (checked) {
+        nextSet.add(columnKey)
+      } else {
+        nextSet.delete(columnKey)
+      }
+      return {
+        ...prev,
+        pivot: {
+          ...DEFAULT_PIVOT_CONFIG,
+          ...(prev.pivot || {}),
+          indexColumns: [...nextSet]
+        }
+      }
+    })
+  }
+
+  const handlePivotPrefixChange = (value) => {
+    updateTransformations((prev) => ({
+      ...prev,
+      pivot: {
+        ...DEFAULT_PIVOT_CONFIG,
+        ...(prev.pivot || {}),
+        prefix: value
+      }
+    }))
+  }
+
+  const handlePivotFillValueChange = (value) => {
+    updateTransformations((prev) => {
+      const base = { ...DEFAULT_PIVOT_CONFIG, ...(prev.pivot || {}) }
+      if (value === '') {
+        const { fillValue: _omit, ...rest } = base
+        return { ...prev, pivot: rest }
+      }
+      return { ...prev, pivot: { ...base, fillValue: value } }
+    })
+  }
+
+  const handleToggleUnpivot = (enabled) => {
+    updateTransformations((prev) => ({
+      ...prev,
+      unpivot: {
+        ...DEFAULT_UNPIVOT_CONFIG,
+        ...(prev.unpivot || {}),
+        enabled
+      }
+    }))
+  }
+
+  const handleUnpivotIdToggle = (columnKey, checked) => {
+    updateTransformations((prev) => {
+      const current = Array.isArray(prev.unpivot?.idColumns) ? prev.unpivot.idColumns : []
+      const nextSet = new Set(current)
+      if (checked) {
+        nextSet.add(columnKey)
+      } else {
+        nextSet.delete(columnKey)
+      }
+      return {
+        ...prev,
+        unpivot: {
+          ...DEFAULT_UNPIVOT_CONFIG,
+          ...(prev.unpivot || {}),
+          idColumns: [...nextSet]
+        }
+      }
+    })
+  }
+
+  const handleUnpivotValueToggle = (columnKey, checked) => {
+    updateTransformations((prev) => {
+      const current = Array.isArray(prev.unpivot?.valueColumns) ? prev.unpivot.valueColumns : []
+      const nextSet = new Set(current)
+      if (checked) {
+        nextSet.add(columnKey)
+      } else {
+        nextSet.delete(columnKey)
+      }
+      return {
+        ...prev,
+        unpivot: {
+          ...DEFAULT_UNPIVOT_CONFIG,
+          ...(prev.unpivot || {}),
+          valueColumns: [...nextSet]
+        }
+      }
+    })
+  }
+
+  const handleUnpivotVariableChange = (value) => {
+    updateTransformations((prev) => ({
+      ...prev,
+      unpivot: {
+        ...DEFAULT_UNPIVOT_CONFIG,
+        ...(prev.unpivot || {}),
+        variableColumn: value
+      }
+    }))
+  }
+
+  const handleUnpivotValueNameChange = (value) => {
+    updateTransformations((prev) => ({
+      ...prev,
+      unpivot: {
+        ...DEFAULT_UNPIVOT_CONFIG,
+        ...(prev.unpivot || {}),
+        valueColumnName: value
+      }
+    }))
+  }
+
+  const handleUnpivotDropEmptyToggle = (checked) => {
+    updateTransformations((prev) => ({
+      ...prev,
+      unpivot: {
+        ...DEFAULT_UNPIVOT_CONFIG,
+        ...(prev.unpivot || {}),
+        dropEmptyValues: checked
+      }
+    }))
+  }
 
   const handleAddFilter = () => {
     const id = createUniqueId('filter')
@@ -2397,11 +2616,15 @@ export default function CsvWorkbench({
     }))
   }
 
-  const transformationMetaInfo = transformationMeta || {
-    originalCount: 0,
-    filteredOut: 0,
-    aggregatedFrom: 0,
-    aggregatedTo: 0
+  const pivotMeta = { ...DEFAULT_PIVOT_META, ...(transformationMeta?.pivot || {}) }
+  const unpivotMeta = { ...DEFAULT_UNPIVOT_META, ...(transformationMeta?.unpivot || {}) }
+  const transformationMetaInfo = {
+    originalCount: transformationMeta?.originalCount ?? 0,
+    filteredOut: transformationMeta?.filteredOut ?? 0,
+    aggregatedFrom: transformationMeta?.aggregatedFrom ?? 0,
+    aggregatedTo: transformationMeta?.aggregatedTo ?? 0,
+    pivot: pivotMeta,
+    unpivot: unpivotMeta
   }
 
   return (
@@ -4078,6 +4301,332 @@ export default function CsvWorkbench({
                       )}
                     </div>
 
+                    <div className="space-y-3 rounded-lg border border-gray-700 bg-dark-bg/40 p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-dark-textLight">Pivot</h4>
+                          <p className="text-[11px] text-dark-textGray">
+                            Wandelt Werte aus einer Schlüsselspalte in dynamische Spalten um.
+                          </p>
+                        </div>
+                        <label className="flex items-center space-x-2 text-xs text-dark-textLight">
+                          <input
+                            type="checkbox"
+                            checked={pivotConfig.enabled}
+                            onChange={(event) => handleTogglePivot(event.target.checked)}
+                            className="h-4 w-4 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
+                          />
+                          <span>Aktivieren</span>
+                        </label>
+                      </div>
+                      {!pivotConfig.enabled ? (
+                        <p className="text-xs text-dark-textGray">
+                          Aktivieren Sie die Pivot-Transformation, um Werte einer Spalte als neue Spalten abzubilden.
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                Schlüsselspalte
+                              </label>
+                              <select
+                                value={pivotConfig.keyColumn || ''}
+                                onChange={(event) => handlePivotKeyChange(event.target.value)}
+                                className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                              >
+                                <option value="">Spalte wählen …</option>
+                                {columns.map((column) => (
+                                  <option key={`pivot-key-${column.key}`} value={column.key}>
+                                    {column.key}
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="mt-1 text-[11px] text-dark-textGray">
+                                Jeder eindeutige Wert bildet eine eigene Spalte.
+                              </p>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                Wertespalte
+                              </label>
+                              <select
+                                value={pivotConfig.valueColumn || ''}
+                                onChange={(event) => handlePivotValueChange(event.target.value)}
+                                className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                              >
+                                <option value="">Spalte wählen …</option>
+                                {columns.map((column) => (
+                                  <option key={`pivot-value-${column.key}`} value={column.key}>
+                                    {column.key}
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="mt-1 text-[11px] text-dark-textGray">
+                                Inhalt für die neu entstehenden Spalten.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <h5 className="text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                                Beibehaltende Index-Spalten
+                              </h5>
+                              <span className="text-[11px] text-dark-textGray">optional</span>
+                            </div>
+                            {columns.length === 0 ? (
+                              <p className="text-[11px] text-dark-textGray">Keine Spalten verfügbar.</p>
+                            ) : (
+                              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                                {columns.map((column) => {
+                                  const checked = pivotIndexColumnsSet.has(column.key)
+                                  return (
+                                    <label
+                                      key={`pivot-index-${column.key}`}
+                                      className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                                        checked
+                                          ? 'border-dark-accent1/70 bg-dark-secondary/60 text-dark-textLight'
+                                          : 'border-gray-700 bg-dark-secondary/30 text-dark-textLight hover:border-dark-accent1'
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={(event) => handlePivotIndexToggle(column.key, event.target.checked)}
+                                        className="h-3.5 w-3.5 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
+                                      />
+                                      <span className="truncate">{column.key}</span>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                Präfix für neue Spalten
+                              </label>
+                              <input
+                                type="text"
+                                value={pivotConfig.prefix || ''}
+                                onChange={(event) => handlePivotPrefixChange(event.target.value)}
+                                className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                placeholder="z. B. Jahr_"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                Leereinträge auffüllen mit
+                              </label>
+                              <input
+                                type="text"
+                                value={pivotFillValueInput}
+                                onChange={(event) => handlePivotFillValueChange(event.target.value)}
+                                className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                placeholder="leer lassen für null"
+                              />
+                              <p className="mt-1 text-[11px] text-dark-textGray">
+                                Leer lassen, um fehlende Kombinationen unverändert zu lassen.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="space-y-2 rounded-md border border-gray-700 bg-dark-bg/50 p-3 text-[11px] text-dark-textGray">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                                Erzeugte Spalten
+                              </span>
+                              {pivotMeta.createdColumns.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {pivotMeta.createdColumns.map((column) => (
+                                    <span
+                                      key={`pivot-preview-${column}`}
+                                      className="rounded border border-gray-600 px-2 py-0.5 text-dark-textLight/90"
+                                    >
+                                      {column}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-dark-textGray">Noch keine Vorschau verfügbar.</span>
+                              )}
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-3">
+                              <div>
+                                Gruppen: <span className="text-dark-textLight">{pivotMeta.groups}</span>
+                              </div>
+                              <div>
+                                Ignorierte Schlüssel: <span className="text-dark-textLight">{pivotMeta.skippedMissingKey}</span>
+                              </div>
+                              <div>
+                                Überschriebene Werte: <span className="text-dark-textLight">{pivotMeta.duplicateAssignments}</span>
+                              </div>
+                            </div>
+                            {pivotMeta.skippedMissingValue > 0 && (
+                              <div>
+                                Übersprungene Werte: <span className="text-dark-textLight">{pivotMeta.skippedMissingValue}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-3 rounded-lg border border-gray-700 bg-dark-bg/40 p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-dark-textLight">Unpivot (Melt)</h4>
+                          <p className="text-[11px] text-dark-textGray">
+                            Formt mehrere Wertespalten in Zeilenpaare um.
+                          </p>
+                        </div>
+                        <label className="flex items-center space-x-2 text-xs text-dark-textLight">
+                          <input
+                            type="checkbox"
+                            checked={unpivotConfig.enabled}
+                            onChange={(event) => handleToggleUnpivot(event.target.checked)}
+                            className="h-4 w-4 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
+                          />
+                          <span>Aktivieren</span>
+                        </label>
+                      </div>
+                      {!unpivotConfig.enabled ? (
+                        <p className="text-xs text-dark-textGray">
+                          Bringt breite Tabellen in ein langes Format – ideal für Heatmaps oder Zeitreihen.
+                        </p>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <h5 className="text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                              Beibehaltende ID-Spalten
+                            </h5>
+                            {columns.length === 0 ? (
+                              <p className="text-[11px] text-dark-textGray">Keine Spalten verfügbar.</p>
+                            ) : (
+                              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                                {columns.map((column) => {
+                                  const checked = unpivotIdColumnsSet.has(column.key)
+                                  return (
+                                    <label
+                                      key={`unpivot-id-${column.key}`}
+                                      className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                                        checked
+                                          ? 'border-dark-accent1/70 bg-dark-secondary/60 text-dark-textLight'
+                                          : 'border-gray-700 bg-dark-secondary/30 text-dark-textLight hover:border-dark-accent1'
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={(event) => handleUnpivotIdToggle(column.key, event.target.checked)}
+                                        className="h-3.5 w-3.5 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
+                                      />
+                                      <span className="truncate">{column.key}</span>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <h5 className="text-xs font-semibold uppercase tracking-wide text-dark-textGray">
+                              Wertespalten zum Auflösen
+                            </h5>
+                            {columns.length === 0 ? (
+                              <p className="text-[11px] text-dark-textGray">Keine Spalten verfügbar.</p>
+                            ) : (
+                              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                                {columns.map((column) => {
+                                  const checked = unpivotValueColumnsSet.has(column.key)
+                                  return (
+                                    <label
+                                      key={`unpivot-value-${column.key}`}
+                                      className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                                        checked
+                                          ? 'border-dark-accent1/70 bg-dark-secondary/60 text-dark-textLight'
+                                          : 'border-gray-700 bg-dark-secondary/30 text-dark-textLight hover:border-dark-accent1'
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={(event) => handleUnpivotValueToggle(column.key, event.target.checked)}
+                                        className="h-3.5 w-3.5 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
+                                      />
+                                      <span className="truncate">{column.key}</span>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            )}
+                            {unpivotConfig.valueColumns.length === 0 && (
+                              <p className="text-[11px] text-yellow-200">
+                                Wählen Sie mindestens eine Wertespalte aus, um Zeilen zu erzeugen.
+                              </p>
+                            )}
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                Name für Spaltenkennung
+                              </label>
+                              <input
+                                type="text"
+                                value={unpivotConfig.variableColumn || ''}
+                                onChange={(event) => handleUnpivotVariableChange(event.target.value)}
+                                className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                placeholder="z. B. Kategorie"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                Name für Werte
+                              </label>
+                              <input
+                                type="text"
+                                value={unpivotConfig.valueColumnName || ''}
+                                onChange={(event) => handleUnpivotValueNameChange(event.target.value)}
+                                className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                placeholder="z. B. Messwert"
+                              />
+                            </div>
+                          </div>
+                          <label className="flex items-center gap-2 text-xs text-dark-textLight">
+                            <input
+                              type="checkbox"
+                              checked={unpivotConfig.dropEmptyValues !== false}
+                              onChange={(event) => handleUnpivotDropEmptyToggle(event.target.checked)}
+                              className="h-4 w-4 rounded border-gray-600 bg-dark-bg text-dark-accent1 focus:ring-dark-accent1"
+                            />
+                            <span>Leere Werte überspringen</span>
+                          </label>
+                          <div className="space-y-2 rounded-md border border-gray-700 bg-dark-bg/50 p-3 text-[11px] text-dark-textGray">
+                            <div className="grid gap-2 sm:grid-cols-3">
+                              <div>
+                                Erzeugte Zeilen: <span className="text-dark-textLight">{unpivotMeta.createdRows}</span>
+                              </div>
+                              <div>
+                                Wertespalten: <span className="text-dark-textLight">{unpivotMeta.valueColumns.length}</span>
+                              </div>
+                              <div>
+                                Ausgelassene Werte: <span className="text-dark-textLight">{unpivotMeta.skippedEmpty}</span>
+                              </div>
+                            </div>
+                            {unpivotMeta.valueColumns.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {unpivotMeta.valueColumns.map((column) => (
+                                  <span
+                                    key={`unpivot-preview-${column}`}
+                                    className="rounded border border-gray-600 px-2 py-0.5 text-dark-textLight/90"
+                                  >
+                                    {column}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     <div className="space-y-3 rounded-lg border border-gray-700 bg-dark-bg/40 p-4">
                       <div className="flex items-center justify-between">
                         <h4 className="text-sm font-semibold text-dark-textLight">Gruppierung</h4>

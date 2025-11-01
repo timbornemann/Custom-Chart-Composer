@@ -21,6 +21,21 @@ const createDefaultTransformations = () => ({
   // Value transformation rules applied before filters/grouping
   valueRules: [],
   filters: [],
+  pivot: {
+    enabled: false,
+    indexColumns: [],
+    keyColumn: '',
+    valueColumn: '',
+    prefix: ''
+  },
+  unpivot: {
+    enabled: false,
+    idColumns: [],
+    valueColumns: [],
+    variableColumn: 'Kategorie',
+    valueColumnName: 'Wert',
+    dropEmptyValues: true
+  },
   grouping: {
     enabled: false,
     column: '',
@@ -32,6 +47,22 @@ const createDefaultTransformations = () => ({
     perColumn: {}
   }
 })
+
+const mergeTransformationsWithDefaults = (transformations) => {
+  if (!transformations || typeof transformations !== 'object') {
+    return createDefaultTransformations()
+  }
+
+  const defaults = createDefaultTransformations()
+  return {
+    ...defaults,
+    ...transformations,
+    pivot: { ...defaults.pivot, ...(transformations.pivot || {}) },
+    unpivot: { ...defaults.unpivot, ...(transformations.unpivot || {}) },
+    grouping: { ...defaults.grouping, ...(transformations.grouping || {}) },
+    aggregations: { ...defaults.aggregations, ...(transformations.aggregations || {}) }
+  }
+}
 
 const defaultSortConfig = []
 
@@ -1888,6 +1919,270 @@ const applyValueRules = (rows, rules) => {
   })
 }
 
+const applyPivotTransform = (rows, config) => {
+  const meta = {
+    enabled: !!config?.enabled,
+    createdColumns: [],
+    groups: 0,
+    skippedMissingKey: 0,
+    skippedMissingValue: 0,
+    duplicateAssignments: 0,
+    indexColumns: Array.isArray(config?.indexColumns) ? [...config.indexColumns] : [],
+    sourceColumn: config?.keyColumn || '',
+    valueColumn: config?.valueColumn || '',
+    fillValueUsed: false,
+    prefix: config?.prefix || ''
+  }
+
+  if (!config?.enabled) {
+    return { rows, warnings: [], meta }
+  }
+
+  const warnings = []
+  const indexColumns = Array.isArray(config.indexColumns)
+    ? config.indexColumns.map((column) => sanitizeKey(column)).filter(Boolean)
+    : []
+  const keyColumn = sanitizeKey(config.keyColumn)
+  const valueColumn = sanitizeKey(config.valueColumn)
+  const prefix = sanitizeKey(config.prefix)
+  const hasFillValue = Object.prototype.hasOwnProperty.call(config, 'fillValue')
+  const fillValue = hasFillValue ? config.fillValue : null
+
+  meta.indexColumns = indexColumns
+  meta.sourceColumn = keyColumn
+  meta.valueColumn = valueColumn
+  meta.prefix = prefix
+  meta.fillValueUsed = hasFillValue
+
+  if (!keyColumn || !valueColumn) {
+    warnings.push('Pivot: Schlüssel- und Wertspalte müssen ausgewählt werden.')
+    return { rows, warnings, meta }
+  }
+
+  const availableColumns = new Set()
+  rows.forEach((row) => {
+    if (!row) return
+    Object.keys(row).forEach((columnKey) => availableColumns.add(columnKey))
+  })
+
+  const requiredColumns = [...indexColumns, keyColumn, valueColumn]
+  const missingColumns = requiredColumns.filter((column) => column && !availableColumns.has(column))
+  if (missingColumns.length > 0) {
+    warnings.push(
+      `Pivot: Die Spalte${missingColumns.length === 1 ? '' : 'n'} ${missingColumns
+        .map((column) => `„${column}“`)
+        .join(', ')} konnte${missingColumns.length === 1 ? '' : 'n'} nicht gefunden werden.`
+    )
+    return { rows, warnings, meta }
+  }
+
+  const groupMap = new Map()
+  const pivotKeys = new Set()
+  let duplicateAssignments = 0
+  let skippedMissingKey = 0
+  let skippedMissingValue = 0
+
+  rows.forEach((row) => {
+    if (!row) return
+    const keyValueRaw = row[keyColumn]
+    if (isEmptyValue(keyValueRaw)) {
+      skippedMissingKey += 1
+      return
+    }
+    const pivotKey = sanitizeKey(keyValueRaw)
+    if (!pivotKey) {
+      skippedMissingKey += 1
+      return
+    }
+
+    const value = row[valueColumn]
+    if (isEmptyValue(value)) {
+      skippedMissingValue += 1
+      return
+    }
+
+    const groupKey = indexColumns
+      .map((column) => JSON.stringify(row[column] ?? null))
+      .join(DUPLICATE_KEY_SEPARATOR)
+
+    let entry = groupMap.get(groupKey)
+    if (!entry) {
+      const base = {}
+      indexColumns.forEach((column) => {
+        base[column] = row[column]
+      })
+      entry = { base, values: new Map() }
+      groupMap.set(groupKey, entry)
+    }
+
+    if (entry.values.has(pivotKey)) {
+      duplicateAssignments += 1
+    }
+
+    entry.values.set(pivotKey, value)
+    pivotKeys.add(pivotKey)
+  })
+
+  const sortedPivotKeys = [...pivotKeys].sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }))
+  const columnNameMap = new Map()
+  const usedNames = new Set()
+
+  sortedPivotKeys.forEach((pivotKey) => {
+    const baseName = prefix ? `${prefix}${pivotKey}` : pivotKey
+    let candidate = baseName || pivotKey || 'Spalte'
+    let counter = 2
+    while (usedNames.has(candidate)) {
+      candidate = `${baseName || pivotKey || 'Spalte'}_${counter}`
+      counter += 1
+    }
+    usedNames.add(candidate)
+    columnNameMap.set(pivotKey, candidate)
+  })
+
+  const resultRows = []
+  groupMap.forEach((entry) => {
+    const nextRow = { ...entry.base }
+    sortedPivotKeys.forEach((pivotKey) => {
+      const columnName = columnNameMap.get(pivotKey)
+      if (!columnName) {
+        return
+      }
+      nextRow[columnName] = entry.values.has(pivotKey)
+        ? entry.values.get(pivotKey)
+        : hasFillValue
+        ? fillValue
+        : null
+    })
+    resultRows.push(nextRow)
+  })
+
+  meta.createdColumns = sortedPivotKeys.map((pivotKey) => columnNameMap.get(pivotKey)).filter(Boolean)
+  meta.groups = resultRows.length
+  meta.skippedMissingKey = skippedMissingKey
+  meta.skippedMissingValue = skippedMissingValue
+  meta.duplicateAssignments = duplicateAssignments
+
+  if (skippedMissingKey > 0) {
+    warnings.push(`Pivot: ${skippedMissingKey} Zeile${skippedMissingKey === 1 ? '' : 'n'} ohne Spaltenschlüssel wurden ignoriert.`)
+  }
+  if (skippedMissingValue > 0) {
+    warnings.push(
+      `Pivot: ${skippedMissingValue} Zeile${skippedMissingValue === 1 ? '' : 'n'} ohne gültigen Wert für „${valueColumn}“ wurden übersprungen.`
+    )
+  }
+  if (duplicateAssignments > 0) {
+    warnings.push(
+      `Pivot: ${duplicateAssignments} doppelte Kombination${duplicateAssignments === 1 ? '' : 'en'} aus Schlüssel und Gruppe wurden überschrieben.`
+    )
+  }
+  if (sortedPivotKeys.length === 0) {
+    warnings.push('Pivot: Es konnten keine neuen Spalten gebildet werden.')
+  }
+  if (resultRows.length === 0) {
+    warnings.push('Pivot: Die Transformation erzeugte keine Zeilen.')
+  }
+
+  return { rows: resultRows, warnings, meta }
+}
+
+const applyUnpivotTransform = (rows, config) => {
+  const meta = {
+    enabled: !!config?.enabled,
+    idColumns: Array.isArray(config?.idColumns) ? [...config.idColumns] : [],
+    valueColumns: Array.isArray(config?.valueColumns) ? [...config.valueColumns] : [],
+    variableColumn: config?.variableColumn || 'Kategorie',
+    valueColumnName: config?.valueColumnName || 'Wert',
+    dropEmptyValues: config?.dropEmptyValues !== false,
+    createdRows: 0,
+    skippedEmpty: 0
+  }
+
+  if (!config?.enabled) {
+    return { rows, warnings: [], meta }
+  }
+
+  const warnings = []
+  const idColumns = Array.isArray(config.idColumns)
+    ? config.idColumns.map((column) => sanitizeKey(column)).filter(Boolean)
+    : []
+  let valueColumns = Array.isArray(config.valueColumns)
+    ? config.valueColumns.map((column) => sanitizeKey(column)).filter(Boolean)
+    : []
+  const variableColumn = sanitizeKey(config.variableColumn) || 'Kategorie'
+  const valueColumnName = sanitizeKey(config.valueColumnName) || 'Wert'
+  const dropEmptyValues = config.dropEmptyValues !== false
+
+  meta.idColumns = idColumns
+  meta.valueColumns = valueColumns
+  meta.variableColumn = variableColumn
+  meta.valueColumnName = valueColumnName
+  meta.dropEmptyValues = dropEmptyValues
+
+  if (valueColumns.length === 0) {
+    warnings.push('Unpivot: Es müssen mindestens eine Werte-Spalte ausgewählt werden.')
+    return { rows, warnings, meta }
+  }
+
+  const availableColumns = new Set()
+  rows.forEach((row) => {
+    if (!row) return
+    Object.keys(row).forEach((columnKey) => availableColumns.add(columnKey))
+  })
+
+  const missingValueColumns = valueColumns.filter((column) => !availableColumns.has(column))
+  if (missingValueColumns.length > 0) {
+    warnings.push(
+      `Unpivot: Die Spalte${missingValueColumns.length === 1 ? '' : 'n'} ${missingValueColumns
+        .map((column) => `„${column}“`)
+        .join(', ')} wurde${missingValueColumns.length === 1 ? '' : 'n'} nicht gefunden und ignoriert.`
+    )
+    valueColumns = valueColumns.filter((column) => availableColumns.has(column))
+  }
+
+  meta.valueColumns = [...valueColumns]
+
+  if (valueColumns.length === 0) {
+    warnings.push('Unpivot: Keine gültigen Werte-Spalten verfügbar.')
+    return { rows, warnings, meta }
+  }
+
+  const meltedRows = []
+  let skippedEmpty = 0
+
+  rows.forEach((row) => {
+    if (!row) return
+    valueColumns.forEach((column) => {
+      const value = row[column]
+      if (dropEmptyValues && isEmptyValue(value)) {
+        skippedEmpty += 1
+        return
+      }
+
+      const nextRow = {}
+      idColumns.forEach((idColumn) => {
+        nextRow[idColumn] = row[idColumn]
+      })
+      nextRow[variableColumn] = column
+      nextRow[valueColumnName] = value
+      meltedRows.push(nextRow)
+    })
+  })
+
+  meta.createdRows = meltedRows.length
+  meta.skippedEmpty = skippedEmpty
+
+  if (meltedRows.length === 0) {
+    warnings.push('Unpivot: Die Transformation erzeugte keine Zeilen.')
+  }
+  if (skippedEmpty > 0) {
+    warnings.push(
+      `Unpivot: ${skippedEmpty} leere Wert${skippedEmpty === 1 ? '' : 'e'} wurden ausgelassen.`
+    )
+  }
+
+  return { rows: meltedRows, warnings, meta }
+}
+
 const applyTransformations = (rows, mapping, transformations) => {
   if (!Array.isArray(rows) || rows.length === 0) {
     return {
@@ -1904,13 +2199,39 @@ const applyTransformations = (rows, mapping, transformations) => {
     }
   }
 
+  const pivotConfig = transformations?.pivot || null
+  const unpivotConfig = transformations?.unpivot || null
+
   const meta = {
     originalCount: rows.length,
     filteredOut: 0,
     aggregatedFrom: rows.length,
     aggregatedTo: rows.length,
     unmatchedCount: 0,
-    emptyCount: 0
+    emptyCount: 0,
+    pivot: {
+      enabled: !!pivotConfig?.enabled,
+      createdColumns: [],
+      groups: rows.length,
+      skippedMissingKey: 0,
+      skippedMissingValue: 0,
+      duplicateAssignments: 0,
+      indexColumns: Array.isArray(pivotConfig?.indexColumns) ? [...pivotConfig.indexColumns] : [],
+      sourceColumn: pivotConfig?.keyColumn || '',
+      valueColumn: pivotConfig?.valueColumn || '',
+      fillValueUsed: Object.prototype.hasOwnProperty.call(pivotConfig || {}, 'fillValue'),
+      prefix: pivotConfig?.prefix || ''
+    },
+    unpivot: {
+      enabled: !!unpivotConfig?.enabled,
+      idColumns: Array.isArray(unpivotConfig?.idColumns) ? [...unpivotConfig.idColumns] : [],
+      valueColumns: Array.isArray(unpivotConfig?.valueColumns) ? [...unpivotConfig.valueColumns] : [],
+      variableColumn: unpivotConfig?.variableColumn || 'Kategorie',
+      valueColumnName: unpivotConfig?.valueColumnName || 'Wert',
+      dropEmptyValues: unpivotConfig?.dropEmptyValues !== false,
+      createdRows: rows.length,
+      skippedEmpty: 0
+    }
   }
 
   let workingRows = rows.map((row) => ({ ...row }))
@@ -1920,7 +2241,7 @@ const applyTransformations = (rows, mapping, transformations) => {
     return { rows: workingRows, warnings, meta }
   }
 
-  const { valueRules, filters, grouping, aggregations } = transformations
+  const { valueRules, filters, pivot, unpivot, grouping, aggregations } = transformations
 
   // 1) Apply value rules first (original rows remain unchanged in state)
   workingRows = applyValueRules(workingRows, valueRules)
@@ -1937,6 +2258,34 @@ const applyTransformations = (rows, mapping, transformations) => {
     meta.aggregatedTo = 0
     return { rows: [], warnings, meta }
   }
+
+  const pivotResult = applyPivotTransform(workingRows, pivot)
+  workingRows = pivotResult.rows
+  meta.pivot = pivotResult.meta
+  if (pivotResult.warnings.length > 0) {
+    warnings.push(...pivotResult.warnings)
+  }
+
+  if (workingRows.length === 0) {
+    meta.aggregatedFrom = 0
+    meta.aggregatedTo = 0
+    return { rows: [], warnings, meta }
+  }
+
+  const unpivotResult = applyUnpivotTransform(workingRows, unpivot)
+  workingRows = unpivotResult.rows
+  meta.unpivot = unpivotResult.meta
+  if (unpivotResult.warnings.length > 0) {
+    warnings.push(...unpivotResult.warnings)
+  }
+
+  if (workingRows.length === 0) {
+    meta.aggregatedFrom = 0
+    meta.aggregatedTo = 0
+    return { rows: [], warnings, meta }
+  }
+
+  meta.aggregatedFrom = workingRows.length
 
   if (grouping?.enabled) {
     const { rows: aggregatedRows, info } = aggregateRows(workingRows, mapping, grouping, aggregations)
@@ -1967,6 +2316,8 @@ const applyTransformations = (rows, mapping, transformations) => {
       warnings.push('Es konnten keine Gruppen mit numerischen Werten berechnet werden.')
     }
   }
+
+  meta.aggregatedTo = workingRows.length
 
   return { rows: workingRows, warnings, meta }
 }
@@ -2419,7 +2770,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setColumns(normalizeColumnsState(initialData.columns || []))
     setRowDisplay(normalizeRowDisplayState(initialData.rowDisplay))
     setMapping(initialData.mapping || defaultMapping)
-    setTransformations(initialData.transformations || createDefaultTransformations())
+    setTransformations(mergeTransformationsWithDefaults(initialData.transformations))
     setPreviewLimit(initialData.previewLimit ?? 5)
     setSearchQuery(initialData.searchQuery || '')
     setSearchMode(initialData.searchMode || 'normal')

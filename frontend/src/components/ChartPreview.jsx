@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import PropTypes from 'prop-types'
 import {
   Chart as ChartJS,
@@ -240,12 +240,47 @@ function valueLabelPlugin() {
 }
 
 // Wrapper component to force complete remount
-function ChartWrapper({ chartType, data, options, chartRef }) {
+function ChartWrapper({ chartType, data, options, chartRef, onDataPointClick }) {
   const ChartComponent = getChartComponent(chartType.id)
-  return <ChartComponent ref={chartRef} data={data} options={options} />
+  const handleClick = useCallback(
+    (event, elements) => {
+      if (!onDataPointClick || !elements || elements.length === 0) {
+        return
+      }
+      const [primary] = elements
+      if (!primary) {
+        return
+      }
+
+      onDataPointClick({
+        event,
+        datasetIndex: primary.datasetIndex,
+        index: primary.index,
+        element: primary
+      })
+    },
+    [onDataPointClick]
+  )
+
+  return (
+    <ChartComponent
+      ref={chartRef}
+      data={data}
+      options={options}
+      onClick={handleClick}
+    />
+  )
 }
 
-export default function ChartPreview({ chartType, config, chartRef }) {
+export default function ChartPreview({
+  chartType,
+  config,
+  chartRef,
+  onDataPointClick = null,
+  compact = false,
+  title = null,
+  subtitle = null
+}) {
   const [chartData, setChartData] = useState(null)
   const [chartOptions, setChartOptions] = useState(null)
   const [mountKey, setMountKey] = useState(0)
@@ -335,7 +370,13 @@ export default function ChartPreview({ chartType, config, chartRef }) {
 
   if (!chartType || !config || !chartData) {
     return (
-      <div className="bg-dark-secondary rounded-2xl shadow-lg p-6 flex items-center justify-center h-[600px]">
+      <div
+        className={
+          compact
+            ? 'rounded-xl border border-gray-700/60 bg-dark-bg/40 p-4 flex items-center justify-center h-48'
+            : 'bg-dark-secondary rounded-2xl shadow-lg p-6 flex items-center justify-center h-[600px]'
+        }
+      >
         <div className="text-dark-textGray">Wähle einen Diagrammtyp aus...</div>
       </div>
     )
@@ -344,13 +385,16 @@ export default function ChartPreview({ chartType, config, chartRef }) {
   // Get background color from config, default to dark theme
   const backgroundColor = config.backgroundColor || '#0F172A'
   const isTransparent = backgroundColor === 'transparent'
-  
+
   // Calculate preview dimensions based on aspect ratio
   const getPreviewDimensions = () => {
+    if (compact) {
+      return { maxWidth: '100%', maxHeight: '220px' }
+    }
     // Chart types that don't support custom aspect ratio
     const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
     const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
-    
+
     const aspectRatio = config.options?.aspectRatio
     if (!aspectRatio || !supportsAspectRatio || typeof aspectRatio !== 'number') {
       return { maxWidth: '600px', maxHeight: '450px' }
@@ -378,14 +422,28 @@ export default function ChartPreview({ chartType, config, chartRef }) {
   const previewDimensions = getPreviewDimensions()
 
   return (
-    <div className="bg-dark-secondary rounded-2xl shadow-lg p-6 flex flex-col h-[600px]">
-      <div className="mb-4 flex-shrink-0">
-        <h2 className="text-xl font-semibold text-dark-textLight">Vorschau</h2>
-        <p className="text-sm text-dark-textGray">{chartType.name}</p>
+    <div
+      className={
+        compact
+          ? 'rounded-xl border border-gray-700/60 bg-dark-bg/50 p-4 flex flex-col h-64'
+          : 'bg-dark-secondary rounded-2xl shadow-lg p-6 flex flex-col h-[600px]'
+      }
+    >
+      <div className={`flex-shrink-0 ${compact ? 'mb-2' : 'mb-4'}`}>
+        {(title || !compact) && (
+          <h2 className={`${compact ? 'text-sm' : 'text-xl'} font-semibold text-dark-textLight`}>
+            {title || 'Vorschau'}
+          </h2>
+        )}
+        {(subtitle || (!compact && chartType.name)) && (
+          <p className={`${compact ? 'text-[11px]' : 'text-sm'} text-dark-textGray`}>
+            {subtitle || chartType.name}
+          </p>
+        )}
       </div>
-      <div 
+      <div
         className="rounded-xl p-6 flex items-center justify-center flex-1 transition-colors duration-300"
-        style={{ 
+        style={{
           backgroundColor: isTransparent ? '#1E293B' : backgroundColor,
           backgroundImage: isTransparent 
             ? 'linear-gradient(45deg, #334155 25%, transparent 25%, transparent 75%, #334155 75%, #334155), linear-gradient(45deg, #334155 25%, transparent 25%, transparent 75%, #334155 75%, #334155)'
@@ -395,7 +453,7 @@ export default function ChartPreview({ chartType, config, chartRef }) {
         }}
       >
         {chartData && (
-          <div 
+          <div
             className="w-full h-full flex items-center justify-center"
             style={{
               maxWidth: previewDimensions.maxWidth,
@@ -409,6 +467,7 @@ export default function ChartPreview({ chartType, config, chartRef }) {
                 data={chartData}
                 options={chartOptions}
                 chartRef={localChartRef}
+                onDataPointClick={onDataPointClick}
               />
             </ChartErrorBoundary>
           </div>
@@ -2023,6 +2082,18 @@ const chartTypeShape = PropTypes.shape({
 ChartPreview.propTypes = {
   chartType: chartTypeShape,
   config: PropTypes.object.isRequired,
-  chartRef: PropTypes.shape({ current: PropTypes.any })
+  chartRef: PropTypes.shape({ current: PropTypes.any }),
+  onDataPointClick: PropTypes.func,
+  compact: PropTypes.bool,
+  title: PropTypes.string,
+  subtitle: PropTypes.string
+}
+
+ChartWrapper.propTypes = {
+  chartType: chartTypeShape.isRequired,
+  data: PropTypes.object,
+  options: PropTypes.object,
+  chartRef: PropTypes.shape({ current: PropTypes.any }),
+  onDataPointClick: PropTypes.func
 }
 

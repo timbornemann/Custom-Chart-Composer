@@ -7,6 +7,7 @@ import ChartPreview from './ChartPreview'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { formatCellReference, formatRangeReference } from '../utils/csv/formulas'
 
 const formatCellValue = (value) => {
   if (value === null || value === undefined) return ''
@@ -983,7 +984,11 @@ export default function CsvWorkbench({
     resolveDuplicates: internalResolveDuplicates,
     manualEdits,
     canUndoManualEdit,
-    undoLastManualEdit: internalUndoLastManualEdit
+    undoLastManualEdit: internalUndoLastManualEdit,
+    formulaErrors,
+    setCellFormula: internalSetCellFormula,
+    clearCellFormula: internalClearCellFormula,
+    getCellFormula: internalGetCellFormula
   } = useDataImport({ allowMultipleValueColumns, requireDatasets, initialData, chartType, isScatterBubble, isCoordinate })
 
   const [editingCell, setEditingCell] = useState(null)
@@ -992,6 +997,9 @@ export default function CsvWorkbench({
   const [selectionState, setSelectionState] = useState({ anchor: null, focus: null })
   const [isSelecting, setIsSelecting] = useState(false)
   const pendingFocusRef = useRef(null)
+  const setCellFormula = internalSetCellFormula
+  const clearCellFormula = internalClearCellFormula
+  const getCellFormula = internalGetCellFormula
   const [profilingColumnKey, setProfilingColumnKey] = useState(null)
   const [correlationSelectedColumns, setCorrelationSelectedColumns] = useState([])
   const [correlationThreshold, setCorrelationThreshold] = useState(0)
@@ -1005,6 +1013,10 @@ export default function CsvWorkbench({
   })
   const [chartPreviewHighlight, setChartPreviewHighlight] = useState(null)
   const findReplaceHistoryRef = useRef([])
+  const [formulaInputValue, setFormulaInputValue] = useState('')
+  const [isFormulaEditing, setIsFormulaEditing] = useState(false)
+  const formulaInputRef = useRef(null)
+  const formulaEditingRef = useRef(false)
   const [duplicateActionFeedback, setDuplicateActionFeedback] = useState(null)
   const activeSearchConfig = useMemo(
     () => createSearchConfig({ query: searchQuery, mode: searchMode, columns: searchColumns }),
@@ -1858,6 +1870,195 @@ export default function CsvWorkbench({
   }, [selectedTargets])
 
   const hasSelection = selectedTargets.length > 0
+
+  const activeCell = useMemo(() => selectionState.focus || selectionState.anchor, [selectionState])
+
+  const getDisplayValueForCell = useCallback(
+    (cell) => {
+      if (!cell) {
+        return ''
+      }
+      const formula = getCellFormula(cell.rowIndex, cell.columnKey)
+      if (formula) {
+        return formula
+      }
+      let entry = null
+      if (typeof cell.rowPosition === 'number') {
+        entry = previewEntries[cell.rowPosition]
+      }
+      if (!entry || entry.index !== cell.rowIndex) {
+        entry = previewEntries.find((item) => item.index === cell.rowIndex)
+      }
+      const value = entry?.row?.[cell.columnKey]
+      if (value === null || value === undefined) {
+        return ''
+      }
+      return String(value)
+    },
+    [getCellFormula, previewEntries]
+  )
+
+  useEffect(() => {
+    if (isFormulaEditing) {
+      return
+    }
+    setFormulaInputValue(getDisplayValueForCell(activeCell))
+  }, [activeCell, getDisplayValueForCell, isFormulaEditing])
+
+  useEffect(() => {
+    formulaEditingRef.current = isFormulaEditing
+  }, [isFormulaEditing])
+
+  const activeCellLabel = useMemo(() => {
+    if (!activeCell || !Number.isInteger(activeCell.rowIndex) || !Number.isInteger(activeCell.columnIndex)) {
+      return ''
+    }
+    return formatCellReference(activeCell.columnIndex, activeCell.rowIndex)
+  }, [activeCell])
+
+  const selectionReference = useMemo(() => {
+    if (!selectedTargets || selectedTargets.length === 0) {
+      return ''
+    }
+    let minRow = Infinity
+    let maxRow = -Infinity
+    let minCol = Infinity
+    let maxCol = -Infinity
+    selectedTargets.forEach((target) => {
+      if (Number.isInteger(target.rowIndex)) {
+        minRow = Math.min(minRow, target.rowIndex)
+        maxRow = Math.max(maxRow, target.rowIndex)
+      }
+      if (Number.isInteger(target.columnIndex)) {
+        minCol = Math.min(minCol, target.columnIndex)
+        maxCol = Math.max(maxCol, target.columnIndex)
+      }
+    })
+    if (!Number.isFinite(minRow) || !Number.isFinite(maxRow) || !Number.isFinite(minCol) || !Number.isFinite(maxCol)) {
+      return ''
+    }
+    return formatRangeReference(minCol, minRow, maxCol, maxRow)
+  }, [selectedTargets])
+
+  const activeFormulaError = useMemo(() => {
+    if (!activeCell) {
+      return ''
+    }
+    const rowKey = String(activeCell.rowIndex)
+    return formulaErrors?.[rowKey]?.[activeCell.columnKey] || ''
+  }, [activeCell, formulaErrors])
+
+  const hasActiveCell = Boolean(activeCell)
+
+  const handleFormulaInputChange = useCallback((event) => {
+    setFormulaInputValue(event.target.value)
+  }, [])
+
+  const handleFormulaFocus = useCallback(() => {
+    formulaEditingRef.current = true
+    setIsFormulaEditing(true)
+  }, [])
+
+  const handleFormulaCancel = useCallback(() => {
+    formulaEditingRef.current = false
+    setIsFormulaEditing(false)
+    setFormulaInputValue(getDisplayValueForCell(activeCell))
+    if (formulaInputRef.current) {
+      formulaInputRef.current.blur()
+    }
+  }, [activeCell, getDisplayValueForCell])
+
+  const applyFormulaInput = useCallback(() => {
+    if (!activeCell) {
+      return
+    }
+    const rawValue = formulaInputValue ?? ''
+    const textValue = typeof rawValue === 'string' ? rawValue : String(rawValue)
+    const trimmed = textValue.trim()
+    const columnInfo =
+      Number.isInteger(activeCell.columnIndex) && activeCell.columnIndex >= 0
+        ? visibleColumns[activeCell.columnIndex]
+        : null
+
+    if (trimmed.startsWith('=')) {
+      setCellFormula(activeCell.rowIndex, activeCell.columnKey, trimmed)
+    } else {
+      clearCellFormula(activeCell.rowIndex, activeCell.columnKey)
+      let valueToSet = textValue
+      if (columnInfo?.type === 'number') {
+        if (trimmed === '') {
+          valueToSet = ''
+        } else {
+          const numeric = Number(trimmed.replace(',', '.'))
+          valueToSet = Number.isNaN(numeric) ? textValue : numeric
+        }
+      }
+      updateCellValue(activeCell.rowIndex, activeCell.columnKey, valueToSet)
+    }
+    formulaEditingRef.current = false
+    setIsFormulaEditing(false)
+  }, [activeCell, formulaInputValue, visibleColumns, setCellFormula, clearCellFormula, updateCellValue])
+
+  const handleFormulaBlur = useCallback(() => {
+    if (!formulaEditingRef.current) {
+      return
+    }
+    applyFormulaInput()
+  }, [applyFormulaInput])
+
+  const handleFormulaKeyDown = useCallback(
+    (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        applyFormulaInput()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        handleFormulaCancel()
+      }
+    },
+    [applyFormulaInput, handleFormulaCancel]
+  )
+
+  const handleInsertRange = useCallback(() => {
+    if (!selectionReference) {
+      return
+    }
+    setFormulaInputValue((previous) => {
+      const base = typeof previous === 'string' ? previous : ''
+      const inputElement = formulaInputRef.current
+      const schedule =
+        typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+          ? window.requestAnimationFrame
+          : (callback) => setTimeout(callback, 0)
+      if (!base.trim()) {
+        if (inputElement) {
+          schedule(() => {
+            inputElement.focus()
+            const position = selectionReference.length + 1
+            inputElement.setSelectionRange(position, position)
+          })
+        }
+        return `=${selectionReference}`
+      }
+      if (!inputElement) {
+        return `${base}${selectionReference}`
+      }
+      const start = inputElement.selectionStart ?? base.length
+      const end = inputElement.selectionEnd ?? base.length
+      const next = `${base.slice(0, start)}${selectionReference}${base.slice(end)}`
+      schedule(() => {
+        inputElement.focus()
+        const position = start + selectionReference.length
+        inputElement.setSelectionRange(position, position)
+      })
+      return next
+    })
+    formulaEditingRef.current = true
+    setIsFormulaEditing(true)
+    if (formulaInputRef.current) {
+      formulaInputRef.current.focus()
+    }
+  }, [selectionReference])
 
   const moveSelection = useCallback(
     (deltaRow, deltaColumn, extend) => {
@@ -4471,6 +4672,66 @@ export default function CsvWorkbench({
                         </div>
                       )}
                       <div className="space-y-2">
+                        <div className="rounded-lg border border-gray-700 bg-dark-bg/40 p-3">
+                          <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
+                            <span className="font-semibold uppercase tracking-wide text-dark-textLight/80">Formel</span>
+                            <span className="font-mono text-dark-textGray/80">{activeCellLabel || '–'}</span>
+                            {selectionReference && (
+                              <span className="rounded border border-dark-accent1/40 bg-dark-secondary/60 px-2 py-0.5 text-dark-textLight/80">
+                                Bereich: {selectionReference}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={handleInsertRange}
+                              disabled={!selectionReference}
+                              className={`rounded border px-2 py-0.5 text-[11px] transition-colors ${
+                                selectionReference
+                                  ? 'border-gray-600 text-dark-textLight hover:border-dark-accent1 hover:text-dark-textLight'
+                                  : 'cursor-not-allowed border-gray-800 text-dark-textGray'
+                              }`}
+                            >
+                              Bereich einfügen
+                            </button>
+                          </div>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <input
+                              ref={formulaInputRef}
+                              type="text"
+                              value={formulaInputValue}
+                              onChange={handleFormulaInputChange}
+                              onFocus={handleFormulaFocus}
+                              onBlur={handleFormulaBlur}
+                              onKeyDown={handleFormulaKeyDown}
+                              placeholder={activeCellLabel ? `Formel für ${activeCellLabel}` : 'Formel eingeben'}
+                              className="flex-1 rounded-md border border-gray-700 bg-dark-secondary px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={applyFormulaInput}
+                                disabled={!hasActiveCell}
+                                className={`rounded border px-3 py-1.5 text-xs font-medium transition-colors ${
+                                  hasActiveCell
+                                    ? 'border-dark-accent1/60 bg-dark-accent1/10 text-dark-textLight hover:bg-dark-accent1/20'
+                                    : 'cursor-not-allowed border-gray-800 bg-gray-900 text-dark-textGray'
+                                }`}
+                              >
+                                Anwenden
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleFormulaCancel}
+                                className="rounded border border-gray-700 px-3 py-1.5 text-xs text-dark-textGray transition-colors hover:border-gray-500 hover:text-dark-textLight"
+                              >
+                                Abbrechen
+                              </button>
+                            </div>
+                          </div>
+                          {activeFormulaError && (
+                            <p className="mt-2 text-xs text-red-300">{activeFormulaError}</p>
+                          )}
+                        </div>
                         {hiddenColumns.length > 0 && (
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
                             <span className="font-semibold text-dark-textLight">Versteckte Spalten:</span>

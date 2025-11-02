@@ -3,6 +3,7 @@ import PropTypes from 'prop-types'
 import Papa from 'papaparse'
 import useDataImport, { createSearchConfig, rowMatchesQuery } from '../hooks/useDataImport'
 import CsvFindReplaceModal from './CsvFindReplaceModal'
+import ChartPreview from './ChartPreview'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -89,6 +90,20 @@ const DEFAULT_UNPIVOT_META = {
   createdRows: 0,
   skippedEmpty: 0
 }
+
+const SUGGESTION_PREVIEW_MAX_POINTS = 200
+const SUGGESTION_PREVIEW_MAX_CATEGORIES = 25
+const SUGGESTION_PREVIEW_MAX_DATASETS = 5
+const SUGGESTION_PREVIEW_COLORS = [
+  '#38BDF8',
+  '#34D399',
+  '#F97316',
+  '#A855F7',
+  '#F43F5E',
+  '#FACC15',
+  '#22D3EE',
+  '#F472B6'
+]
 
 const renderHighlightedValue = (value, matches) => {
   const formatted = formatCellValue(value)
@@ -183,6 +198,497 @@ const isCellValueEmpty = (value) => {
     return value.trim() === ''
   }
   return false
+}
+
+const parsePreviewNumber = (value) => {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+
+  const text = String(value).trim()
+  if (!text) return null
+
+  let normalized = text.replace(/\s+/g, '')
+
+  if (/^-?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(normalized)) {
+    normalized = normalized.replace(/\./g, '').replace(',', '.')
+  } else if (/^-?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(normalized)) {
+    normalized = normalized.replace(/,/g, '')
+  } else if (normalized.includes(',') && !normalized.includes('.')) {
+    normalized = normalized.replace(',', '.')
+  }
+
+  const sanitized = normalized.replace(/[^0-9eE+\-.]/g, '')
+  const parsed = Number(sanitized)
+  if (Number.isFinite(parsed)) {
+    return parsed
+  }
+
+  const fallback = Number(normalized.replace(/,/g, '.'))
+  return Number.isFinite(fallback) ? fallback : null
+}
+
+const formatPreviewLabel = (value) => {
+  const formatted = formatSamplePreview(value)
+  return formatted === null || formatted === undefined ? '∅' : String(formatted)
+}
+
+const sampleSuggestionEntries = (entries, limit) => {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return []
+  }
+  if (!limit || entries.length <= limit) {
+    return entries
+  }
+  if (limit <= 1) {
+    return [entries[0]]
+  }
+  const step = (entries.length - 1) / (limit - 1)
+  const result = []
+  for (let index = 0; index < limit; index += 1) {
+    const rawPosition = Math.round(index * step)
+    const clamped = Math.min(entries.length - 1, Math.max(0, rawPosition))
+    const entry = entries[clamped]
+    if (entry) {
+      result.push(entry)
+    }
+  }
+  return result
+}
+
+const ensureDatasetLength = (dataset, length) => {
+  while (dataset.data.length < length) {
+    dataset.data.push(null)
+  }
+}
+
+const ensureAllDatasetsLength = (datasets, length) => {
+  datasets.forEach((dataset) => ensureDatasetLength(dataset, length))
+}
+
+const convertMetaMapToObject = (metaMap) => {
+  const result = {}
+  metaMap.forEach((value, key) => {
+    result[key] = value
+  })
+  return result
+}
+
+const createPreviewChartType = (id, name) => ({ id, name, configSchema: {} })
+
+const getPreviewColor = (index) => SUGGESTION_PREVIEW_COLORS[index % SUGGESTION_PREVIEW_COLORS.length]
+
+const buildMultiValuePreview = (entries, source, selection, chartHint) => {
+  const labelKey = selection?.label
+  const valueKeys = Array.isArray(selection?.values)
+    ? selection.values.filter(Boolean)
+    : selection?.values
+      ? [selection.values]
+      : []
+
+  if (!labelKey || valueKeys.length === 0) {
+    return null
+  }
+
+  const sampled = sampleSuggestionEntries(entries, SUGGESTION_PREVIEW_MAX_POINTS)
+  if (sampled.length === 0) {
+    return null
+  }
+
+  const labels = []
+  const labelIndexMap = new Map()
+  const datasets = valueKeys.map((key, index) => ({
+    key,
+    label: key,
+    data: [],
+    backgroundColor: getPreviewColor(index),
+    borderColor: getPreviewColor(index),
+    metaMap: new Map()
+  }))
+
+  sampled.forEach((entry) => {
+    const row = entry.row || {}
+    const label = formatPreviewLabel(row[labelKey])
+    if (!labelIndexMap.has(label)) {
+      if (labels.length >= SUGGESTION_PREVIEW_MAX_CATEGORIES) {
+        return
+      }
+      labelIndexMap.set(label, labels.length)
+      labels.push(label)
+      ensureAllDatasetsLength(datasets, labels.length)
+    }
+    const labelIndex = labelIndexMap.get(label)
+    valueKeys.forEach((valueKey, datasetIndex) => {
+      const dataset = datasets[datasetIndex]
+      const numeric = parsePreviewNumber(row[valueKey])
+      if (numeric === null) {
+        return
+      }
+      if (dataset.data[labelIndex] === null || dataset.data[labelIndex] === undefined) {
+        dataset.data[labelIndex] = numeric
+      } else {
+        dataset.data[labelIndex] += numeric
+      }
+      if (!dataset.metaMap.has(labelIndex)) {
+        dataset.metaMap.set(labelIndex, { source, rowIndex: entry.index })
+      }
+    })
+  })
+
+  const hasValues = datasets.some((dataset) => dataset.data.some((value) => value !== null && value !== undefined))
+  if (!hasValues || labels.length === 0) {
+    return null
+  }
+
+  const chartDatasets = datasets.map((dataset) => ({
+    label: dataset.label,
+    data: dataset.data,
+    backgroundColor: dataset.backgroundColor,
+    borderColor: dataset.borderColor,
+    borderWidth: 1
+  }))
+
+  const pointMeta = datasets.map((dataset) => convertMetaMapToObject(dataset.metaMap))
+
+  return {
+    chartType: createPreviewChartType('groupedBar', chartHint || 'Mehrere Werte'),
+    config: {
+      labels,
+      datasets: chartDatasets,
+      options: {
+        showLegend: chartDatasets.length > 1,
+        animation: false,
+        aspectRatio: labels.length > 8 ? 2 : 1.4
+      }
+    },
+    pointMeta
+  }
+}
+
+const buildSingleValuePreview = (entries, source, selection, chartHint) => {
+  const labelKey = selection?.label
+  const valueKey = selection?.value || (Array.isArray(selection?.values) ? selection.values[0] : null)
+  if (!labelKey || !valueKey) {
+    return null
+  }
+
+  const sampled = sampleSuggestionEntries(entries, SUGGESTION_PREVIEW_MAX_POINTS)
+  if (sampled.length === 0) {
+    return null
+  }
+
+  const aggregates = new Map()
+  sampled.forEach((entry) => {
+    const row = entry.row || {}
+    const label = formatPreviewLabel(row[labelKey])
+    const numeric = parsePreviewNumber(row[valueKey])
+    if (numeric === null) {
+      return
+    }
+    const existing = aggregates.get(label)
+    if (existing) {
+      existing.value += numeric
+    } else if (aggregates.size < SUGGESTION_PREVIEW_MAX_CATEGORIES) {
+      aggregates.set(label, { value: numeric, rowIndex: entry.index })
+    }
+  })
+
+  if (aggregates.size === 0) {
+    return null
+  }
+
+  const maxSlices = Math.min(12, SUGGESTION_PREVIEW_MAX_CATEGORIES)
+  const sorted = Array.from(aggregates.entries())
+    .sort((a, b) => b[1].value - a[1].value)
+    .slice(0, maxSlices)
+
+  const labels = sorted.map(([label]) => label)
+  const values = sorted.map(([, data]) => data.value)
+  const pointMeta = [sorted.reduce((accumulator, [, data], index) => {
+    accumulator[index] = { source, rowIndex: data.rowIndex }
+    return accumulator
+  }, {})]
+
+  return {
+    chartType: createPreviewChartType('donut', chartHint || 'Einzelwert'),
+    config: {
+      labels,
+      values,
+      colors: labels.map((_, index) => getPreviewColor(index)),
+      options: {
+        animation: false,
+        showLegend: labels.length <= 8
+      }
+    },
+    pointMeta
+  }
+}
+
+const buildLongFormatPreview = (entries, source, selection, chartHint) => {
+  const labelKey = selection?.label
+  const valueKey = selection?.value
+  const datasetKey = selection?.dataset
+  if (!labelKey || !valueKey || !datasetKey) {
+    return null
+  }
+
+  const sampled = sampleSuggestionEntries(entries, SUGGESTION_PREVIEW_MAX_POINTS)
+  if (sampled.length === 0) {
+    return null
+  }
+
+  const labels = []
+  const labelIndexMap = new Map()
+  const datasets = new Map()
+
+  sampled.forEach((entry) => {
+    const row = entry.row || {}
+    const label = formatPreviewLabel(row[labelKey])
+    if (!labelIndexMap.has(label)) {
+      if (labels.length >= SUGGESTION_PREVIEW_MAX_CATEGORIES) {
+        return
+      }
+      labelIndexMap.set(label, labels.length)
+      labels.push(label)
+      datasets.forEach((dataset) => ensureDatasetLength(dataset, labels.length))
+    }
+    const labelIndex = labelIndexMap.get(label)
+    const datasetLabel = formatPreviewLabel(row[datasetKey])
+    let dataset = datasets.get(datasetLabel)
+    if (!dataset) {
+      if (datasets.size >= SUGGESTION_PREVIEW_MAX_DATASETS) {
+        return
+      }
+      const color = getPreviewColor(datasets.size)
+      dataset = {
+        key: datasetLabel,
+        label: datasetLabel,
+        data: Array(labels.length).fill(null),
+        backgroundColor: color,
+        borderColor: color,
+        metaMap: new Map()
+      }
+      datasets.set(datasetLabel, dataset)
+    } else {
+      ensureDatasetLength(dataset, labels.length)
+    }
+
+    const numeric = parsePreviewNumber(row[valueKey])
+    if (numeric === null) {
+      return
+    }
+
+    if (dataset.data[labelIndex] === null || dataset.data[labelIndex] === undefined) {
+      dataset.data[labelIndex] = numeric
+    } else {
+      dataset.data[labelIndex] += numeric
+    }
+
+    if (!dataset.metaMap.has(labelIndex)) {
+      dataset.metaMap.set(labelIndex, { source, rowIndex: entry.index })
+    }
+  })
+
+  if (labels.length === 0 || datasets.size === 0) {
+    return null
+  }
+
+  const chartDatasets = Array.from(datasets.values()).map((dataset) => ({
+    label: dataset.label,
+    data: dataset.data,
+    borderColor: dataset.borderColor,
+    backgroundColor: dataset.backgroundColor,
+    fill: false
+  }))
+
+  const pointMeta = Array.from(datasets.values()).map((dataset) => convertMetaMapToObject(dataset.metaMap))
+
+  return {
+    chartType: createPreviewChartType('multiLine', chartHint || 'Datensatz-Vergleich'),
+    config: {
+      labels,
+      datasets: chartDatasets,
+      options: {
+        showLegend: true,
+        animation: false,
+        smooth: true,
+        tension: 0.3
+      }
+    },
+    pointMeta
+  }
+}
+
+const buildScatterPreview = (entries, source, selection, chartHint, hasRadius) => {
+  const xColumn = selection?.xColumn
+  const yColumn = selection?.yColumn
+  if (!xColumn || !yColumn) {
+    return null
+  }
+
+  const sampled = sampleSuggestionEntries(entries, SUGGESTION_PREVIEW_MAX_POINTS)
+  if (sampled.length === 0) {
+    return null
+  }
+
+  const datasetColumn = selection?.datasetLabel
+  const pointLabelColumn = selection?.pointLabelColumn
+  const datasets = new Map()
+
+  sampled.forEach((entry) => {
+    const row = entry.row || {}
+    const xValue = parsePreviewNumber(row[xColumn])
+    const yValue = parsePreviewNumber(row[yColumn])
+    if (xValue === null || yValue === null) {
+      return
+    }
+
+    const datasetLabel = datasetColumn ? formatPreviewLabel(row[datasetColumn]) : 'Daten'
+    let dataset = datasets.get(datasetLabel)
+    if (!dataset) {
+      if (datasets.size >= SUGGESTION_PREVIEW_MAX_DATASETS) {
+        return
+      }
+      const color = getPreviewColor(datasets.size)
+      dataset = {
+        key: datasetLabel,
+        label: datasetLabel,
+        data: [],
+        backgroundColor: color,
+        borderColor: color,
+        meta: []
+      }
+      datasets.set(datasetLabel, dataset)
+    }
+
+    const rValue = hasRadius && selection?.rColumn ? parsePreviewNumber(row[selection.rColumn]) : null
+    const label = pointLabelColumn ? formatPreviewLabel(row[pointLabelColumn]) : `Zeile ${entry.index + 1}`
+
+    const point = {
+      x: xValue,
+      y: yValue,
+      label
+    }
+
+    if (hasRadius) {
+      point.r = rValue !== null ? Math.max(2, Math.abs(rValue)) : 6
+    }
+
+    dataset.data.push(point)
+    dataset.meta.push({ source, rowIndex: entry.index })
+  })
+
+  if (datasets.size === 0) {
+    return null
+  }
+
+  const chartDatasets = Array.from(datasets.values()).map((dataset) => ({
+    label: dataset.label,
+    data: dataset.data,
+    backgroundColor: dataset.backgroundColor,
+    borderColor: dataset.borderColor,
+    pointRadius: hasRadius ? undefined : 6
+  }))
+
+  const pointMeta = Array.from(datasets.values()).map((dataset) => {
+    const meta = {}
+    dataset.meta.forEach((entryMeta, index) => {
+      meta[index] = entryMeta
+    })
+    return meta
+  })
+
+  return {
+    chartType: createPreviewChartType(hasRadius ? 'bubble' : 'scatter', chartHint || 'Punkte'),
+    config: {
+      datasets: chartDatasets,
+      options: {
+        animation: false,
+        showLegend: datasets.size > 1
+      }
+    },
+    pointMeta
+  }
+}
+
+const buildCoordinatePreview = (entries, source, selection, chartHint) => {
+  const longitudeColumn = selection?.longitudeColumn
+  const latitudeColumn = selection?.latitudeColumn
+  if (!longitudeColumn || !latitudeColumn) {
+    return null
+  }
+
+  const sampled = sampleSuggestionEntries(entries, SUGGESTION_PREVIEW_MAX_POINTS)
+  if (sampled.length === 0) {
+    return null
+  }
+
+  const datasetColumn = selection?.datasetLabel
+  const pointLabelColumn = selection?.pointLabelColumn
+  const datasets = new Map()
+
+  sampled.forEach((entry) => {
+    const row = entry.row || {}
+    const longitude = parsePreviewNumber(row[longitudeColumn])
+    const latitude = parsePreviewNumber(row[latitudeColumn])
+    if (longitude === null || latitude === null) {
+      return
+    }
+
+    const datasetLabel = datasetColumn ? formatPreviewLabel(row[datasetColumn]) : 'Koordinaten'
+    let dataset = datasets.get(datasetLabel)
+    if (!dataset) {
+      if (datasets.size >= SUGGESTION_PREVIEW_MAX_DATASETS) {
+        return
+      }
+      const color = getPreviewColor(datasets.size)
+      dataset = {
+        key: datasetLabel,
+        label: datasetLabel,
+        data: [],
+        backgroundColor: color,
+        borderColor: color,
+        meta: []
+      }
+      datasets.set(datasetLabel, dataset)
+    }
+
+    const label = pointLabelColumn ? formatPreviewLabel(row[pointLabelColumn]) : `Zeile ${entry.index + 1}`
+    dataset.data.push({ longitude, latitude, label })
+    dataset.meta.push({ source, rowIndex: entry.index })
+  })
+
+  if (datasets.size === 0) {
+    return null
+  }
+
+  const chartDatasets = Array.from(datasets.values()).map((dataset) => ({
+    label: dataset.label,
+    data: dataset.data,
+    backgroundColor: dataset.backgroundColor,
+    borderColor: dataset.borderColor
+  }))
+
+  const pointMeta = Array.from(datasets.values()).map((dataset) => {
+    const meta = {}
+    dataset.meta.forEach((entryMeta, index) => {
+      meta[index] = entryMeta
+    })
+    return meta
+  })
+
+  return {
+    chartType: createPreviewChartType('coordinate', chartHint || 'Koordinaten'),
+    config: {
+      datasets: chartDatasets,
+      options: {
+        animation: false,
+        showLegend: datasets.size > 1
+      }
+    },
+    pointMeta
+  }
 }
 
 const FILTER_OPERATORS = [
@@ -497,6 +1003,7 @@ export default function CsvWorkbench({
     raw: { matches: [], total: 0 },
     transformed: { matches: [], total: 0 }
   })
+  const [chartPreviewHighlight, setChartPreviewHighlight] = useState(null)
   const findReplaceHistoryRef = useRef([])
   const [duplicateActionFeedback, setDuplicateActionFeedback] = useState(null)
   const activeSearchConfig = useMemo(
@@ -2082,6 +2589,7 @@ export default function CsvWorkbench({
         title: 'Kategorien mit mehreren Zahlen',
         description: 'Ideal für Balken- oder Liniendiagramme mit mehreren Serien.',
         chartHint: 'Balken-/Liniendiagramm',
+        preview: { chartType: 'groupedBar' },
         fields: [
           {
             key: 'label',
@@ -2112,6 +2620,7 @@ export default function CsvWorkbench({
         title: 'Kategorien mit einer Kennzahl',
         description: 'Perfekt für Kreis- oder Donutdiagramme.',
         chartHint: 'Kreis-/Donutdiagramm',
+        preview: { chartType: 'donut' },
         fields: [
           {
             key: 'label',
@@ -2142,6 +2651,7 @@ export default function CsvWorkbench({
         title: 'Lange Tabelle mit Datensatz-Spalte',
         description: 'Verwende eine Datensatzspalte, um Serien dynamisch zu gruppieren.',
         chartHint: 'Mehrserien-Diagramm',
+        preview: { chartType: 'multiLine' },
         fields: [
           {
             key: 'label',
@@ -2183,6 +2693,7 @@ export default function CsvWorkbench({
           ? 'Wähle Spalten für X, Y und optional Radiuswerte.'
           : 'Wähle Spalten für X- und Y-Werte.',
         chartHint: needsRadius ? 'Bubble/Matrix' : 'Scatter',
+        preview: { chartType: needsRadius ? 'bubble' : 'scatter', usesRadius: needsRadius },
         fields: [
           {
             key: 'xColumn',
@@ -2251,6 +2762,7 @@ export default function CsvWorkbench({
         title: 'Koordinaten-Daten',
         description: 'Geeignet für Kartenvisualisierungen mit Longitude/Latitude.',
         chartHint: 'Karten-/Koordinatenvisualisierung',
+        preview: { chartType: 'coordinate' },
         fields: [
           {
             key: 'longitudeColumn',
@@ -2346,6 +2858,118 @@ export default function CsvWorkbench({
       return Boolean(value)
     })
   }, [])
+
+  const suggestionPreviewSource = useMemo(() => {
+    if (Array.isArray(transformedPreviewEntries) && transformedPreviewEntries.length > 0) {
+      return { entries: transformedPreviewEntries, source: 'transformed' }
+    }
+    return { entries: Array.isArray(previewEntries) ? previewEntries : [], source: 'raw' }
+  }, [transformedPreviewEntries, previewEntries])
+
+  const suggestionPreviewData = useMemo(() => {
+    const result = new Map()
+    if (!Array.isArray(chartSuggestions) || chartSuggestions.length === 0) {
+      return result
+    }
+
+    const { entries, source } = suggestionPreviewSource
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return result
+    }
+
+    chartSuggestions.forEach((suggestion) => {
+      const selection = suggestionSelections[suggestion.id]
+      if (!isSuggestionComplete(suggestion, selection)) {
+        return
+      }
+
+      let preview = null
+
+      if (suggestion.id === 'multiValue') {
+        preview = buildMultiValuePreview(entries, source, selection, suggestion.chartHint)
+      } else if (suggestion.id === 'singleValue') {
+        preview = buildSingleValuePreview(entries, source, selection, suggestion.chartHint)
+      } else if (suggestion.id === 'longFormat') {
+        preview = buildLongFormatPreview(entries, source, selection, suggestion.chartHint)
+      } else if (suggestion.id === 'scatter') {
+        const usesRadius = suggestion.preview?.usesRadius || false
+        preview = buildScatterPreview(entries, source, selection, suggestion.chartHint, usesRadius)
+      } else if (suggestion.id === 'coordinate') {
+        preview = buildCoordinatePreview(entries, source, selection, suggestion.chartHint)
+      }
+
+      if (preview && preview.pointMeta) {
+        result.set(suggestion.id, { ...preview, source })
+      }
+    })
+
+    return result
+  }, [
+    chartSuggestions,
+    suggestionSelections,
+    suggestionPreviewSource,
+    isSuggestionComplete
+  ])
+
+  useEffect(() => {
+    if (!chartPreviewHighlight) {
+      return
+    }
+    const entries = chartPreviewHighlight.source === 'transformed' ? transformedPreviewEntries : previewEntries
+    const exists = Array.isArray(entries) && entries.some((entry) => entry.index === chartPreviewHighlight.rowIndex)
+    if (!exists) {
+      setChartPreviewHighlight(null)
+    }
+  }, [chartPreviewHighlight, transformedPreviewEntries, previewEntries])
+
+  useEffect(() => {
+    if (!chartPreviewHighlight) {
+      return
+    }
+    const key = `${chartPreviewHighlight.source}-${chartPreviewHighlight.rowIndex}`
+    const node = rowRefs.current.get(key)
+    if (node && typeof node.scrollIntoView === 'function') {
+      try {
+        node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } catch (_error) {
+        node.scrollIntoView()
+      }
+    }
+  }, [chartPreviewHighlight])
+
+  const handleSuggestionPreviewPointClick = useCallback(
+    (suggestionId, preview, detail) => {
+      if (!preview || !detail) {
+        return
+      }
+      const datasetMeta = Array.isArray(preview.pointMeta)
+        ? preview.pointMeta[detail.datasetIndex]
+        : null
+      if (!datasetMeta) {
+        return
+      }
+      const entryMeta = datasetMeta[detail.index]
+      if (!entryMeta) {
+        return
+      }
+
+      setChartPreviewHighlight((previous) => {
+        if (
+          previous &&
+          previous.source === (entryMeta.source || preview.source || 'raw') &&
+          previous.rowIndex === entryMeta.rowIndex
+        ) {
+          return null
+        }
+        return {
+          suggestionId,
+          source: entryMeta.source || preview.source || 'raw',
+          rowIndex: entryMeta.rowIndex
+        }
+      })
+    },
+    [setChartPreviewHighlight]
+  )
 
   const handleSuggestionApply = useCallback(
     (suggestion) => {
@@ -3930,11 +4554,21 @@ export default function CsvWorkbench({
                                       .map((part, index) => `${duplicateMeta.keyColumns?.[index] ?? `Spalte ${index + 1}`}: ${part.display}`)
                                       .join(' · ')}) – ${duplicateMeta.isPrimary ? 'führende Zeile' : 'Duplikat'}`
                                   : ''
+                                const isChartHighlighted =
+                                  chartPreviewHighlight?.source === 'raw' && chartPreviewHighlight.rowIndex === entry.index
+                                const combinedRowClass = [
+                                  rowHighlightClass,
+                                  isChartHighlighted ? 'ring-1 ring-dark-accent1/60 bg-dark-accent1/10' : ''
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')
+                                  .trim()
+                                const rowClassName = combinedRowClass || undefined
                                 return (
                                   <tr
                                     key={entry.index}
                                     ref={(node) => registerRowRef('raw', entry.index, node)}
-                                    className={rowHighlightClass || undefined}
+                                    className={rowClassName}
                                   >
                                     <td
                                       className="sticky left-0 z-40 border-r border-gray-800 bg-dark-bg/90 px-2 py-2 text-[11px] text-dark-textGray"
@@ -5407,8 +6041,18 @@ export default function CsvWorkbench({
                                   const rowTop = rowState.pinned
                                     ? pinnedTransformedRowOffsets.get(entry.index) ?? transformedHeaderHeight
                                     : undefined
+                                  const isChartHighlighted =
+                                    chartPreviewHighlight?.source === 'transformed' &&
+                                    chartPreviewHighlight.rowIndex === entry.index
+                                  const rowClassName = isChartHighlighted
+                                    ? 'ring-1 ring-dark-accent1/60 bg-dark-accent1/10'
+                                    : undefined
                                   return (
-                                    <tr key={entry.index} ref={(node) => registerRowRef('transformed', entry.index, node)}>
+                                    <tr
+                                      key={entry.index}
+                                      ref={(node) => registerRowRef('transformed', entry.index, node)}
+                                      className={rowClassName}
+                                    >
                                       <td
                                         className="sticky left-0 z-40 border-r border-gray-800 bg-dark-bg/90 px-2 py-2 text-[11px] text-dark-textGray"
                                         style={{
@@ -5524,6 +6168,10 @@ export default function CsvWorkbench({
                     {chartSuggestions.map((suggestion) => {
                       const selection = suggestionSelections[suggestion.id] || {}
                       const suggestionReady = isSuggestionComplete(suggestion, selection)
+                      const preview = suggestionPreviewData.get(suggestion.id)
+                      const previewPointCount = preview
+                        ? preview.pointMeta.reduce((total, dataset) => total + Object.keys(dataset || {}).length, 0)
+                        : 0
                       return (
                         <div key={suggestion.id} className="rounded-lg border border-gray-700 bg-dark-bg/60 p-4">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -5547,52 +6195,74 @@ export default function CsvWorkbench({
                               <span>Daten anwenden</span>
                             </button>
                           </div>
-                          <div className="mt-3 grid gap-3 md:grid-cols-2">
-                            {suggestion.fields.map((field) => {
-                              const fieldOptions = getFieldOptions(field)
-                              const fieldValue = selection[field.key]
-                              return (
-                                <div key={field.key} className="space-y-1">
-                                  <label className="block text-[11px] uppercase tracking-wide text-dark-textGray">
-                                    {field.label}
-                                    {field.optional && <span className="text-dark-textGray/60"> (optional)</span>}
-                                  </label>
-                                  {field.multiple ? (
-                                    <select
-                                      multiple
-                                      value={Array.isArray(fieldValue) ? fieldValue : []}
-                                      onChange={(event) =>
-                                        updateSuggestionSelection(
-                                          suggestion.id,
-                                          field.key,
-                                          Array.from(event.target.selectedOptions, (option) => option.value)
-                                        )
-                                      }
-                                      className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                                    >
-                                      {fieldOptions.map((option) => (
-                                        <option key={option.key} value={option.key}>
-                                          {option.key}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  ) : (
-                                    <select
-                                      value={fieldValue || ''}
-                                      onChange={(event) => updateSuggestionSelection(suggestion.id, field.key, event.target.value)}
-                                      className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                                    >
-                                      <option value="">{field.optional ? 'Keine Auswahl' : 'Spalte wählen …'}</option>
-                                      {fieldOptions.map((option) => (
-                                        <option key={option.key} value={option.key}>
-                                          {option.key}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  )}
+                          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+                            <div className="grid gap-3 md:grid-cols-2">
+                              {suggestion.fields.map((field) => {
+                                const fieldOptions = getFieldOptions(field)
+                                const fieldValue = selection[field.key]
+                                return (
+                                  <div key={field.key} className="space-y-1">
+                                    <label className="block text-[11px] uppercase tracking-wide text-dark-textGray">
+                                      {field.label}
+                                      {field.optional && <span className="text-dark-textGray/60"> (optional)</span>}
+                                    </label>
+                                    {field.multiple ? (
+                                      <select
+                                        multiple
+                                        value={Array.isArray(fieldValue) ? fieldValue : []}
+                                        onChange={(event) =>
+                                          updateSuggestionSelection(
+                                            suggestion.id,
+                                            field.key,
+                                            Array.from(event.target.selectedOptions, (option) => option.value)
+                                          )
+                                        }
+                                        className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                      >
+                                        {fieldOptions.map((option) => (
+                                          <option key={option.key} value={option.key}>
+                                            {option.key}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <select
+                                        value={fieldValue || ''}
+                                        onChange={(event) => updateSuggestionSelection(suggestion.id, field.key, event.target.value)}
+                                        className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                                      >
+                                        <option value="">{field.optional ? 'Keine Auswahl' : 'Spalte wählen …'}</option>
+                                        {fieldOptions.map((option) => (
+                                          <option key={option.key} value={option.key}>
+                                            {option.key}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                            <div className="flex flex-col">
+                              {preview ? (
+                                <>
+                                  <ChartPreview
+                                    chartType={preview.chartType}
+                                    config={preview.config}
+                                    compact
+                                    subtitle={suggestion.chartHint}
+                                    onDataPointClick={(detail) => handleSuggestionPreviewPointClick(suggestion.id, preview, detail)}
+                                  />
+                                  <p className="mt-2 text-[10px] text-dark-textGray">
+                                    Vorschau mit {previewPointCount} Datenpunkten (max. {SUGGESTION_PREVIEW_MAX_POINTS} berücksichtigt).
+                                  </p>
+                                </>
+                              ) : (
+                                <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-gray-700/60 bg-dark-bg/30 p-4 text-center text-[11px] text-dark-textGray">
+                                  Wähle gültige Spalten, um eine Datenvorschau zu erhalten. Filter, Sortierungen und Transformationen werden berücksichtigt.
                                 </div>
-                              )
-                            })}
+                              )}
+                            </div>
                           </div>
                         </div>
                       )

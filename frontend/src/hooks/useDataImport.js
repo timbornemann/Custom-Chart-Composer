@@ -74,6 +74,9 @@ const MAX_CORRELATION_SAMPLES = 2000
 const MAX_CORRELATION_COLUMNS = 30
 const DUPLICATE_KEY_SEPARATOR = '\u241F'
 const DUPLICATE_EMPTY_TOKEN = '__EMPTY__'
+const defaultManualOperationMeta = {
+  lastFillSeries: null
+}
 
 const normalizeDuplicateValue = (value) => {
   if (value === null || value === undefined) {
@@ -2740,6 +2743,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [validationErrors, setValidationErrors] = useState([])
   const [analysisWarnings, setAnalysisWarnings] = useState([])
   const [resultWarnings, setResultWarnings] = useState([])
+  const [manualOperationWarnings, setManualOperationWarnings] = useState([])
+  const [manualOperationMeta, setManualOperationMeta] = useState(defaultManualOperationMeta)
   const [profilingMeta, setProfilingMeta] = useState(() => createDefaultProfilingMeta())
   const initialDataSignatureRef = useRef(null)
 
@@ -2902,6 +2907,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setValidationErrors([])
     setAnalysisWarnings([])
     setResultWarnings([])
+    setManualOperationWarnings([])
+    setManualOperationMeta(defaultManualOperationMeta)
     setProfilingMeta(createDefaultProfilingMeta())
     setManualEditMap({})
     setManualEditHistory([])
@@ -2917,6 +2924,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       setParseError('')
       setValidationErrors([])
       setResultWarnings([])
+      setManualOperationWarnings([])
+      setManualOperationMeta(defaultManualOperationMeta)
 
       try {
         const extension = file.name.split('.').pop()?.toLowerCase()
@@ -3290,6 +3299,782 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     return null
   }, [])
 
+  const numbersAreClose = (a, b, tolerance = 1e-9) => {
+    return Math.abs(a - b) <= tolerance
+  }
+
+  const parseAlphaSeed = (seed) => {
+    if (!seed || seed.rawValue === null || seed.rawValue === undefined) {
+      return null
+    }
+    if (typeof seed.rawValue !== 'string') {
+      return null
+    }
+    const text = seed.rawValue.trim()
+    if (!text) {
+      return null
+    }
+    const match = text.match(/^(.*?)(\d+)$/)
+    if (!match) {
+      return null
+    }
+    const [, prefix, digits] = match
+    const numeric = Number(digits)
+    if (!Number.isFinite(numeric)) {
+      return null
+    }
+    return {
+      ...seed,
+      prefix,
+      digits,
+      width: digits.length,
+      numeric,
+      normalized: text
+    }
+  }
+
+  const DAY_IN_MS = 24 * 60 * 60 * 1000
+
+  const parseTemporalSeed = (seed) => {
+    if (!seed) {
+      return null
+    }
+    const { rawValue } = seed
+    if (rawValue instanceof Date) {
+      const time = rawValue.getTime()
+      if (!Number.isFinite(time)) {
+        return null
+      }
+      return {
+        ...seed,
+        kind: 'dateTime',
+        msValue: time,
+        template: rawValue
+      }
+    }
+    if (rawValue === null || rawValue === undefined) {
+      return null
+    }
+    const text = String(rawValue).trim()
+    if (!text) {
+      return null
+    }
+    const parsedDate = toDateTime(text)
+    if (parsedDate) {
+      const hasTime = /\d{1,2}:\d{2}/.test(text)
+      const kind = hasTime ? 'dateTime' : 'date'
+      return {
+        ...seed,
+        kind,
+        msValue: parsedDate.getTime(),
+        template: text,
+        rawTemplate: rawValue
+      }
+    }
+    const timeMatch = text.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+    if (timeMatch) {
+      const hours = Number(timeMatch[1])
+      const minutes = Number(timeMatch[2])
+      const seconds = Number(timeMatch[3] || '0')
+      if (
+        Number.isInteger(hours) &&
+        Number.isInteger(minutes) &&
+        Number.isInteger(seconds) &&
+        hours >= 0 &&
+        hours < 24 &&
+        minutes >= 0 &&
+        minutes < 60 &&
+        seconds >= 0 &&
+        seconds < 60
+      ) {
+        const msValue = hours * 3600000 + minutes * 60000 + seconds * 1000
+        return {
+          ...seed,
+          kind: 'time',
+          msValue,
+          template: text,
+          rawTemplate: rawValue,
+          hasSeconds: Boolean(timeMatch[3]),
+          padHour: timeMatch[1].length === 2
+        }
+      }
+    }
+    return null
+  }
+
+  const addMonthsUtc = (date, months) => {
+    const baseYear = date.getUTCFullYear()
+    const baseMonth = date.getUTCMonth()
+    const baseDay = date.getUTCDate()
+    const hours = date.getUTCHours()
+    const minutes = date.getUTCMinutes()
+    const seconds = date.getUTCSeconds()
+    const ms = date.getUTCMilliseconds()
+
+    const totalMonths = baseMonth + months
+    const targetYear = baseYear + Math.floor(totalMonths / 12)
+    let targetMonth = totalMonths % 12
+    if (targetMonth < 0) {
+      targetMonth += 12
+    }
+
+    const result = new Date(Date.UTC(targetYear, targetMonth, 1, hours, minutes, seconds, ms))
+    const daysInMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
+    const targetDay = Math.min(baseDay, daysInMonth)
+    result.setUTCDate(targetDay)
+    return result
+  }
+
+  const computeMonthDifference = (baseDate, targetDate) => {
+    const baseYear = baseDate.getUTCFullYear()
+    const baseMonth = baseDate.getUTCMonth()
+    const targetYear = targetDate.getUTCFullYear()
+    const targetMonth = targetDate.getUTCMonth()
+    const monthDiff = (targetYear - baseYear) * 12 + (targetMonth - baseMonth)
+    if (!Number.isFinite(monthDiff)) {
+      return null
+    }
+    const comparison = addMonthsUtc(baseDate, monthDiff)
+    if (Math.abs(comparison.getTime() - targetDate.getTime()) <= 60000) {
+      return monthDiff
+    }
+    return null
+  }
+
+  const formatTemporalMsPart = (value, kind) => {
+    if (!Number.isFinite(value) || value === 0) {
+      return ''
+    }
+    const sign = value < 0 ? '-' : ''
+    const abs = Math.abs(value)
+    if (kind !== 'time' && abs % DAY_IN_MS === 0) {
+      const days = abs / DAY_IN_MS
+      return `${sign}${days} ${days === 1 ? 'Tag' : 'Tage'}`
+    }
+    if (abs % 3600000 === 0) {
+      const hours = abs / 3600000
+      return `${sign}${hours} ${hours === 1 ? 'Stunde' : 'Stunden'}`
+    }
+    if (abs % 60000 === 0) {
+      const minutes = abs / 60000
+      return `${sign}${minutes} ${minutes === 1 ? 'Minute' : 'Minuten'}`
+    }
+    if (abs % 1000 === 0) {
+      const seconds = abs / 1000
+      return `${sign}${seconds} ${seconds === 1 ? 'Sekunde' : 'Sekunden'}`
+    }
+    return `${sign}${abs} ms`
+  }
+
+  const formatTemporalStepDescription = (step, kind) => {
+    if (!step) {
+      return ''
+    }
+    const parts = []
+    if (step.months) {
+      const months = step.months
+      parts.push(`${months} ${Math.abs(months) === 1 ? 'Monat' : 'Monate'}`)
+    }
+    if (step.ms) {
+      const formatted = formatTemporalMsPart(step.ms, kind)
+      if (formatted) {
+        parts.push(formatted)
+      }
+    }
+    if (parts.length === 0) {
+      return '0'
+    }
+    return parts.join(' + ')
+  }
+
+  const formatDateLikeValue = (template, date, kind) => {
+    if (template instanceof Date) {
+      return new Date(date.getTime())
+    }
+    const trimmed = typeof template === 'string' ? template.trim() : ''
+    const year = String(date.getUTCFullYear()).padStart(4, '0')
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(date.getUTCDate()).padStart(2, '0')
+    const hour = String(date.getUTCHours()).padStart(2, '0')
+    const minute = String(date.getUTCMinutes()).padStart(2, '0')
+    const second = String(date.getUTCSeconds()).padStart(2, '0')
+    const millisecond = String(date.getUTCMilliseconds()).padStart(3, '0')
+
+    if (!trimmed) {
+      return date.toISOString()
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return `${year}-${month}-${day}`
+    }
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$/.test(trimmed)) {
+      const separator = trimmed.includes(' ') ? ' ' : 'T'
+      return `${year}-${month}-${day}${separator}${hour}:${minute}`
+    }
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(trimmed)) {
+      const separator = trimmed.includes(' ') ? ' ' : 'T'
+      return `${year}-${month}-${day}${separator}${hour}:${minute}:${second}`
+    }
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}\.\d+$/.test(trimmed)) {
+      const separator = trimmed.includes(' ') ? ' ' : 'T'
+      return `${year}-${month}-${day}${separator}${hour}:${minute}:${second}.${millisecond}`
+    }
+    if (/^\d{1,2}[./]\d{1,2}[./]\d{4}$/.test(trimmed)) {
+      return `${day}.${month}.${year}`
+    }
+    if (/^\d{1,2}[./]\d{1,2}[./]\d{4}\s+\d{1,2}:\d{2}$/.test(trimmed)) {
+      return `${day}.${month}.${year} ${hour}:${minute}`
+    }
+    if (/^\d{1,2}[./]\d{1,2}[./]\d{4}\s+\d{1,2}:\d{2}:\d{2}$/.test(trimmed)) {
+      return `${day}.${month}.${year} ${hour}:${minute}:${second}`
+    }
+    return kind === 'date' ? `${year}-${month}-${day}` : date.toISOString()
+  }
+
+  const formatTimeLikeValue = (template, totalMs, hasSeconds, padHour) => {
+    if (!Number.isFinite(totalMs)) {
+      return null
+    }
+    const normalized = ((totalMs % DAY_IN_MS) + DAY_IN_MS) % DAY_IN_MS
+    const hours = Math.floor(normalized / 3600000)
+    const minutes = Math.floor((normalized % 3600000) / 60000)
+    const seconds = Math.floor((normalized % 60000) / 1000)
+    const includeSeconds = hasSeconds || (typeof template === 'string' && template.split(':').length > 2)
+    const hourPart = padHour ? String(hours).padStart(2, '0') : String(hours)
+    const minutePart = String(minutes).padStart(2, '0')
+    const secondPart = String(seconds).padStart(2, '0')
+    if (includeSeconds) {
+      return `${hourPart}:${minutePart}:${secondPart}`
+    }
+    return `${hourPart}:${minutePart}`
+  }
+
+  const parseTemporalStepInput = (input, kind) => {
+    if (input === null || input === undefined) {
+      return null
+    }
+    const text = String(input).trim()
+    if (!text) {
+      return null
+    }
+    const isoMatch = text.match(
+      /^P(?:(-?\d+)Y)?(?:(-?\d+)M)?(?:(-?\d+)W)?(?:(-?\d+)D)?(?:T(?:(-?\d+)H)?(?:(-?\d+)M)?(?:(-?\d+(?:\.\d+)?)S)?)?$/i
+    )
+    if (isoMatch) {
+      const [, years, months, weeks, days, hours, minutes, seconds] = isoMatch
+      const monthValue = Number(years || 0) * 12 + Number(months || 0)
+      const msValue =
+        Number(weeks || 0) * 7 * DAY_IN_MS +
+        Number(days || 0) * DAY_IN_MS +
+        Number(hours || 0) * 3600000 +
+        Number(minutes || 0) * 60000 +
+        Number(seconds || 0) * 1000
+      if (!Number.isFinite(monthValue) || !Number.isFinite(msValue)) {
+        return null
+      }
+      return { months: monthValue, ms: msValue }
+    }
+    const simpleMatch = text.match(/^(-?\d+(?:[.,]\d+)?)([a-zA-Z]+)?$/)
+    if (!simpleMatch) {
+      return null
+    }
+    const amountText = simpleMatch[1].replace(',', '.')
+    const amount = Number(amountText)
+    if (!Number.isFinite(amount)) {
+      return null
+    }
+    const unitRaw = simpleMatch[2] ? simpleMatch[2].toLowerCase() : ''
+    const defaultUnit = kind === 'time' ? 'min' : 'd'
+    const unit = unitRaw || defaultUnit
+    if (['mo', 'mon', 'monat', 'monate', 'month', 'months'].includes(unit)) {
+      return { months: Math.round(amount), ms: 0 }
+    }
+    if (['y', 'yr', 'jahr', 'jahre', 'year', 'years'].includes(unit)) {
+      return { months: Math.round(amount * 12), ms: 0 }
+    }
+    if (['w', 'wk', 'week', 'weeks'].includes(unit)) {
+      return { months: 0, ms: amount * 7 * DAY_IN_MS }
+    }
+    if (['d', 'day', 'days', 'tag', 'tage'].includes(unit)) {
+      return { months: 0, ms: amount * DAY_IN_MS }
+    }
+    if (['h', 'hr', 'hour', 'hours', 'stunde', 'stunden'].includes(unit)) {
+      return { months: 0, ms: amount * 3600000 }
+    }
+    if (['min', 'm', 'minute', 'minutes', 'minuten'].includes(unit)) {
+      return { months: 0, ms: amount * 60000 }
+    }
+    if (['s', 'sec', 'second', 'seconds', 'sek', 'sekunden'].includes(unit)) {
+      return { months: 0, ms: amount * 1000 }
+    }
+    if (['ms', 'millisecond', 'milliseconds'].includes(unit)) {
+      return { months: 0, ms: amount }
+    }
+    return null
+  }
+
+  const detectAlphaSeriesStrategy = (sortedSeeds, manualStepText) => {
+    const parsedSeeds = sortedSeeds
+      .map((seed) => parseAlphaSeed(seed))
+      .filter(Boolean)
+    if (parsedSeeds.length === 0) {
+      return null
+    }
+    const base = parsedSeeds[0]
+    let step = null
+    let manualStepUsed = false
+    let stepDescription = ''
+    if (manualStepText) {
+      if (!/^[-+]?\d+$/.test(manualStepText)) {
+        return { strategy: null, warnings: ['Schrittweite muss eine ganze Zahl sein.'] }
+      }
+      step = Number(manualStepText)
+      manualStepUsed = true
+      stepDescription = manualStepText
+    } else {
+      const other = parsedSeeds.find((seed) => seed.order !== base.order)
+      if (!other) {
+        return null
+      }
+      const orderDiff = other.order - base.order
+      if (!orderDiff) {
+        return null
+      }
+      const candidate = (other.numeric - base.numeric) / orderDiff
+      if (!Number.isFinite(candidate)) {
+        return { strategy: null, warnings: [] }
+      }
+      const rounded = Math.round(candidate)
+      if (Math.abs(candidate - rounded) > 1e-9) {
+        return {
+          strategy: null,
+          warnings: ['Schrittweite muss ganzzahlig sein.']
+        }
+      }
+      step = rounded
+      stepDescription = String(step)
+    }
+    if (!Number.isFinite(step)) {
+      return { strategy: null, warnings: ['Ungültige Schrittweite.'] }
+    }
+    const strategy = {
+      type: 'alphanumeric',
+      baseOrder: base.order,
+      manualStepUsed,
+      manualStepText: manualStepUsed ? manualStepText : stepDescription,
+      stepDescription,
+      generate: (offset) => {
+        const numericValue = base.numeric + step * offset
+        if (!Number.isFinite(numericValue)) {
+          return null
+        }
+        const rounded = Math.round(numericValue)
+        const formatted = String(Math.abs(rounded)).padStart(base.width, '0')
+        const rawPrefix = base.prefix || ''
+        let prefix = rawPrefix
+        let sign = ''
+        if (rounded < 0) {
+          if (rawPrefix.startsWith('-')) {
+            prefix = rawPrefix.slice(1)
+          }
+          sign = '-'
+        }
+        return `${sign}${prefix}${formatted}`
+      },
+      compare: (expected, actual) => {
+        if (expected === null || expected === undefined) {
+          return false
+        }
+        if (actual === null || actual === undefined) {
+          return false
+        }
+        return String(expected) === String(actual).trim()
+      },
+      isGeneratedValueValid: (value) => typeof value === 'string' && value.length > 0
+    }
+    return { strategy, warnings: [] }
+  }
+
+  const detectNumericSeriesStrategy = (sortedSeeds, manualStepText) => {
+    const parsedSeeds = sortedSeeds
+      .map((seed) => {
+        const numeric = toNumber(seed.rawValue)
+        if (numeric === null) {
+          return null
+        }
+        return { ...seed, numeric }
+      })
+      .filter(Boolean)
+    if (parsedSeeds.length === 0) {
+      return null
+    }
+    const base = parsedSeeds[0]
+    const rawBase = base.rawValue
+    if (typeof rawBase === 'string' && /^0\d+$/.test(rawBase.trim())) {
+      return null
+    }
+    let step = null
+    let manualStepUsed = false
+    let stepDescription = ''
+    if (manualStepText) {
+      const parsedStep = toNumber(manualStepText)
+      if (parsedStep === null) {
+        return { strategy: null, warnings: ['Schrittweite ist keine Zahl.'] }
+      }
+      step = parsedStep
+      manualStepUsed = true
+      stepDescription = manualStepText
+    } else {
+      const other = parsedSeeds.find((seed) => seed.order !== base.order)
+      if (!other) {
+        return null
+      }
+      const orderDiff = other.order - base.order
+      if (!orderDiff) {
+        return null
+      }
+      step = (other.numeric - base.numeric) / orderDiff
+      stepDescription = String(step)
+    }
+    if (!Number.isFinite(step)) {
+      return { strategy: null, warnings: ['Ungültige Schrittweite.'] }
+    }
+    const strategy = {
+      type: 'numeric',
+      baseOrder: base.order,
+      manualStepUsed,
+      manualStepText: manualStepUsed ? stepDescription : String(step),
+      stepDescription: manualStepUsed ? stepDescription : String(step),
+      generate: (offset) => {
+        const value = base.numeric + step * offset
+        if (!Number.isFinite(value)) {
+          return null
+        }
+        const rounded = Math.abs(value) < 1e12 ? Number(value.toFixed(12)) : value
+        return rounded
+      },
+      compare: (expected, actual) => {
+        if (!Number.isFinite(expected)) {
+          return false
+        }
+        const numericActual = toNumber(actual)
+        if (numericActual === null) {
+          return false
+        }
+        return numbersAreClose(Number(expected), numericActual)
+      },
+      isGeneratedValueValid: (value) => Number.isFinite(value)
+    }
+    return { strategy, warnings: [] }
+  }
+
+  const detectTemporalSeriesStrategy = (sortedSeeds, manualStepText) => {
+    const parsedSeeds = sortedSeeds
+      .map((seed) => parseTemporalSeed(seed))
+      .filter(Boolean)
+    if (parsedSeeds.length === 0) {
+      return null
+    }
+    const base = parsedSeeds[0]
+    let stepMonths = 0
+    let stepMs = 0
+    let manualStepUsed = false
+    let stepDescription = ''
+    if (manualStepText) {
+      const parsedStep = parseTemporalStepInput(manualStepText, base.kind)
+      if (!parsedStep) {
+        return {
+          strategy: null,
+          warnings: ['Schrittweite konnte nicht als Dauer interpretiert werden.']
+        }
+      }
+      stepMonths = parsedStep.months || 0
+      stepMs = parsedStep.ms || 0
+      manualStepUsed = true
+      stepDescription = manualStepText
+    } else {
+      const other = parsedSeeds.find((seed) => seed.order !== base.order)
+      if (!other) {
+        return null
+      }
+      const orderDiff = other.order - base.order
+      if (!orderDiff) {
+        return null
+      }
+      if (base.kind === 'time' && other.kind === 'time') {
+        const diff = other.msValue - base.msValue
+        stepMs = diff / orderDiff
+      } else if (base.kind !== 'time' && other.kind !== 'time') {
+        const baseDate = new Date(base.msValue)
+        const otherDate = new Date(other.msValue)
+        const monthDiff = computeMonthDifference(baseDate, otherDate)
+        if (monthDiff !== null && monthDiff % orderDiff === 0) {
+          stepMonths = monthDiff / orderDiff
+          const afterMonths = addMonthsUtc(baseDate, monthDiff)
+          const remainder = otherDate.getTime() - afterMonths.getTime()
+          stepMs = remainder / orderDiff
+        } else {
+          stepMs = (other.msValue - base.msValue) / orderDiff
+        }
+      } else {
+        return {
+          strategy: null,
+          warnings: ['Datums- und Zeitwerte können nicht gemischt werden.']
+        }
+      }
+      stepDescription = formatTemporalStepDescription({ months: stepMonths, ms: stepMs }, base.kind)
+    }
+    if (!Number.isFinite(stepMonths) || !Number.isFinite(stepMs)) {
+      return { strategy: null, warnings: ['Ungültige Schrittweite.'] }
+    }
+    const strategy = {
+      type: 'temporal',
+      temporalKind: base.kind,
+      baseOrder: base.order,
+      manualStepUsed,
+      manualStepText: manualStepUsed
+        ? stepDescription || manualStepText
+        : formatTemporalStepDescription({ months: stepMonths, ms: stepMs }, base.kind),
+      stepDescription:
+        stepDescription || formatTemporalStepDescription({ months: stepMonths, ms: stepMs }, base.kind),
+      generate: (offset) => {
+        if (base.kind === 'time') {
+          const total = base.msValue + stepMs * offset
+          return formatTimeLikeValue(base.template, total, base.hasSeconds, base.padHour)
+        }
+        const baseDate = new Date(base.msValue)
+        let candidate = baseDate
+        if (stepMonths) {
+          candidate = addMonthsUtc(baseDate, stepMonths * offset)
+        } else {
+          candidate = new Date(baseDate.getTime())
+        }
+        if (stepMs) {
+          candidate = new Date(candidate.getTime() + stepMs * offset)
+        }
+        const template = base.rawTemplate !== undefined ? base.rawTemplate : base.template
+        return formatDateLikeValue(template, candidate, base.kind)
+      },
+      compare: (expected, actual) => {
+        if (base.kind === 'time') {
+          const expectedParsed = parseTemporalSeed({ rawValue: expected })
+          const actualParsed = parseTemporalSeed({ rawValue: actual })
+          if (!expectedParsed || !actualParsed) {
+            return false
+          }
+          return Math.abs(expectedParsed.msValue - actualParsed.msValue) <= 1000
+        }
+        const expectedDate = toDateTime(expected)
+        const actualDate = toDateTime(actual)
+        if (!expectedDate || !actualDate) {
+          return false
+        }
+        return Math.abs(expectedDate.getTime() - actualDate.getTime()) <= 1000
+      },
+      isGeneratedValueValid: (value) => value !== null && value !== undefined
+    }
+    return { strategy, warnings: [] }
+  }
+
+  const determineSeriesStrategy = (seedData, manualStepText) => {
+    if (!Array.isArray(seedData) || seedData.length === 0) {
+      return { strategy: null, warnings: ['Keine Startwerte vorhanden.'] }
+    }
+    const sorted = [...seedData].sort((a, b) => (a.order || 0) - (b.order || 0))
+    const detectors = [detectTemporalSeriesStrategy, detectNumericSeriesStrategy, detectAlphaSeriesStrategy]
+    const collectedWarnings = []
+    for (const detector of detectors) {
+      const result = detector(sorted, manualStepText)
+      if (!result) {
+        continue
+      }
+      if (Array.isArray(result.warnings) && result.warnings.length > 0) {
+        collectedWarnings.push(...result.warnings)
+      }
+      if (result.strategy) {
+        return { strategy: result.strategy, warnings: collectedWarnings }
+      }
+    }
+    return { strategy: null, warnings: collectedWarnings }
+  }
+
+  const createFillSeriesAssignments = (rows, config) => {
+    const seriesEntries = Array.isArray(config?.series) ? config.series : []
+    const assignments = []
+    const warnings = []
+    const meta = {
+      totalTargets: 0,
+      filled: 0,
+      failed: 0,
+      groups: []
+    }
+    const seenAssignments = new Set()
+
+    seriesEntries.forEach((entry, index) => {
+      const rawKey = entry?.key
+      const rawLabel = typeof entry?.label === 'string' ? entry.label.trim() : ''
+      const label = rawLabel || rawKey || `Serie ${index + 1}`
+      const direction = entry?.direction || entry?.orientation || 'unknown'
+      const cellsSource = Array.isArray(entry?.cells) ? entry.cells : []
+      const cells = cellsSource
+        .map((cell, cellIndex) => {
+          const rowIndex = Number(cell?.rowIndex)
+          const columnKey = sanitizeKey(cell?.columnKey)
+          if (!Number.isInteger(rowIndex) || rowIndex < 0 || !columnKey) {
+            return null
+          }
+          const order = typeof cell?.order === 'number' ? cell.order : cellIndex
+          return {
+            rowIndex,
+            columnKey,
+            order,
+            isSeed: cell?.isSeed === true,
+            rowPosition: Number.isInteger(cell?.rowPosition) ? cell.rowPosition : null,
+            columnIndex: Number.isInteger(cell?.columnIndex) ? cell.columnIndex : null
+          }
+        })
+        .filter(Boolean)
+
+      if (cells.length === 0) {
+        meta.groups.push({
+          key: rawKey || `series-${index}`,
+          label,
+          direction,
+          total: 0,
+          filled: 0,
+          failed: 0,
+          type: 'none',
+          usedManualStep: false,
+          stepDescription: '',
+          temporalKind: null
+        })
+        return
+      }
+
+      cells.sort((a, b) => {
+        if (a.order === b.order) {
+          if (a.rowIndex === b.rowIndex) {
+            return a.columnKey.localeCompare(b.columnKey)
+          }
+          return a.rowIndex - b.rowIndex
+        }
+        return a.order - b.order
+      })
+
+      const seeds = cells.filter((cell) => cell.isSeed)
+      const fillCells = cells.filter((cell) => !cell.isSeed)
+
+      const groupMeta = {
+        key: rawKey || `series-${index}`,
+        label,
+        direction,
+        total: fillCells.length,
+        filled: 0,
+        failed: 0,
+        type: 'unknown',
+        usedManualStep: false,
+        stepDescription: '',
+        temporalKind: null
+      }
+
+      meta.totalTargets += fillCells.length
+
+      if (fillCells.length === 0) {
+        meta.groups.push(groupMeta)
+        return
+      }
+
+      const manualStepRaw = entry?.manualStep
+      const manualStepText =
+        manualStepRaw === undefined || manualStepRaw === null
+          ? ''
+          : String(manualStepRaw).trim()
+
+      const seedData = seeds
+        .map((seed) => {
+          const row = rows?.[seed.rowIndex]
+          if (!row) {
+            return null
+          }
+          const rawValue = row[seed.columnKey]
+          if (isEmptyValue(rawValue)) {
+            return null
+          }
+          return { ...seed, rawValue }
+        })
+        .filter(Boolean)
+
+      if (seedData.length === 0) {
+        warnings.push(`Serie „${label}“: Keine gültigen Startwerte gefunden.`)
+        groupMeta.failed = fillCells.length
+        meta.failed += fillCells.length
+        meta.groups.push(groupMeta)
+        return
+      }
+
+      const { strategy, warnings: strategyWarnings } = determineSeriesStrategy(
+        seedData,
+        manualStepText || null
+      )
+      if (strategyWarnings && strategyWarnings.length > 0) {
+        strategyWarnings.forEach((message) => {
+          warnings.push(`Serie „${label}“: ${message}`)
+        })
+      }
+      if (!strategy) {
+        warnings.push(`Serie „${label}“: Startwerte konnten nicht interpretiert werden.`)
+        groupMeta.failed = fillCells.length
+        meta.failed += fillCells.length
+        meta.groups.push(groupMeta)
+        return
+      }
+
+      groupMeta.type = strategy.type
+      groupMeta.usedManualStep = strategy.manualStepUsed
+      groupMeta.stepDescription = strategy.stepDescription || ''
+      if (strategy.temporalKind) {
+        groupMeta.temporalKind = strategy.temporalKind
+      }
+
+      const inconsistentSeeds = seedData.filter((seed) => {
+        const offset = seed.order - strategy.baseOrder
+        const expected = strategy.generate(offset)
+        return !strategy.compare(expected, seed.rawValue)
+      })
+      if (inconsistentSeeds.length > 0) {
+        warnings.push(
+          `Serie „${label}“: ${inconsistentSeeds.length} Startwert${
+            inconsistentSeeds.length === 1 ? '' : 'e'
+          } passen nicht zur Schrittweite.`
+        )
+      }
+
+      fillCells.forEach((cell) => {
+        const key = `${cell.rowIndex}::${cell.columnKey}`
+        const offset = cell.order - strategy.baseOrder
+        const generated = strategy.generate(offset)
+        if (!strategy.isGeneratedValueValid(generated)) {
+          groupMeta.failed += 1
+          meta.failed += 1
+          warnings.push(
+            `Serie „${label}“: Wert für Zeile ${cell.rowIndex + 1}, Spalte „${cell.columnKey}“ konnte nicht berechnet werden.`
+          )
+          return
+        }
+        if (!seenAssignments.has(key)) {
+          assignments.push({ rowIndex: cell.rowIndex, columnKey: cell.columnKey, value: generated })
+          seenAssignments.add(key)
+        }
+        groupMeta.filled += 1
+        meta.filled += 1
+      })
+
+      groupMeta.failed += Math.max(0, groupMeta.total - groupMeta.filled)
+      meta.groups.push(groupMeta)
+    })
+
+    return { assignments, warnings, meta }
+  }
+
   const updateCell = useCallback(
     (input, columnKey, value) => {
       const config = normalizeUpdateInput(input, columnKey, value)
@@ -3300,6 +4085,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       const columnOrder = Array.isArray(config.columnOrder)
         ? config.columnOrder
         : columns.map((column) => column.key)
+
+      let fillSeriesContext = null
 
       setRows((prev) => {
         if (!prev || prev.length === 0) {
@@ -3382,7 +4169,20 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
           return undefined
         }
 
-        normalizedUpdates.forEach((update) => {
+        let effectiveUpdates = normalizedUpdates
+        let operationType = config.type
+
+        if (config.type === 'fillSeries') {
+          fillSeriesContext = createFillSeriesAssignments(prev, config)
+          effectiveUpdates = fillSeriesContext.assignments || []
+          operationType = 'set'
+        }
+
+        if (!effectiveUpdates || effectiveUpdates.length === 0) {
+          return prev
+        }
+
+        effectiveUpdates.forEach((update) => {
           if (update.rowIndex < 0 || update.rowIndex >= prev.length) {
             return
           }
@@ -3395,11 +4195,11 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
           const currentValue = workingRow[update.columnKey]
           let nextValue = currentValue
 
-          if (config.type === 'set') {
+          if (operationType === 'set') {
             const nextCandidate =
               update.value !== undefined ? update.value : config.value !== undefined ? config.value : value
             nextValue = nextCandidate
-          } else if (config.type === 'increment') {
+          } else if (operationType === 'increment') {
             const delta = Number(update.amount ?? config.amount ?? config.value ?? value)
             if (!Number.isFinite(delta)) {
               return
@@ -3407,7 +4207,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
             const numericCurrent = toNumber(currentValue)
             const baseValue = numericCurrent === null ? 0 : numericCurrent
             nextValue = baseValue + delta
-          } else if (config.type === 'copy') {
+          } else if (operationType === 'copy') {
             nextValue = resolveSourceValue(update)
           } else if (typeof config.apply === 'function') {
             nextValue = config.apply({
@@ -3444,6 +4244,27 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       })
       setValidationErrors([])
       setResultWarnings([])
+      if (config.type === 'fillSeries') {
+        if (fillSeriesContext) {
+          setManualOperationMeta((prevMeta) => ({
+            ...prevMeta,
+            lastFillSeries: {
+              timestamp: Date.now(),
+              totalTargets: fillSeriesContext.meta?.totalTargets ?? 0,
+              filled: fillSeriesContext.meta?.filled ?? 0,
+              failed: fillSeriesContext.meta?.failed ?? 0,
+              groups: Array.isArray(fillSeriesContext.meta?.groups)
+                ? fillSeriesContext.meta.groups.map((group) => ({ ...group }))
+                : []
+            }
+          }))
+          setManualOperationWarnings(fillSeriesContext.warnings || [])
+        } else {
+          setManualOperationWarnings(['Serienfüllung konnte nicht ausgeführt werden.'])
+        }
+      } else {
+        setManualOperationWarnings([])
+      }
     },
     [normalizeUpdateInput, columns]
   )
@@ -3660,8 +4481,13 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const transformedRowCount = transformedRows.length
   const transformedFilteredRowCount = filteredTransformedEntries.length
   const warnings = useMemo(
-    () => [...analysisWarnings, ...transformationWarnings, ...resultWarnings],
-    [analysisWarnings, transformationWarnings, resultWarnings]
+    () => [
+      ...analysisWarnings,
+      ...manualOperationWarnings,
+      ...transformationWarnings,
+      ...resultWarnings
+    ],
+    [analysisWarnings, manualOperationWarnings, transformationWarnings, resultWarnings]
   )
   const duplicateInfo = useMemo(
     () => computeDuplicateGroups(rows, duplicateKeyColumns),
@@ -4023,14 +4849,17 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         valueColumns: [...valueColumns],
         datasetLabelColumn: datasetLabel || null,
         transformations,
-        transformationMeta,
+        transformationMeta: {
+          ...(transformationMeta || {}),
+          manualOperations: manualOperationMeta
+        },
         mapping: activeMapping,
         profiling: profilingMeta
           ? { ...createDefaultProfilingMeta(), ...profilingMeta }
           : createDefaultProfilingMeta()
       }
     }
-  }, [rows, mapping, transformations, requireDatasets, columns, profilingMeta])
+  }, [rows, mapping, transformations, requireDatasets, columns, profilingMeta, manualOperationMeta])
 
   const getImportState = useCallback(() => {
     return {
@@ -4095,7 +4924,10 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     transformedFilteredRowCount,
     transformedRows,
     transformationWarnings,
-    transformationMeta: transformationSummary.meta,
+    transformationMeta: {
+      ...(transformationSummary.meta || {}),
+      manualOperations: manualOperationMeta
+    },
     isLoading,
     parseError,
     validationErrors,

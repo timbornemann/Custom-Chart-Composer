@@ -172,6 +172,19 @@ const formatSamplePreview = (value) => {
   return asString.trim() === '' ? '∅' : formatted
 }
 
+const isCellValueEmpty = (value) => {
+  if (value === null || value === undefined) {
+    return true
+  }
+  if (typeof value === 'number') {
+    return Number.isNaN(value)
+  }
+  if (typeof value === 'string') {
+    return value.trim() === ''
+  }
+  return false
+}
+
 const FILTER_OPERATORS = [
   // Text operators
   { value: 'equalsText', label: 'Text ist gleich' },
@@ -1490,6 +1503,155 @@ export default function CsvWorkbench({
     const updates = selectedTargets.map((target) => ({ rowIndex: target.rowIndex, columnKey: target.columnKey }))
     updateCell({ type: 'increment', amount, updates })
   }, [hasSelection, selectedTargets, updateCell])
+
+  const handleFillSeries = useCallback(
+    (orientationHint = 'vertical') => {
+      if (!hasSelection || !selectedRange) {
+        return
+      }
+
+      const resolveValueForTarget = (target) => {
+        const entry = previewEntries[target.rowPosition]
+        if (!entry || !entry.row) {
+          return undefined
+        }
+        return entry.row[target.columnKey]
+      }
+
+      let orientation = orientationHint
+      if (orientation === 'auto') {
+        const rowSpan = selectedRange.rowEnd - selectedRange.rowStart + 1
+        const columnSpan = selectedRange.columnEnd - selectedRange.columnStart + 1
+        orientation = rowSpan >= columnSpan ? 'vertical' : 'horizontal'
+      }
+
+      const groups = []
+      if (orientation === 'horizontal') {
+        const rowMap = new Map()
+        selectedTargets.forEach((target) => {
+          if (!rowMap.has(target.rowIndex)) {
+            rowMap.set(target.rowIndex, [])
+          }
+          rowMap.get(target.rowIndex).push(target)
+        })
+        rowMap.forEach((targets, key) => {
+          groups.push({ key: String(key), targets, orientation: 'horizontal' })
+        })
+      } else {
+        const columnMap = new Map()
+        selectedTargets.forEach((target) => {
+          if (!columnMap.has(target.columnKey)) {
+            columnMap.set(target.columnKey, [])
+          }
+          columnMap.get(target.columnKey).push(target)
+        })
+        columnMap.forEach((targets, key) => {
+          groups.push({ key, targets, orientation: 'vertical' })
+        })
+      }
+
+      if (groups.length === 0) {
+        return
+      }
+
+      const series = []
+      const updates = []
+      let cancelled = false
+
+      groups.forEach((group) => {
+        if (cancelled) {
+          return
+        }
+
+        const sortedTargets = [...group.targets].sort((a, b) => {
+          if (group.orientation === 'horizontal') {
+            if (a.columnIndex === b.columnIndex) {
+              return a.rowPosition - b.rowPosition
+            }
+            return a.columnIndex - b.columnIndex
+          }
+          if (a.rowPosition === b.rowPosition) {
+            return a.columnIndex - b.columnIndex
+          }
+          return a.rowPosition - b.rowPosition
+        })
+
+        let seedsFound = 0
+        const cells = sortedTargets.map((target, index) => {
+          const value = resolveValueForTarget(target)
+          let isSeed = false
+          if (!isCellValueEmpty(value) && seedsFound < 2) {
+            isSeed = true
+            seedsFound += 1
+          }
+          return {
+            rowIndex: target.rowIndex,
+            columnKey: target.columnKey,
+            order: index,
+            isSeed,
+            rowPosition: target.rowPosition,
+            columnIndex: target.columnIndex
+          }
+        })
+
+        const fillCells = cells.filter((cell) => !cell.isSeed)
+        if (fillCells.length === 0) {
+          return
+        }
+
+        let manualStep = null
+        if (seedsFound > 0 && seedsFound < 2) {
+          const label =
+            group.orientation === 'vertical'
+              ? `Spalte „${group.key}“`
+              : `Zeile ${sortedTargets[0] ? sortedTargets[0].rowIndex + 1 : group.key}`
+          const input = window.prompt(
+            `Nur ein Startwert für ${label} gefunden. Bitte Schrittweite oder Muster angeben (z. B. 1, 0.5, 1d, 30m).`,
+            '1'
+          )
+          if (input === null) {
+            cancelled = true
+            return
+          }
+          if (!input.trim()) {
+            window.alert('Bitte geben Sie eine gültige Schrittweite ein.')
+            cancelled = true
+            return
+          }
+          manualStep = input.trim()
+        }
+
+        const seriesLabel =
+          group.orientation === 'vertical'
+            ? group.key
+            : `Zeile ${sortedTargets[0] ? sortedTargets[0].rowIndex + 1 : group.key}`
+
+        series.push({
+          key: `${group.orientation}-${group.key}`,
+          label: seriesLabel,
+          direction: group.orientation,
+          manualStep: manualStep || undefined,
+          cells
+        })
+
+        fillCells.forEach((cell) => {
+          updates.push({ rowIndex: cell.rowIndex, columnKey: cell.columnKey })
+        })
+      })
+
+      if (cancelled) {
+        return
+      }
+
+      if (updates.length === 0) {
+        window.alert('Keine Zellen zum Ausfüllen erkannt.')
+        return
+      }
+
+      updateCell({ type: 'fillSeries', updates, series })
+    },
+    [hasSelection, selectedRange, selectedTargets, previewEntries, updateCell]
+  )
 
   const handleCopyFromDirection = useCallback(
     (direction) => {
@@ -3635,6 +3797,20 @@ export default function CsvWorkbench({
                               className="rounded border border-gray-600 px-2 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
                             >
                               Inkrementieren …
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleFillSeries('vertical')}
+                              className="rounded border border-gray-600 px-2 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                            >
+                              Serie ↓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleFillSeries('horizontal')}
+                              className="rounded border border-gray-600 px-2 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-textLight"
+                            >
+                              Serie →
                             </button>
                             <div className="flex items-center gap-1">
                               <span className="text-dark-textGray/80">Kopieren von</span>

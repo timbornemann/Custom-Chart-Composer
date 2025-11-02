@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
+import { evaluateFormulaExpression } from '../utils/csv/formulas'
 
 // Note: Values are checked case-insensitively in toNumber(), so we only need lowercase here
 const PLACEHOLDER_VALUES = new Set(['', '-', 'n/a', 'na', 'null', 'undefined', 'nan', 'unknown'])
@@ -76,6 +77,58 @@ const DUPLICATE_KEY_SEPARATOR = '\u241F'
 const DUPLICATE_EMPTY_TOKEN = '__EMPTY__'
 const defaultManualOperationMeta = {
   lastFillSeries: null
+}
+
+const normalizeFormulaMap = (value) => {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  const result = {}
+  Object.entries(value).forEach(([rawRowKey, columnEntries]) => {
+    const rowIndex = Number.parseInt(rawRowKey, 10)
+    if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+      return
+    }
+    if (!columnEntries || typeof columnEntries !== 'object') {
+      return
+    }
+    const rowKey = String(rowIndex)
+    const normalizedRow = {}
+    Object.entries(columnEntries).forEach(([columnKey, formula]) => {
+      const normalizedKey = sanitizeKey(columnKey)
+      if (!normalizedKey || typeof formula !== 'string') {
+        return
+      }
+      const trimmed = formula.trim()
+      if (!trimmed) {
+        return
+      }
+      normalizedRow[normalizedKey] = trimmed
+    })
+    if (Object.keys(normalizedRow).length > 0) {
+      result[rowKey] = normalizedRow
+    }
+  })
+  return result
+}
+
+const removeFormulaEntry = (map, rowKey, columnKey) => {
+  if (!map || typeof map !== 'object') {
+    return map
+  }
+  const existingRow = map[rowKey]
+  if (!existingRow || !Object.prototype.hasOwnProperty.call(existingRow, columnKey)) {
+    return map
+  }
+  const nextRow = { ...existingRow }
+  delete nextRow[columnKey]
+  const nextMap = { ...map }
+  if (Object.keys(nextRow).length === 0) {
+    delete nextMap[rowKey]
+  } else {
+    nextMap[rowKey] = nextRow
+  }
+  return nextMap
 }
 
 const normalizeDuplicateValue = (value) => {
@@ -2681,6 +2734,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [rows, setRows] = useState([])
   const [columns, setColumns] = useState([])
   const [rowDisplay, setRowDisplay] = useState(() => ({ raw: {}, transformed: {} }))
+  const [formulaMap, setFormulaMap] = useState(() => ({}))
+  const [formulaErrors, setFormulaErrors] = useState(() => ({}))
   const [manualEditMap, setManualEditMap] = useState(() => ({}))
   const [manualEditHistory, setManualEditHistory] = useState(() => [])
   const [mapping, setMapping] = useState(defaultMapping)
@@ -2778,6 +2833,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setRowDisplay(normalizeRowDisplayState(initialData.rowDisplay))
     setManualEditMap(initialData.manualEdits || {})
     setManualEditHistory([])
+    setFormulaMap(normalizeFormulaMap(initialData.formulas || {}))
+    setFormulaErrors({})
     setMapping(initialData.mapping || defaultMapping)
     setTransformations(mergeTransformationsWithDefaults(initialData.transformations))
     setPreviewLimit(initialData.previewLimit ?? 5)
@@ -2912,6 +2969,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setProfilingMeta(createDefaultProfilingMeta())
     setManualEditMap({})
     setManualEditHistory([])
+    setFormulaMap({})
+    setFormulaErrors({})
   }, [])
 
   const parseFile = useCallback(
@@ -2952,6 +3011,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         )
         setManualEditMap({})
         setManualEditHistory([])
+        setFormulaMap({})
+        setFormulaErrors({})
         setTransformations(createDefaultTransformations())
         setPreviewLimit(5)
         setSearchQuery('')
@@ -3209,6 +3270,80 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       updateRowState(source, rowIndex, { pinned })
     },
     [updateRowState]
+  )
+
+  const clearFormulasForCells = useCallback(
+    (cells) => {
+      if (!Array.isArray(cells) || cells.length === 0) {
+        return
+      }
+      setFormulaMap((previous) => {
+        let next = previous
+        cells.forEach((cell) => {
+          if (!cell || !Number.isInteger(cell.rowIndex) || cell.rowIndex < 0) {
+            return
+          }
+          const rowKey = String(cell.rowIndex)
+          const columnKey = sanitizeKey(cell.columnKey)
+          if (!columnKey) {
+            return
+          }
+          const updated = removeFormulaEntry(next, rowKey, columnKey)
+          if (updated !== next) {
+            next = updated
+          }
+        })
+        return next === previous ? previous : next
+      })
+      setFormulaErrors((previous) => {
+        let next = previous
+        cells.forEach((cell) => {
+          if (!cell || !Number.isInteger(cell.rowIndex) || cell.rowIndex < 0) {
+            return
+          }
+          const rowKey = String(cell.rowIndex)
+          const columnKey = sanitizeKey(cell.columnKey)
+          if (!columnKey) {
+            return
+          }
+          const updated = removeFormulaEntry(next, rowKey, columnKey)
+          if (updated !== next) {
+            next = updated
+          }
+        })
+        return next === previous ? previous : next
+      })
+    },
+    [setFormulaMap, setFormulaErrors]
+  )
+
+  const clearManualEditForCell = useCallback(
+    (rowIndex, columnKey) => {
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+        return
+      }
+      const normalizedKey = sanitizeKey(columnKey)
+      if (!normalizedKey) {
+        return
+      }
+      const rowKey = String(rowIndex)
+      setManualEditMap((previous) => {
+        const rowEntries = previous?.[rowKey]
+        if (!rowEntries || !Object.prototype.hasOwnProperty.call(rowEntries, normalizedKey)) {
+          return previous
+        }
+        const nextRow = { ...rowEntries }
+        delete nextRow[normalizedKey]
+        const next = { ...previous }
+        if (Object.keys(nextRow).length === 0) {
+          delete next[rowKey]
+        } else {
+          next[rowKey] = nextRow
+        }
+        return next
+      })
+    },
+    [setManualEditMap]
   )
 
   const normalizeUpdateInput = useCallback((input, fallbackColumnKey, fallbackValue) => {
@@ -4087,6 +4222,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         : columns.map((column) => column.key)
 
       let fillSeriesContext = null
+      const touchedCells = []
 
       setRows((prev) => {
         if (!prev || prev.length === 0) {
@@ -4192,6 +4328,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
             return
           }
 
+          touchedCells.push({ rowIndex: update.rowIndex, columnKey: update.columnKey })
+
           const currentValue = workingRow[update.columnKey]
           let nextValue = currentValue
 
@@ -4242,6 +4380,25 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         )
         return nextRows
       })
+      if (!config.preserveFormulas && touchedCells.length > 0) {
+        const unique = []
+        const seen = new Set()
+        touchedCells.forEach((cell) => {
+          if (!cell) return
+          const rowIndex = Number.isInteger(cell.rowIndex) ? cell.rowIndex : null
+          const columnKey = sanitizeKey(cell.columnKey)
+          if (rowIndex === null || rowIndex < 0 || !columnKey) {
+            return
+          }
+          const key = `${rowIndex}::${columnKey}`
+          if (seen.has(key)) {
+            return
+          }
+          seen.add(key)
+          unique.push({ rowIndex, columnKey })
+        })
+        clearFormulasForCells(unique)
+      }
       setValidationErrors([])
       setResultWarnings([])
       if (config.type === 'fillSeries') {
@@ -4335,6 +4492,64 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     [rows, updateCell]
   )
 
+  const getCellFormula = useCallback(
+    (rowIndex, columnKey) => {
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+        return ''
+      }
+      const normalizedKey = sanitizeKey(columnKey)
+      if (!normalizedKey) {
+        return ''
+      }
+      const rowKey = String(rowIndex)
+      const rowFormulas = formulaMap[rowKey] || {}
+      return rowFormulas[normalizedKey] || ''
+    },
+    [formulaMap]
+  )
+
+  const setCellFormula = useCallback(
+    (rowIndex, columnKey, formula) => {
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+        return
+      }
+      const normalizedKey = sanitizeKey(columnKey)
+      if (!normalizedKey) {
+        return
+      }
+      const trimmed = typeof formula === 'string' ? formula.trim() : ''
+      const rowKey = String(rowIndex)
+      if (!trimmed) {
+        clearFormulasForCells([{ rowIndex, columnKey: normalizedKey }])
+        return
+      }
+      setFormulaMap((previous) => {
+        const rowEntries = previous?.[rowKey] || {}
+        if (rowEntries[normalizedKey] === trimmed) {
+          return previous
+        }
+        return { ...previous, [rowKey]: { ...rowEntries, [normalizedKey]: trimmed } }
+      })
+      setFormulaErrors((previous) => removeFormulaEntry(previous, rowKey, normalizedKey))
+      clearManualEditForCell(rowIndex, normalizedKey)
+    },
+    [clearFormulasForCells, setFormulaMap, setFormulaErrors, clearManualEditForCell]
+  )
+
+  const clearCellFormula = useCallback(
+    (rowIndex, columnKey) => {
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+        return
+      }
+      const normalizedKey = sanitizeKey(columnKey)
+      if (!normalizedKey) {
+        return
+      }
+      clearFormulasForCells([{ rowIndex, columnKey: normalizedKey }])
+    },
+    [clearFormulasForCells]
+  )
+
   const undoLastManualEdit = useCallback(() => {
     let entry = null
     setManualEditHistory((prev) => {
@@ -4358,6 +4573,116 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     })
     return count
   }, [manualEditMap])
+
+  useEffect(() => {
+    if (!columns || columns.length === 0) {
+      setFormulaErrors((previous) => (Object.keys(previous || {}).length === 0 ? previous : {}))
+      return
+    }
+    if (!formulaMap || Object.keys(formulaMap).length === 0) {
+      setFormulaErrors((previous) => (Object.keys(previous || {}).length === 0 ? previous : {}))
+      return
+    }
+
+    const columnKeys = columns.map((column) => column.key)
+    const columnKeySet = new Set(columnKeys)
+    const nextErrors = {}
+    const updates = []
+
+    const context = {
+      rowCount: rows.length,
+      columnCount: columnKeys.length,
+      getCellValue: (targetRowIndex, targetColumnIndex) => {
+        if (!Number.isInteger(targetRowIndex) || targetRowIndex < 0 || targetRowIndex >= rows.length) {
+          return null
+        }
+        const columnKey = columnKeys[targetColumnIndex]
+        if (!columnKey) {
+          return null
+        }
+        const row = rows[targetRowIndex]
+        return row ? row[columnKey] : null
+      },
+      getCellFormula: (targetRowIndex, targetColumnIndex) => {
+        if (!Number.isInteger(targetRowIndex) || targetRowIndex < 0) {
+          return null
+        }
+        const columnKey = columnKeys[targetColumnIndex]
+        if (!columnKey) {
+          return null
+        }
+        const rowFormulas = formulaMap[String(targetRowIndex)] || {}
+        return rowFormulas[columnKey] || null
+      }
+    }
+
+    const addError = (rowKey, columnKey, message) => {
+      if (!nextErrors[rowKey]) {
+        nextErrors[rowKey] = {}
+      }
+      nextErrors[rowKey][columnKey] = message
+    }
+
+    Object.entries(formulaMap).forEach(([rowKey, columnEntries]) => {
+      const rowIndex = Number.parseInt(rowKey, 10)
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+        return
+      }
+      if (rowIndex >= rows.length) {
+        Object.keys(columnEntries || {}).forEach((columnKey) => {
+          addError(rowKey, columnKey, 'Zeile nicht verfügbar')
+        })
+        return
+      }
+      Object.entries(columnEntries || {}).forEach(([columnKey, formula]) => {
+        if (!columnKey || typeof formula !== 'string') {
+          return
+        }
+        if (!columnKeySet.has(columnKey)) {
+          addError(rowKey, columnKey, 'Spalte nicht verfügbar')
+          return
+        }
+        const result = evaluateFormulaExpression(formula, context)
+        if (result.error) {
+          addError(rowKey, columnKey, result.error)
+          return
+        }
+        const currentValue = rows[rowIndex]?.[columnKey]
+        if (!Object.is(currentValue, result.value)) {
+          updates.push({ rowIndex, columnKey, value: result.value })
+        }
+      })
+    })
+
+    setFormulaErrors((previous) => {
+      const prevKeys = Object.keys(previous || {})
+      const nextKeys = Object.keys(nextErrors)
+      if (prevKeys.length === nextKeys.length) {
+        let equal = true
+        for (let index = 0; index < prevKeys.length; index += 1) {
+          const key = prevKeys[index]
+          if (!Object.prototype.hasOwnProperty.call(nextErrors, key)) {
+            equal = false
+            break
+          }
+          const prevRow = previous?.[key] || {}
+          const nextRow = nextErrors[key] || {}
+          if (!shallowRowEqual(prevRow, nextRow)) {
+            equal = false
+            break
+          }
+        }
+        if (equal) {
+          return previous
+        }
+      }
+      return nextErrors
+    })
+
+    if (updates.length > 0) {
+      updateCell({ type: 'set', updates, preserveFormulas: true })
+    }
+  }, [columns, formulaMap, rows, updateCell])
 
   const manualEdits = useMemo(
     () => ({
@@ -4876,7 +5201,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     rowDisplay,
     profilingMeta,
     duplicateKeyColumns,
-    manualEdits: manualEditMap
+    manualEdits: manualEditMap,
+    formulas: formulaMap
   }
   }, [
     fileName,
@@ -4892,7 +5218,8 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     rowDisplay,
     profilingMeta,
     duplicateKeyColumns,
-    manualEditMap
+    manualEditMap,
+    formulaMap
   ])
 
   return {
@@ -4954,6 +5281,11 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     resolveDuplicates,
     manualEdits,
     canUndoManualEdit,
-    undoLastManualEdit
+    undoLastManualEdit,
+    formulas: formulaMap,
+    formulaErrors,
+    setCellFormula,
+    clearCellFormula,
+    getCellFormula
   }
 }

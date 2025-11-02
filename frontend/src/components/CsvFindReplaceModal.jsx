@@ -101,7 +101,9 @@ export default function CsvFindReplaceModal({
   totalTransformedMatches,
   canReplaceInTransformed,
   transformedScopeDisabledReason,
-  defaultScope = 'raw'
+  defaultScope = 'raw',
+  activeMatch = null,
+  onPreviewMatchFocus = () => {}
 }) {
   const [replacementValue, setReplacementValue] = useState('')
   const [scope, setScope] = useState(defaultScope)
@@ -350,8 +352,28 @@ export default function CsvFindReplaceModal({
                       const currentValue = match.formattedValue
                       const highlighted = highlightMatches(currentValue, match.positions)
                       const replacedPreview = buildReplacementPreview(currentValue, searchConfig, replacementValue)
+                      const isActive =
+                        activeMatch &&
+                        activeMatch.scope === (match.scope || scope) &&
+                        activeMatch.rowIndex === match.rowIndex &&
+                        activeMatch.columnKey === match.columnKey
                       return (
-                        <tr key={`${match.scope || scope}-${match.rowIndex}-${match.columnKey}`}>
+                        <tr
+                          key={`${match.scope || scope}-${match.rowIndex}-${match.columnKey}`}
+                          className={`cursor-pointer transition-colors ${
+                            isActive
+                              ? 'bg-dark-accent1/15 text-dark-textLight'
+                              : 'hover:bg-dark-secondary/50'
+                          }`}
+                          tabIndex={0}
+                          onClick={() => onPreviewMatchFocus({ ...match, scope: match.scope || scope })}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              onPreviewMatchFocus({ ...match, scope: match.scope || scope })
+                            }
+                          }}
+                        >
                           <td className="px-3 py-2 font-mono text-[11px] text-dark-textGray/80">#{match.rowIndex + 1}</td>
                           <td className="px-3 py-2 text-dark-textLight">{columnLabel}</td>
                           <td className="px-3 py-2 text-dark-textLight">{highlighted}</td>
@@ -457,11 +479,19 @@ CsvFindReplaceModal.propTypes = {
   totalTransformedMatches: PropTypes.number.isRequired,
   canReplaceInTransformed: PropTypes.bool.isRequired,
   transformedScopeDisabledReason: PropTypes.string,
-  defaultScope: PropTypes.oneOf(['raw', 'transformed'])
+  defaultScope: PropTypes.oneOf(['raw', 'transformed']),
+  activeMatch: PropTypes.shape({
+    scope: PropTypes.oneOf(['raw', 'transformed']).isRequired,
+    rowIndex: PropTypes.number.isRequired,
+    columnKey: PropTypes.string.isRequired
+  }),
+  onPreviewMatchFocus: PropTypes.func
 }
 
 CsvFindReplaceModal.defaultProps = {
   searchConfig: null,
   transformedScopeDisabledReason: '',
-  defaultScope: 'raw'
+  defaultScope: 'raw',
+  activeMatch: null,
+  onPreviewMatchFocus: () => {}
 }

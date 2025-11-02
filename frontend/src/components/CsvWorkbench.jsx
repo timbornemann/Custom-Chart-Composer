@@ -1011,6 +1011,7 @@ export default function CsvWorkbench({
     raw: { matches: [], total: 0 },
     transformed: { matches: [], total: 0 }
   })
+  const [findReplaceDefaultScope, setFindReplaceDefaultScope] = useState('raw')
   const [chartPreviewHighlight, setChartPreviewHighlight] = useState(null)
   const findReplaceHistoryRef = useRef([])
   const [formulaInputValue, setFormulaInputValue] = useState('')
@@ -1018,6 +1019,8 @@ export default function CsvWorkbench({
   const formulaInputRef = useRef(null)
   const formulaEditingRef = useRef(false)
   const [duplicateActionFeedback, setDuplicateActionFeedback] = useState(null)
+  const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1)
+  const searchMatchSignatureRef = useRef('')
   const activeSearchConfig = useMemo(
     () => createSearchConfig({ query: searchQuery, mode: searchMode, columns: searchColumns }),
     [searchQuery, searchMode, searchColumns]
@@ -1051,6 +1054,163 @@ export default function CsvWorkbench({
   }, [transformationMeta, transformedRows, totalRows])
   const canReplaceInTransformed = transformedScopeDisabledReason === ''
   const canOpenFindReplace = activeSearchConfig?.isActive && totalRows > 0
+  const searchMatches = useMemo(() => {
+    if (!activeSearchConfig?.isActive) {
+      return []
+    }
+    const columnOrder = new Map()
+    visibleColumns.forEach((column, index) => {
+      columnOrder.set(column.key, index)
+    })
+    const collectMatches = (entries, scope) => {
+      if (!Array.isArray(entries) || entries.length === 0) {
+        return []
+      }
+      const result = []
+      entries.forEach((entry, rowPosition) => {
+        const matchInfo = entry?.matchInfo || null
+        if (!matchInfo) {
+          return
+        }
+        Object.entries(matchInfo).forEach(([columnKey, positions]) => {
+          if (!Array.isArray(positions) || positions.length === 0) {
+            return
+          }
+          result.push({
+            scope,
+            rowIndex: entry.index,
+            rowPosition,
+            columnKey,
+            positions,
+            rowRefKey: `${scope}-${entry.index}`
+          })
+        })
+      })
+      return result
+    }
+    const rawMatches = collectMatches(previewEntries, 'raw')
+    const transformedMatches = collectMatches(transformedPreviewEntries, 'transformed')
+    const combined = [...rawMatches, ...transformedMatches]
+    combined.sort((a, b) => {
+      if (a.scope !== b.scope) {
+        if (a.scope === 'raw') return -1
+        if (b.scope === 'raw') return 1
+        return a.scope.localeCompare(b.scope)
+      }
+      if (a.rowIndex !== b.rowIndex) {
+        return a.rowIndex - b.rowIndex
+      }
+      const orderA = columnOrder.has(a.columnKey) ? columnOrder.get(a.columnKey) : Number.MAX_SAFE_INTEGER
+      const orderB = columnOrder.has(b.columnKey) ? columnOrder.get(b.columnKey) : Number.MAX_SAFE_INTEGER
+      if (orderA !== orderB) {
+        return orderA - orderB
+      }
+      return a.columnKey.localeCompare(b.columnKey, undefined, { sensitivity: 'base' })
+    })
+    return combined
+  }, [activeSearchConfig, previewEntries, transformedPreviewEntries, visibleColumns])
+  const activeSearchMatch = activeSearchMatchIndex >= 0 ? searchMatches[activeSearchMatchIndex] : null
+  const hasSearchMatches = searchMatches.length > 0
+  const searchMatchSummary = hasSearchMatches && activeSearchMatchIndex >= 0
+    ? `${activeSearchMatchIndex + 1}/${searchMatches.length}`
+    : `0/${searchMatches.length}`
+  useEffect(() => {
+    if (!activeSearchConfig?.isActive) {
+      searchMatchSignatureRef.current = ''
+      setActiveSearchMatchIndex(-1)
+      return
+    }
+    const columnsKey = Array.isArray(activeSearchConfig.columns) && activeSearchConfig.columns.length > 0
+      ? activeSearchConfig.columns.join('|')
+      : 'ALL'
+    const signature = `${activeSearchConfig.mode || 'normal'}|${activeSearchConfig.query || ''}|${columnsKey}`
+    if (signature !== searchMatchSignatureRef.current) {
+      searchMatchSignatureRef.current = signature
+      setActiveSearchMatchIndex(searchMatches.length > 0 ? 0 : -1)
+      return
+    }
+    if (searchMatches.length === 0) {
+      setActiveSearchMatchIndex(-1)
+      return
+    }
+    setActiveSearchMatchIndex((previous) => {
+      if (previous >= 0 && previous < searchMatches.length) {
+        return previous
+      }
+      return 0
+    })
+  }, [activeSearchConfig, searchMatches.length])
+  useEffect(() => {
+    if (!activeSearchMatch || activeSearchMatch.scope !== 'raw') {
+      return
+    }
+    const rowPosition = previewEntries.findIndex((entry) => entry.index === activeSearchMatch.rowIndex)
+    if (rowPosition === -1) {
+      return
+    }
+    const target = createCellTarget(activeSearchMatch.rowIndex, rowPosition, activeSearchMatch.columnKey)
+    setSelectionState((previous) => {
+      const focus = previous.focus || previous.anchor
+      if (
+        focus &&
+        focus.rowIndex === target.rowIndex &&
+        focus.columnKey === target.columnKey &&
+        focus.rowPosition === target.rowPosition &&
+        focus.columnIndex === target.columnIndex
+      ) {
+        return previous
+      }
+      return { anchor: target, focus: target }
+    })
+    pendingFocusRef.current = { rowIndex: target.rowIndex, columnKey: target.columnKey }
+  }, [activeSearchMatch, createCellTarget, previewEntries])
+  useEffect(() => {
+    if (!activeSearchMatch) {
+      return
+    }
+    const key = activeSearchMatch.rowRefKey || `${activeSearchMatch.scope}-${activeSearchMatch.rowIndex}`
+    const node = rowRefs.current.get(key)
+    if (node && typeof node.scrollIntoView === 'function') {
+      try {
+        node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } catch (_error) {
+        node.scrollIntoView()
+      }
+    }
+  }, [activeSearchMatch])
+  const handleSearchMatchNavigate = useCallback(
+    (direction) => {
+      if (!Array.isArray(searchMatches) || searchMatches.length === 0) {
+        return
+      }
+      setActiveSearchMatchIndex((previous) => {
+        if (previous === -1) {
+          return direction >= 0 ? 0 : searchMatches.length - 1
+        }
+        const next = (previous + direction + searchMatches.length) % searchMatches.length
+        return next
+      })
+    },
+    [searchMatches]
+  )
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.defaultPrevented) {
+        return
+      }
+      if (event.key === 'F3') {
+        if (!activeSearchConfig?.isActive) {
+          return
+        }
+        event.preventDefault()
+        handleSearchMatchNavigate(event.shiftKey ? -1 : 1)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [activeSearchConfig, handleSearchMatchNavigate])
 
   useEffect(() => {
     if (!correlationMatrix || !Array.isArray(correlationMatrix.columns) || correlationMatrix.columns.length === 0) {
@@ -1080,6 +1240,10 @@ export default function CsvWorkbench({
         return { matches: [], total: 0 }
       }
       const columnKeys = new Set(columns.map((column) => column.key))
+      const columnOrder = new Map()
+      columns.forEach((column, index) => {
+        columnOrder.set(column.key, index)
+      })
       const matches = []
       rowsSource.forEach((row, rowIndex) => {
         if (!row) return
@@ -1105,6 +1269,17 @@ export default function CsvWorkbench({
             rawValue
           })
         })
+      })
+      matches.sort((a, b) => {
+        if (a.rowIndex !== b.rowIndex) {
+          return a.rowIndex - b.rowIndex
+        }
+        const orderA = columnOrder.has(a.columnKey) ? columnOrder.get(a.columnKey) : Number.MAX_SAFE_INTEGER
+        const orderB = columnOrder.has(b.columnKey) ? columnOrder.get(b.columnKey) : Number.MAX_SAFE_INTEGER
+        if (orderA !== orderB) {
+          return orderA - orderB
+        }
+        return a.columnKey.localeCompare(b.columnKey, undefined, { sensitivity: 'base' })
       })
       const total = matches.reduce((sum, entry) => sum + (entry.positions?.length || 0), 0)
       return { matches, total }
@@ -2431,8 +2606,28 @@ export default function CsvWorkbench({
     if (!canOpenFindReplace) {
       return
     }
+    const scope =
+      activeSearchMatch?.scope === 'transformed' && canReplaceInTransformed ? 'transformed' : 'raw'
+    setFindReplaceDefaultScope(scope)
     setIsFindReplaceOpen(true)
-  }, [canOpenFindReplace])
+  }, [canOpenFindReplace, activeSearchMatch, canReplaceInTransformed])
+  const handleModalMatchFocus = useCallback(
+    (match) => {
+      if (!match) {
+        return
+      }
+      const index = searchMatches.findIndex(
+        (candidate) =>
+          candidate.scope === match.scope &&
+          candidate.rowIndex === match.rowIndex &&
+          candidate.columnKey === match.columnKey
+      )
+      if (index >= 0) {
+        setActiveSearchMatchIndex(index)
+      }
+    },
+    [searchMatches]
+  )
 
   const handleFindReplaceConfirm = useCallback(
     ({ scope, replacement }) => {
@@ -3654,6 +3849,9 @@ export default function CsvWorkbench({
         totalTransformedMatches={findReplaceData.transformed.total}
         canReplaceInTransformed={canReplaceInTransformed}
         transformedScopeDisabledReason={transformedScopeDisabledReason}
+        defaultScope={findReplaceDefaultScope}
+        activeMatch={activeSearchMatch}
+        onPreviewMatchFocus={handleModalMatchFocus}
       />
       <div className="space-y-6">
       <div className="rounded-xl border border-gray-700 bg-dark-secondary shadow-lg">
@@ -4183,6 +4381,33 @@ export default function CsvWorkbench({
                               className="w-full rounded-md border border-gray-700 bg-dark-bg py-1.5 pl-7 pr-2 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
                             />
                             <span className="pointer-events-none absolute left-2 top-1.5 text-dark-textGray/80">🔍</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[11px]">
+                            <button
+                              type="button"
+                              onClick={() => handleSearchMatchNavigate(-1)}
+                              disabled={!hasSearchMatches}
+                              className={`rounded-md border px-2 py-1 transition-colors ${
+                                hasSearchMatches
+                                  ? 'border-gray-700 text-dark-textLight hover:border-dark-accent1 hover:text-dark-accent1'
+                                  : 'cursor-not-allowed border-gray-800 text-dark-textGray'
+                              }`}
+                            >
+                              Vorheriger
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSearchMatchNavigate(1)}
+                              disabled={!hasSearchMatches}
+                              className={`rounded-md border px-2 py-1 transition-colors ${
+                                hasSearchMatches
+                                  ? 'border-gray-700 text-dark-textLight hover:border-dark-accent1 hover:text-dark-accent1'
+                                  : 'cursor-not-allowed border-gray-800 text-dark-textGray'
+                              }`}
+                            >
+                              Nächster
+                            </button>
+                            <span className="ml-1 text-dark-textGray">Treffer {searchMatchSummary}</span>
                           </div>
                           <button
                             type="button"
@@ -4888,6 +5113,10 @@ export default function CsvWorkbench({
                                         ? highlightedValue.length > 0
                                         : Boolean(highlightedValue)
                                       const isSelected = selectedCellSet.has(`${entry.index}::${column.key}`)
+                                      const isActiveMatch =
+                                        activeSearchMatch?.scope === 'raw' &&
+                                        activeSearchMatch.rowIndex === entry.index &&
+                                        activeSearchMatch.columnKey === column.key
                                       const isPinnedLeft = column.display?.pinned === 'left'
                                       const isPinnedRight = column.display?.pinned === 'right'
                                       const cellLeft = pinnedLeftOffsets.get(column.key)
@@ -4925,7 +5154,15 @@ export default function CsvWorkbench({
                                         <td
                                           key={column.key}
                                           className={`px-3 py-2 text-xs text-dark-textLight/90 ${
-                                            isSelected ? 'bg-dark-accent1/20 text-dark-textLight ring-1 ring-dark-accent1/40' : ''
+                                            isSelected
+                                              ? 'bg-dark-accent1/20 text-dark-textLight ring-1 ring-dark-accent1/40'
+                                              : ''
+                                          } ${
+                                            isActiveMatch
+                                              ? isSelected
+                                                ? 'ring-2 ring-dark-accent1/80'
+                                                : 'bg-dark-accent1/10 text-dark-textLight ring-2 ring-dark-accent1/60'
+                                              : ''
                                           }`}
                                           style={cellStyle}
                                         >
@@ -6377,8 +6614,18 @@ export default function CsvWorkbench({
                                         const hasContent = Array.isArray(highlightedValue)
                                           ? highlightedValue.length > 0
                                           : Boolean(highlightedValue)
+                                        const isActiveMatch =
+                                          activeSearchMatch?.scope === 'transformed' &&
+                                          activeSearchMatch.rowIndex === entry.index &&
+                                          activeSearchMatch.columnKey === column.key
                                         return (
-                                          <td key={`transformed-${column.key}`} className="px-3 py-2 text-xs text-dark-textLight/90" style={cellStyle}>
+                                          <td
+                                            key={`transformed-${column.key}`}
+                                            className={`px-3 py-2 text-xs text-dark-textLight/90 ${
+                                              isActiveMatch ? 'bg-dark-accent1/10 text-dark-textLight ring-2 ring-dark-accent1/60' : ''
+                                            }`}
+                                            style={cellStyle}
+                                          >
                                             {hasContent ? highlightedValue : <span className="text-dark-textGray/60">–</span>}
                                           </td>
                                         )

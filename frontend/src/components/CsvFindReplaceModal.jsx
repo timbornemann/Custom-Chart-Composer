@@ -94,13 +94,13 @@ export default function CsvFindReplaceModal({
   onToggleColumn,
   onResetColumns,
   availableColumns,
-  searchConfig,
+  searchConfig = null,
   rawMatches,
   transformedMatches,
   totalRawMatches,
   totalTransformedMatches,
   canReplaceInTransformed,
-  transformedScopeDisabledReason,
+  transformedScopeDisabledReason = '',
   defaultScope = 'raw',
   activeMatch = null,
   onPreviewMatchFocus = () => {}
@@ -488,10 +488,3 @@ CsvFindReplaceModal.propTypes = {
   onPreviewMatchFocus: PropTypes.func
 }
 
-CsvFindReplaceModal.defaultProps = {
-  searchConfig: null,
-  transformedScopeDisabledReason: '',
-  defaultScope: 'raw',
-  activeMatch: null,
-  onPreviewMatchFocus: () => {}
-}

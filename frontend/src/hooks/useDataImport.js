@@ -2815,6 +2815,9 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [formulaErrors, setFormulaErrors] = useState(() => ({}))
   const [manualEditMap, setManualEditMap] = useState(() => ({}))
   const [manualEditHistory, setManualEditHistory] = useState(() => [])
+  const [manualEditFuture, setManualEditFuture] = useState(() => [])
+  const [versionTimeline, setVersionTimeline] = useState(() => [])
+  const [activeVersionId, setActiveVersionId] = useState(null)
   const [mapping, setMapping] = useState(defaultMapping)
   const [transformations, setTransformations] = useState(() => createDefaultTransformations())
   const [previewLimit, setPreviewLimit] = useState(5)
@@ -2879,12 +2882,45 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   const [manualOperationMeta, setManualOperationMeta] = useState(defaultManualOperationMeta)
   const [profilingMeta, setProfilingMeta] = useState(() => createDefaultProfilingMeta())
   const initialDataSignatureRef = useRef(null)
+  const versionCounterRef = useRef(0)
 
   const searchConfig = useMemo(
     () => createSearchConfig({ query: searchQuery, mode: searchMode, columns: searchColumns }),
     [searchQuery, searchMode, searchColumns]
   )
   const searchError = searchConfig.error || ''
+
+  const registerVersionEvent = useCallback(
+    (event) => {
+      if (!event) {
+        return null
+      }
+
+      const base = typeof event === 'string' ? { description: event } : event
+      const timestamp = Number.isFinite(base?.timestamp) ? base.timestamp : Date.now()
+      const counter = (versionCounterRef.current || 0) + 1
+      versionCounterRef.current = counter
+      const randomSuffix = Math.random().toString(36).slice(2, 8)
+      const id = base?.id || `ver-${timestamp}-${counter}-${randomSuffix}`
+      const entry = {
+        id,
+        description: base?.description || 'Änderung',
+        type: base?.type || 'manual-edit',
+        scope: base?.scope || 'raw',
+        timestamp,
+        meta: base?.meta || {}
+      }
+
+      setVersionTimeline((prev) => {
+        const history = Array.isArray(prev) ? prev : []
+        const next = [...history.slice(Math.max(0, history.length - 49)), entry]
+        return next
+      })
+      setActiveVersionId(id)
+      return entry
+    },
+    [setVersionTimeline, setActiveVersionId]
+  )
 
   // Load initial data when provided
   useEffect(() => {
@@ -2904,17 +2940,27 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     }
     initialDataSignatureRef.current = signature
 
-    setFileName(initialData.fileName || '')
-    setRows(initialData.rows || [])
-    setColumns(normalizeColumnsState(initialData.columns || []))
-    setRowDisplay(normalizeRowDisplayState(initialData.rowDisplay))
-    setManualEditMap(initialData.manualEdits || {})
-    setManualEditHistory([])
-    setFormulaMap(normalizeFormulaMap(initialData.formulas || {}))
-    setFormulaErrors({})
-    setMapping(initialData.mapping || defaultMapping)
-    setTransformations(mergeTransformationsWithDefaults(initialData.transformations))
-    setPreviewLimit(initialData.previewLimit ?? 5)
+      setFileName(initialData.fileName || '')
+      setRows(initialData.rows || [])
+      setColumns(normalizeColumnsState(initialData.columns || []))
+      setRowDisplay(normalizeRowDisplayState(initialData.rowDisplay))
+      setManualEditMap(initialData.manualEdits || {})
+      setManualEditHistory([])
+      setManualEditFuture(
+        Array.isArray(initialData.manualEditFuture) ? initialData.manualEditFuture : []
+      )
+      setVersionTimeline(
+        Array.isArray(initialData.versionTimeline) ? initialData.versionTimeline : []
+      )
+      setActiveVersionId(initialData.activeVersionId || null)
+      versionCounterRef.current = Array.isArray(initialData.versionTimeline)
+        ? initialData.versionTimeline.length
+        : 0
+      setFormulaMap(normalizeFormulaMap(initialData.formulas || {}))
+      setFormulaErrors({})
+      setMapping(initialData.mapping || defaultMapping)
+      setTransformations(mergeTransformationsWithDefaults(initialData.transformations))
+      setPreviewLimit(initialData.previewLimit ?? 5)
     setSearchQuery(initialData.searchQuery || '')
     setSearchMode(initialData.searchMode || 'normal')
     setSearchColumns(initialData.searchColumns || [])
@@ -3021,6 +3067,15 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       )
       return filtered.length === prev.length ? prev : filtered
     })
+    setManualEditFuture((prev) => {
+      if (!Array.isArray(prev) || prev.length === 0) {
+        return prev
+      }
+      const filtered = prev.filter(
+        (entry) => Number.isInteger(entry?.rowIndex) && entry.rowIndex >= 0 && entry.rowIndex < rows.length && availableColumns.has(entry.columnKey)
+      )
+      return filtered.length === prev.length ? prev : filtered
+    })
   }, [rows.length, columns])
 
   const reset = useCallback(() => {
@@ -3046,6 +3101,10 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setProfilingMeta(createDefaultProfilingMeta())
     setManualEditMap({})
     setManualEditHistory([])
+      setManualEditFuture([])
+      setVersionTimeline([])
+      setActiveVersionId(null)
+      versionCounterRef.current = 0
     setFormulaMap({})
     setFormulaErrors({})
   }, [])
@@ -3088,6 +3147,10 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         )
         setManualEditMap({})
         setManualEditHistory([])
+          setManualEditFuture([])
+          setVersionTimeline([])
+          setActiveVersionId(null)
+          versionCounterRef.current = 0
         setFormulaMap({})
         setFormulaErrors({})
         setTransformations(createDefaultTransformations())
@@ -4557,16 +4620,23 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         return { ...prev, [rowKey]: nextRowEntries }
       })
 
-      if (!options?.skipHistory) {
-        setManualEditHistory((prev) => [
-          ...(Array.isArray(prev) ? prev : []),
-          { rowIndex, columnKey: normalizedKey, previousValue, newValue }
-        ])
-      }
+        if (!options?.skipHistory) {
+          setManualEditHistory((prev) => [
+            ...(Array.isArray(prev) ? prev : []),
+            { rowIndex, columnKey: normalizedKey, previousValue, newValue }
+          ])
+          setManualEditFuture([])
+          registerVersionEvent({
+            type: 'manual-edit',
+            description: `Zelle ${normalizedKey} in Zeile ${rowIndex + 1} geändert`,
+            scope: 'raw',
+            meta: { rowIndex, columnKey: normalizedKey, previousValue, newValue }
+          })
+        }
 
       return true
     },
-    [rows, updateCell]
+      [rows, updateCell, registerVersionEvent]
   )
 
   const getCellFormula = useCallback(
@@ -4627,23 +4697,57 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     [clearFormulasForCells]
   )
 
-  const undoLastManualEdit = useCallback(() => {
-    let entry = null
-    setManualEditHistory((prev) => {
-      if (!Array.isArray(prev) || prev.length === 0) {
-        return prev
+    const undoLastManualEdit = useCallback(() => {
+      let entry = null
+      setManualEditHistory((prev) => {
+        if (!Array.isArray(prev) || prev.length === 0) {
+          return prev
+        }
+        entry = prev[prev.length - 1]
+        return prev.slice(0, -1)
+      })
+      if (!entry) {
+        return { undone: false }
       }
-      entry = prev[prev.length - 1]
-      return prev.slice(0, -1)
-    })
-    if (!entry) {
-      return { undone: false }
-    }
-    const changed = updateCellValue(entry.rowIndex, entry.columnKey, entry.previousValue, { skipHistory: true })
-    return { undone: !!changed, entry }
-  }, [updateCellValue])
+      const changed = updateCellValue(entry.rowIndex, entry.columnKey, entry.previousValue, { skipHistory: true })
+      if (changed) {
+        setManualEditFuture((prev) => [...(Array.isArray(prev) ? prev : []), entry])
+        registerVersionEvent({
+          type: 'undo',
+          description: `Rückgängig: Zeile ${entry.rowIndex + 1} · ${entry.columnKey}`,
+          scope: 'raw',
+          meta: entry
+        })
+      }
+      return { undone: !!changed, entry }
+    }, [updateCellValue, registerVersionEvent])
 
-  const manualEditCount = useMemo(() => {
+    const redoLastManualEdit = useCallback(() => {
+      let entry = null
+      setManualEditFuture((prev) => {
+        if (!Array.isArray(prev) || prev.length === 0) {
+          return prev
+        }
+        entry = prev[prev.length - 1]
+        return prev.slice(0, -1)
+      })
+      if (!entry) {
+        return { redone: false }
+      }
+      const changed = updateCellValue(entry.rowIndex, entry.columnKey, entry.newValue, { skipHistory: true })
+      if (changed) {
+        setManualEditHistory((prev) => [...(Array.isArray(prev) ? prev : []), entry])
+        registerVersionEvent({
+          type: 'redo',
+          description: `Wiederholen: Zeile ${entry.rowIndex + 1} · ${entry.columnKey}`,
+          scope: 'raw',
+          meta: entry
+        })
+      }
+      return { redone: !!changed, entry }
+    }, [updateCellValue, registerVersionEvent])
+
+    const manualEditCount = useMemo(() => {
     let count = 0
     Object.values(manualEditMap || {}).forEach((rowEntries) => {
       count += Object.keys(rowEntries || {}).length
@@ -4761,7 +4865,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     }
   }, [columns, formulaMap, rows, updateCell])
 
-  const manualEdits = useMemo(
+    const manualEdits = useMemo(
     () => ({
       map: manualEditMap,
       count: manualEditCount,
@@ -4771,6 +4875,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
   )
 
   const canUndoManualEdit = manualEditHistory.length > 0
+    const canRedoManualEdit = manualEditFuture.length > 0
 
   useEffect(() => {
     setTransformations((prev) => {
@@ -5341,8 +5446,11 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     rowDisplay,
     profilingMeta,
     duplicateKeyColumns,
-    manualEdits: manualEditMap,
-    formulas: formulaMap
+      manualEdits: manualEditMap,
+      manualEditFuture,
+      versionTimeline,
+      activeVersionId,
+      formulas: formulaMap
   }
   }, [
     fileName,
@@ -5358,7 +5466,10 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     rowDisplay,
     profilingMeta,
     duplicateKeyColumns,
-    manualEditMap,
+      manualEditMap,
+      manualEditFuture,
+      versionTimeline,
+      activeVersionId,
     formulaMap
   ])
 
@@ -5419,13 +5530,19 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     setDuplicateKeyColumns,
     duplicateInfo,
     resolveDuplicates,
-    manualEdits,
-    canUndoManualEdit,
-    undoLastManualEdit,
-    formulas: formulaMap,
-    formulaErrors,
-    setCellFormula,
-    clearCellFormula,
-    getCellFormula
+      manualEdits,
+      canUndoManualEdit,
+      canRedoManualEdit,
+      undoLastManualEdit,
+      redoLastManualEdit,
+      versionTimeline,
+      activeVersionId,
+      setActiveVersionId,
+      registerVersionEvent,
+      formulas: formulaMap,
+      formulaErrors,
+      setCellFormula,
+      clearCellFormula,
+      getCellFormula
   }
 }

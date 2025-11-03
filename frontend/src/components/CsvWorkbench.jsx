@@ -10,6 +10,9 @@ import SortableHeaderCell from './csv/SortableHeaderCell'
 import DuplicatesSection from './csv/DuplicatesSection'
 import ValueRulesEditor from './csv/ValueRulesEditor'
 import FilterEditor from './csv/FilterEditor'
+import SavedViewsPanel from './csv/SavedViewsPanel'
+import ValidationRulesPanel from './csv/ValidationRulesPanel'
+import QuickAggregationPanel from './csv/QuickAggregationPanel'
 import { AVAILABLE_FORMULAS, formatCellReference, formatRangeReference } from '../utils/csv/formulas'
 import {
   ACTION_COLUMN_WIDTH,
@@ -107,9 +110,15 @@ export default function CsvWorkbench({
     setDuplicateKeyColumns: internalSetDuplicateKeyColumns,
     duplicateInfo,
     resolveDuplicates: internalResolveDuplicates,
-    manualEdits,
-    canUndoManualEdit,
-    undoLastManualEdit: internalUndoLastManualEdit,
+      manualEdits,
+      canUndoManualEdit,
+      canRedoManualEdit,
+      undoLastManualEdit: internalUndoLastManualEdit,
+      redoLastManualEdit: internalRedoLastManualEdit,
+      versionTimeline,
+      activeVersionId,
+      setActiveVersionId: internalSetActiveVersionId,
+      registerVersionEvent: internalRegisterVersionEvent,
     formulaErrors,
     setCellFormula: internalSetCellFormula,
     clearCellFormula: internalClearCellFormula,
@@ -150,6 +159,18 @@ export default function CsvWorkbench({
   const [groupingColumnToAdd, setGroupingColumnToAdd] = useState('')
   const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1)
   const searchMatchSignatureRef = useRef('')
+  const [savedViews, setSavedViews] = useState(() => [])
+  const [activeSavedViewId, setActiveSavedViewId] = useState(null)
+  const [validationRules, setValidationRules] = useState(() => [])
+  const [validationComputed, setValidationComputed] = useState({ issues: [], summary: [] })
+  const [quickAggregationConfig, setQuickAggregationConfig] = useState(() => ({
+    scope: 'raw',
+    valueColumns: [],
+    groupBy: '',
+    operations: ['sum', 'average']
+  }))
+  const [quickAggregationResult, setQuickAggregationResult] = useState(null)
+  const [savedViewDraftName, setSavedViewDraftName] = useState('')
   const formulaMetadataByName = useMemo(() => {
     const map = new Map()
     AVAILABLE_FORMULAS.forEach((formula) => {
@@ -157,6 +178,48 @@ export default function CsvWorkbench({
     })
     return map
   }, [])
+
+  useEffect(() => {
+    if (!initialData) {
+      return
+    }
+
+    if (Array.isArray(initialData.savedViews)) {
+      setSavedViews(initialData.savedViews)
+      const activeView = initialData.savedViews.find((view) => view.id === initialData.activeSavedViewId)
+      setSavedViewDraftName(activeView ? activeView.name || '' : '')
+    }
+    if (Object.prototype.hasOwnProperty.call(initialData, 'activeSavedViewId')) {
+      setActiveSavedViewId(initialData.activeSavedViewId || null)
+    }
+    if (Array.isArray(initialData.validationRules)) {
+      setValidationRules(initialData.validationRules)
+    }
+    if (initialData.quickAggregationConfig && typeof initialData.quickAggregationConfig === 'object') {
+      setQuickAggregationConfig((prev) => ({
+        scope: initialData.quickAggregationConfig.scope === 'transformed' ? 'transformed' : 'raw',
+        valueColumns: Array.isArray(initialData.quickAggregationConfig.valueColumns)
+          ? initialData.quickAggregationConfig.valueColumns
+          : prev.valueColumns,
+        groupBy:
+          typeof initialData.quickAggregationConfig.groupBy === 'string'
+            ? initialData.quickAggregationConfig.groupBy
+            : prev.groupBy,
+        operations: Array.isArray(initialData.quickAggregationConfig.operations) && initialData.quickAggregationConfig.operations.length > 0
+          ? initialData.quickAggregationConfig.operations
+          : prev.operations
+      }))
+    }
+  }, [initialData])
+
+  const registerVersionEvent = useCallback(
+    (event) => {
+      if (typeof internalRegisterVersionEvent === 'function') {
+        internalRegisterVersionEvent(event)
+      }
+    },
+    [internalRegisterVersionEvent]
+  )
   const activeSearchConfig = useMemo(
     () => createSearchConfig({ query: searchQuery, mode: searchMode, columns: searchColumns }),
     [searchQuery, searchMode, searchColumns]
@@ -1177,6 +1240,22 @@ export default function CsvWorkbench({
 
   const activeCell = useMemo(() => selectionState.focus || selectionState.anchor, [selectionState])
 
+  const topValuesByColumn = useMemo(() => {
+    const map = new Map()
+    columns.forEach((column) => {
+      const values = column?.statistics?.text?.topValues
+      if (Array.isArray(values) && values.length > 0) {
+        map.set(
+          column.key,
+          values
+            .map((entry) => entry?.value)
+            .filter((value) => value !== null && value !== undefined)
+        )
+      }
+    })
+    return map
+  }, [columns])
+
   const getDisplayValueForCell = useCallback(
     (cell) => {
       if (!cell) {
@@ -1295,7 +1374,46 @@ export default function CsvWorkbench({
     )
   }, [formulaSuggestionContext])
 
-  const suggestionsOpen = formulaSuggestionContext && formulaSuggestions.length > 0
+  const valueSuggestions = useMemo(() => {
+    if (!isFormulaEditing || typeof formulaInputValue !== 'string') {
+      return []
+    }
+    if (formulaInputValue.trim().startsWith('=')) {
+      return []
+    }
+    if (!activeCell || !activeCell.columnKey) {
+      return []
+    }
+    const candidates = topValuesByColumn.get(activeCell.columnKey) || []
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      return []
+    }
+    const normalizedQuery = formulaInputValue.trim().toLowerCase()
+    const filtered = normalizedQuery
+      ? candidates.filter((value) => String(value).toLowerCase().includes(normalizedQuery))
+      : candidates
+    return Array.from(new Set(filtered)).slice(0, 8)
+  }, [isFormulaEditing, formulaInputValue, activeCell, topValuesByColumn])
+
+  const suggestionDataset = useMemo(() => {
+    if (
+      formulaSuggestionContext &&
+      Array.isArray(formulaSuggestions) &&
+      formulaSuggestions.length > 0 &&
+      !suppressFormulaSuggestions
+    ) {
+      return { type: 'formula', items: formulaSuggestions }
+    }
+    if (Array.isArray(valueSuggestions) && valueSuggestions.length > 0 && !suppressFormulaSuggestions) {
+      return {
+        type: 'value',
+        items: valueSuggestions.map((value) => ({ label: String(value), value }))
+      }
+    }
+    return { type: 'none', items: [] }
+  }, [formulaSuggestionContext, formulaSuggestions, valueSuggestions, suppressFormulaSuggestions])
+
+  const suggestionsOpen = suggestionDataset.type !== 'none' && suggestionDataset.items.length > 0
 
   useEffect(() => {
     if (!suggestionsOpen) {
@@ -1303,19 +1421,19 @@ export default function CsvWorkbench({
       return
     }
     setActiveSuggestionIndex((previous) => {
-      if (previous < 0 || previous >= formulaSuggestions.length) {
+      if (previous < 0 || previous >= suggestionDataset.items.length) {
         return 0
       }
       return previous
     })
-  }, [suggestionsOpen, formulaSuggestions.length])
+  }, [suggestionsOpen, suggestionDataset.items.length])
 
   const highlightedSuggestionIndex = suggestionsOpen
-    ? Math.min(activeSuggestionIndex, formulaSuggestions.length - 1)
+    ? Math.min(activeSuggestionIndex, suggestionDataset.items.length - 1)
     : -1
 
   const activeSuggestion =
-    highlightedSuggestionIndex >= 0 ? formulaSuggestions[highlightedSuggestionIndex] : null
+    highlightedSuggestionIndex >= 0 ? suggestionDataset.items[highlightedSuggestionIndex] : null
 
   const typedFunctionName = useMemo(() => {
     if (typeof formulaInputValue !== 'string') {
@@ -1333,14 +1451,14 @@ export default function CsvWorkbench({
   }, [formulaInputValue])
 
   const currentFormulaHelp = useMemo(() => {
-    if (activeSuggestion) {
+    if (suggestionDataset.type === 'formula' && activeSuggestion) {
       return activeSuggestion
     }
     if (!typedFunctionName) {
       return null
     }
     return formulaMetadataByName.get(typedFunctionName) || null
-  }, [activeSuggestion, typedFunctionName, formulaMetadataByName])
+  }, [suggestionDataset.type, activeSuggestion, typedFunctionName, formulaMetadataByName])
 
   const hasActiveCell = Boolean(activeCell)
 
@@ -1356,43 +1474,62 @@ export default function CsvWorkbench({
     setFormulaCaretPosition(position)
   }, [])
 
-  const applyFormulaSuggestion = useCallback(
+  const applySuggestion = useCallback(
     (suggestion) => {
       if (!suggestion) {
         return
       }
-      let nextCursorPosition = null
-      setFormulaInputValue((previous) => {
-        const baseText = typeof previous === 'string' ? previous : ''
-        const ensuredBase = baseText.startsWith('=') ? baseText : `=${baseText}`
-        const context = formulaSuggestionContext || { start: 1, end: 1 }
-        const safeStart = Math.max(1, Math.min(context.start, ensuredBase.length))
-        const safeEnd = Math.max(safeStart, Math.min(context.end, ensuredBase.length))
-        const before = ensuredBase.slice(0, safeStart)
-        const after = ensuredBase.slice(safeEnd)
-        const insertion = `${suggestion.name}()`
-        nextCursorPosition = before.length + suggestion.name.length + 1
-        const schedule =
-          typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
-            ? window.requestAnimationFrame
-            : (callback) => setTimeout(callback, 0)
-        schedule(() => {
-          if (formulaInputRef.current) {
-            formulaInputRef.current.focus()
-            formulaInputRef.current.setSelectionRange(nextCursorPosition, nextCursorPosition)
-          }
+      if (suggestionDataset.type === 'formula') {
+        let nextCursorPosition = null
+        setFormulaInputValue((previous) => {
+          const baseText = typeof previous === 'string' ? previous : ''
+          const ensuredBase = baseText.startsWith('=') ? baseText : `=${baseText}`
+          const context = formulaSuggestionContext || { start: 1, end: 1 }
+          const safeStart = Math.max(1, Math.min(context.start, ensuredBase.length))
+          const safeEnd = Math.max(safeStart, Math.min(context.end, ensuredBase.length))
+          const before = ensuredBase.slice(0, safeStart)
+          const after = ensuredBase.slice(safeEnd)
+          const insertion = `${suggestion.name}()`
+          nextCursorPosition = before.length + suggestion.name.length + 1
+          const schedule =
+            typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+              ? window.requestAnimationFrame
+              : (callback) => setTimeout(callback, 0)
+          schedule(() => {
+            if (formulaInputRef.current) {
+              formulaInputRef.current.focus()
+              formulaInputRef.current.setSelectionRange(nextCursorPosition, nextCursorPosition)
+            }
+          })
+          return `${before}${insertion}${after}`
         })
-        return `${before}${insertion}${after}`
-      })
-      if (nextCursorPosition !== null) {
-        setFormulaCaretPosition(nextCursorPosition)
+        if (nextCursorPosition !== null) {
+          setFormulaCaretPosition(nextCursorPosition)
+        }
+        setSuppressFormulaSuggestions(true)
+        setActiveSuggestionIndex(0)
+        formulaEditingRef.current = true
+        setIsFormulaEditing(true)
+      } else if (suggestionDataset.type === 'value') {
+        const valueText = suggestion.value === null || suggestion.value === undefined ? '' : String(suggestion.value)
+        setFormulaInputValue(valueText)
+        setSuppressFormulaSuggestions(true)
+        setActiveSuggestionIndex(0)
+        setTimeout(() => {
+          setSuppressFormulaSuggestions(false)
+        }, 0)
       }
-      setSuppressFormulaSuggestions(true)
-      setActiveSuggestionIndex(0)
-      formulaEditingRef.current = true
-      setIsFormulaEditing(true)
     },
-    [formulaSuggestionContext, formulaInputRef]
+    [
+      suggestionDataset.type,
+      formulaSuggestionContext,
+      formulaInputRef,
+      setFormulaInputValue,
+      setSuppressFormulaSuggestions,
+      setActiveSuggestionIndex,
+      setFormulaCaretPosition,
+      setIsFormulaEditing
+    ]
   )
 
   const handleFormulaInputChange = useCallback((event) => {
@@ -1473,36 +1610,36 @@ export default function CsvWorkbench({
 
   const handleFormulaKeyDown = useCallback(
     (event) => {
-      if (suggestionsOpen && formulaSuggestions.length > 0) {
+        if (suggestionsOpen && suggestionDataset.items.length > 0) {
         if (event.key === 'ArrowDown') {
           event.preventDefault()
           setActiveSuggestionIndex((previous) => {
-            if (formulaSuggestions.length === 0) {
+              if (suggestionDataset.items.length === 0) {
               return 0
             }
             const nextIndex = previous + 1
-            return nextIndex >= formulaSuggestions.length ? 0 : nextIndex
+              return nextIndex >= suggestionDataset.items.length ? 0 : nextIndex
           })
           return
         }
         if (event.key === 'ArrowUp') {
           event.preventDefault()
           setActiveSuggestionIndex((previous) => {
-            if (formulaSuggestions.length === 0) {
+              if (suggestionDataset.items.length === 0) {
               return 0
             }
             const nextIndex = previous - 1
-            return nextIndex < 0 ? formulaSuggestions.length - 1 : nextIndex
+              return nextIndex < 0 ? suggestionDataset.items.length - 1 : nextIndex
           })
           return
         }
         if (event.key === 'Enter') {
           event.preventDefault()
-          const suggestion =
-            (highlightedSuggestionIndex >= 0
-              ? formulaSuggestions[highlightedSuggestionIndex]
-              : formulaSuggestions[0]) || null
-          applyFormulaSuggestion(suggestion)
+            const suggestion =
+              (highlightedSuggestionIndex >= 0
+                ? suggestionDataset.items[highlightedSuggestionIndex]
+                : suggestionDataset.items[0]) || null
+            applySuggestion(suggestion)
           return
         }
         if (event.key === 'Escape') {
@@ -1522,8 +1659,8 @@ export default function CsvWorkbench({
     },
     [
       applyFormulaInput,
-      applyFormulaSuggestion,
-      formulaSuggestions,
+        applySuggestion,
+        suggestionDataset.items,
       handleFormulaCancel,
       highlightedSuggestionIndex,
       suggestionsOpen
@@ -1940,13 +2077,654 @@ export default function CsvWorkbench({
     [hasSelection, selectedTargets, previewEntries, visibleColumns, updateCell, selectedColumnOrder]
   )
 
-  const schedulePersist = useCallback(() => {
-    if (!onImportStateChange) return
-    setTimeout(() => {
-      const state = getImportState()
-      onImportStateChange({ ...state, stateVersion: Date.now() })
-    }, 0)
-  }, [onImportStateChange, getImportState])
+  const schedulePersist = useCallback(
+    (extraState = {}) => {
+      if (!onImportStateChange) return
+      setTimeout(() => {
+        const state = getImportState()
+        onImportStateChange({
+          ...state,
+          ...extraState,
+          savedViews,
+          activeSavedViewId,
+          validationRules,
+          quickAggregationConfig,
+          stateVersion: Date.now()
+        })
+      }, 0)
+    },
+    [
+      onImportStateChange,
+      getImportState,
+      savedViews,
+      activeSavedViewId,
+      validationRules,
+      quickAggregationConfig
+    ]
+  )
+
+  const buildCurrentViewState = useCallback(() => {
+    const rawFilters = Array.isArray(transformations?.filters) ? transformations.filters : []
+    const filtersSnapshot = JSON.parse(JSON.stringify(rawFilters))
+    const sortSnapshot = Array.isArray(sortConfig) ? sortConfig.map((entry) => ({ ...entry })) : []
+    return {
+      filters: filtersSnapshot,
+      sortConfig: sortSnapshot,
+      searchQuery,
+      searchMode,
+      searchColumns
+    }
+  }, [transformations, sortConfig, searchQuery, searchMode, searchColumns])
+
+  const handleSaveCurrentView = useCallback(
+    (name) => {
+      const trimmed = (name || savedViewDraftName || '').trim()
+      if (!trimmed) {
+        return { success: false, reason: 'Bitte einen Namen für die Ansicht eingeben.' }
+      }
+
+      const snapshot = buildCurrentViewState()
+      const timestamp = Date.now()
+      let createdId = null
+
+      setSavedViews((prev) => {
+        const history = Array.isArray(prev) ? [...prev] : []
+        const matchIndex = history.findIndex((view) => view?.name?.toLowerCase() === trimmed.toLowerCase())
+        if (matchIndex >= 0) {
+          const existing = history[matchIndex]
+          createdId = existing.id
+          history[matchIndex] = {
+            ...existing,
+            ...snapshot,
+            name: trimmed,
+            updatedAt: timestamp
+          }
+        } else {
+          createdId = createUniqueId('view')
+          history.push({
+            id: createdId,
+            name: trimmed,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            ...snapshot
+          })
+        }
+        schedulePersist({ savedViews: history, activeSavedViewId: createdId })
+        return history
+      })
+
+      if (createdId) {
+        setActiveSavedViewId(createdId)
+        setSavedViewDraftName('')
+        registerVersionEvent({
+          type: 'saved-view',
+          description: `Ansicht „${trimmed}“ gespeichert`,
+          meta: { viewId: createdId }
+        })
+      }
+
+      return { success: !!createdId, id: createdId }
+    },
+    [savedViewDraftName, buildCurrentViewState, schedulePersist, registerVersionEvent]
+  )
+
+  const handleApplySavedView = useCallback(
+    (viewId) => {
+      const target = savedViews.find((view) => view.id === viewId)
+      if (!target) {
+        return { applied: false, reason: 'Ansicht nicht gefunden.' }
+      }
+
+      const filtersSnapshot = JSON.parse(JSON.stringify(Array.isArray(target.filters) ? target.filters : []))
+      updateTransformations((prev) => ({
+        ...prev,
+        filters: filtersSnapshot
+      }))
+      setSortConfig(Array.isArray(target.sortConfig) ? target.sortConfig : [])
+      setSearchQuery(target.searchQuery || '')
+      setSearchMode(target.searchMode || 'normal')
+      setSearchColumns(Array.isArray(target.searchColumns) ? target.searchColumns : [])
+      setActiveSavedViewId(viewId)
+      setSavedViewDraftName(target.name || '')
+      schedulePersist({ activeSavedViewId: viewId })
+      registerVersionEvent({
+        type: 'saved-view-apply',
+        description: `Ansicht „${target.name || 'Unbenannt'}“ angewendet`,
+        meta: { viewId }
+      })
+      return { applied: true }
+    },
+    [savedViews, updateTransformations, setSortConfig, setSearchQuery, setSearchMode, setSearchColumns, schedulePersist, registerVersionEvent]
+  )
+
+  const handleDeleteSavedView = useCallback(
+    (viewId) => {
+      setSavedViews((prev) => {
+        const history = Array.isArray(prev) ? prev.filter((view) => view.id !== viewId) : []
+        const nextActive = viewId === activeSavedViewId ? null : activeSavedViewId
+        schedulePersist({ savedViews: history, activeSavedViewId: nextActive })
+        return history
+      })
+      if (activeSavedViewId === viewId) {
+        setActiveSavedViewId(null)
+        setSavedViewDraftName('')
+      }
+      registerVersionEvent({
+        type: 'saved-view-delete',
+        description: 'Gespeicherte Ansicht entfernt',
+        meta: { viewId }
+      })
+    },
+    [activeSavedViewId, schedulePersist, registerVersionEvent]
+  )
+
+  const handleRenameSavedView = useCallback(
+    (viewId, nextName) => {
+      const trimmed = (nextName || '').trim()
+      if (!trimmed) {
+        return { success: false }
+      }
+      let renamed = false
+      setSavedViews((prev) => {
+        const history = Array.isArray(prev) ? [...prev] : []
+        const index = history.findIndex((view) => view.id === viewId)
+        if (index === -1) {
+          return prev
+        }
+        const updated = {
+          ...history[index],
+          name: trimmed,
+          updatedAt: Date.now()
+        }
+        history[index] = updated
+        schedulePersist({ savedViews: history })
+        renamed = true
+        return history
+      })
+      if (renamed) {
+        registerVersionEvent({
+          type: 'saved-view-rename',
+          description: `Ansicht umbenannt in „${trimmed}“`,
+          meta: { viewId }
+        })
+        if (activeSavedViewId === viewId) {
+          setSavedViewDraftName(trimmed)
+        }
+      }
+      return { success: renamed }
+    },
+    [schedulePersist, registerVersionEvent, activeSavedViewId]
+  )
+
+  const handleAddValidationRule = useCallback(() => {
+    const defaultColumn = columns[0]?.key || ''
+    const createdAt = Date.now()
+    let createdRule = null
+    setValidationRules((prev) => {
+      const base = Array.isArray(prev) ? [...prev] : []
+      createdRule = {
+        id: createUniqueId('rule'),
+        name: `Regel ${base.length + 1}`,
+        column: defaultColumn,
+        type: 'required',
+        scope: 'raw',
+        message: '',
+        createdAt,
+        updatedAt: createdAt
+      }
+      base.push(createdRule)
+      schedulePersist({ validationRules: base })
+      return base
+    })
+    if (createdRule) {
+      registerVersionEvent({
+        type: 'validation-rule',
+        description: `Validierungsregel „${createdRule.name}“ erstellt`,
+        meta: { ruleId: createdRule.id }
+      })
+    }
+  }, [columns, schedulePersist, registerVersionEvent])
+
+  const handleUpdateValidationRule = useCallback(
+    (ruleId, changes) => {
+      if (!ruleId || !changes) {
+        return
+      }
+      setValidationRules((prev) => {
+        const base = Array.isArray(prev) ? [...prev] : []
+        const index = base.findIndex((rule) => rule.id === ruleId)
+        if (index === -1) {
+          return prev
+        }
+        const updated = {
+          ...base[index],
+          ...changes,
+          updatedAt: Date.now()
+        }
+        base[index] = updated
+        schedulePersist({ validationRules: base })
+        return base
+      })
+    },
+    [schedulePersist]
+  )
+
+  const handleRemoveValidationRule = useCallback(
+    (ruleId) => {
+      if (!ruleId) {
+        return
+      }
+      setValidationRules((prev) => {
+        const base = Array.isArray(prev) ? prev.filter((rule) => rule.id !== ruleId) : []
+        schedulePersist({ validationRules: base })
+        return base
+      })
+      registerVersionEvent({
+        type: 'validation-rule-delete',
+        description: 'Validierungsregel entfernt',
+        meta: { ruleId }
+      })
+    },
+    [schedulePersist, registerVersionEvent]
+  )
+
+  const handleQuickAggregationConfigChange = useCallback(
+    (changes) => {
+      if (!changes || typeof changes !== 'object') {
+        return
+      }
+      setQuickAggregationConfig((prev) => {
+        const next = { ...prev, ...changes }
+        if (!Array.isArray(next.operations) || next.operations.length === 0) {
+          next.operations = ['sum']
+        }
+        schedulePersist({ quickAggregationConfig: next })
+        return next
+      })
+    },
+    [schedulePersist]
+  )
+
+  const runQuickAggregation = useCallback(() => {
+    const state = getImportState()
+    const rawRows = Array.isArray(state?.rows) ? state.rows : []
+    const sourceRows = quickAggregationConfig.scope === 'transformed' ? transformedRows || [] : rawRows
+    const valueColumns = Array.isArray(quickAggregationConfig.valueColumns)
+      ? quickAggregationConfig.valueColumns.filter((key) => typeof key === 'string' && key)
+      : []
+    const operations = Array.isArray(quickAggregationConfig.operations) && quickAggregationConfig.operations.length > 0
+      ? quickAggregationConfig.operations.filter((op) => ['sum', 'average', 'min', 'max', 'count'].includes(op))
+      : ['sum']
+
+    if (sourceRows.length === 0 || valueColumns.length === 0) {
+      setQuickAggregationResult({ type: 'empty', scope: quickAggregationConfig.scope, rows: [], columns: [] })
+      return { computed: false, reason: 'Keine Daten oder Zielspalten ausgewählt.' }
+    }
+
+    const ensureAccumulator = (container, columnKey) => {
+      if (!container[columnKey]) {
+        container[columnKey] = {
+          sum: 0,
+          count: 0,
+          min: Number.POSITIVE_INFINITY,
+          max: Number.NEGATIVE_INFINITY
+        }
+      }
+      return container[columnKey]
+    }
+
+    const applyValue = (acc, rawValue) => {
+      if (rawValue === null || rawValue === undefined) {
+        return
+      }
+      const text = typeof rawValue === 'string' ? rawValue.trim() : rawValue
+      if (text === '') {
+        return
+      }
+      const numeric = typeof text === 'number' ? text : Number(String(text).replace(',', '.'))
+      if (!Number.isFinite(numeric)) {
+        return
+      }
+      acc.sum += numeric
+      acc.count += 1
+      if (numeric < acc.min) acc.min = numeric
+      if (numeric > acc.max) acc.max = numeric
+    }
+
+    const groupByKey = typeof quickAggregationConfig.groupBy === 'string' && quickAggregationConfig.groupBy.trim()
+      ? quickAggregationConfig.groupBy.trim()
+      : ''
+
+    const operationLabelMap = {
+      sum: 'Summe',
+      average: 'Durchschnitt',
+      min: 'Minimum',
+      max: 'Maximum',
+      count: 'Anzahl'
+    }
+
+    if (groupByKey) {
+      const groups = new Map()
+      sourceRows.forEach((row) => {
+        const rawGroup = row?.[groupByKey]
+        const key = rawGroup === null || rawGroup === undefined || rawGroup === '' ? '(leer)' : String(rawGroup)
+        if (!groups.has(key)) {
+          groups.set(key, { label: rawGroup, counters: {} })
+        }
+        const entry = groups.get(key)
+        valueColumns.forEach((columnKey) => {
+          const accumulator = ensureAccumulator(entry.counters, columnKey)
+          applyValue(accumulator, row?.[columnKey])
+        })
+      })
+
+      const headers = [groupByKey]
+      valueColumns.forEach((columnKey) => {
+        operations.forEach((operation) => {
+          const label = `${columnKey} (${operationLabelMap[operation] || operation})`
+          headers.push(label)
+        })
+      })
+
+      const rows = Array.from(groups.entries()).map(([key, entry]) => {
+        const cells = [key]
+        valueColumns.forEach((columnKey) => {
+          const accumulator = entry.counters[columnKey] || { sum: 0, count: 0, min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY }
+          operations.forEach((operation) => {
+            let value = ''
+            if (operation === 'sum') {
+              value = accumulator.sum
+            } else if (operation === 'average') {
+              value = accumulator.count > 0 ? accumulator.sum / accumulator.count : ''
+            } else if (operation === 'min') {
+              value = accumulator.count > 0 ? accumulator.min : ''
+            } else if (operation === 'max') {
+              value = accumulator.count > 0 ? accumulator.max : ''
+            } else if (operation === 'count') {
+              value = accumulator.count
+            }
+            cells.push(value)
+          })
+        })
+        return cells
+      })
+
+      setQuickAggregationResult({
+        type: 'grouped',
+        scope: quickAggregationConfig.scope,
+        groupBy: groupByKey,
+        columns: headers,
+        rows,
+        operations,
+        valueColumns,
+        totalRows: sourceRows.length
+      })
+      registerVersionEvent({
+        type: 'quick-aggregation',
+        description: `Quick-Aggregation (${operations.join(', ')}) aktualisiert`,
+        meta: { scope: quickAggregationConfig.scope, groupBy: groupByKey, valueColumns }
+      })
+      return { computed: true, rows: rows.length }
+    }
+
+    const accumulatorByColumn = {}
+    sourceRows.forEach((row) => {
+      valueColumns.forEach((columnKey) => {
+        const accumulator = ensureAccumulator(accumulatorByColumn, columnKey)
+        applyValue(accumulator, row?.[columnKey])
+      })
+    })
+
+    const headers = ['Kennzahl']
+    operations.forEach((operation) => {
+      headers.push(operationLabelMap[operation] || operation)
+    })
+
+    const rows = valueColumns.map((columnKey) => {
+      const accumulator = accumulatorByColumn[columnKey] || { sum: 0, count: 0, min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY }
+      const cells = [columnKey]
+      operations.forEach((operation) => {
+        if (operation === 'sum') {
+          cells.push(accumulator.sum)
+        } else if (operation === 'average') {
+          cells.push(accumulator.count > 0 ? accumulator.sum / accumulator.count : '')
+        } else if (operation === 'min') {
+          cells.push(accumulator.count > 0 ? accumulator.min : '')
+        } else if (operation === 'max') {
+          cells.push(accumulator.count > 0 ? accumulator.max : '')
+        } else if (operation === 'count') {
+          cells.push(accumulator.count)
+        }
+      })
+      return cells
+    })
+
+    setQuickAggregationResult({
+      type: 'summary',
+      scope: quickAggregationConfig.scope,
+      columns: headers,
+      rows,
+      operations,
+      valueColumns,
+      totalRows: sourceRows.length
+    })
+    registerVersionEvent({
+      type: 'quick-aggregation',
+      description: `Quick-Aggregation (${operations.join(', ')}) aktualisiert`,
+      meta: { scope: quickAggregationConfig.scope, groupBy: groupByKey || null, valueColumns }
+    })
+    return { computed: true, rows: rows.length }
+  }, [getImportState, quickAggregationConfig, transformedRows, registerVersionEvent])
+
+  const handleQuickAggregationExport = useCallback(() => {
+    if (!quickAggregationResult || !Array.isArray(quickAggregationResult.rows) || quickAggregationResult.rows.length === 0) {
+      return { exported: false }
+    }
+    const data = [quickAggregationResult.columns, ...quickAggregationResult.rows]
+    const csv = Papa.unparse(data)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `aggregation-${quickAggregationResult.scope || 'raw'}-${Date.now()}.csv`
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    URL.revokeObjectURL(url)
+    return { exported: true }
+  }, [quickAggregationResult])
+
+  useEffect(() => {
+    if (!Array.isArray(validationRules) || validationRules.length === 0) {
+      if (validationComputed.issues.length > 0 || validationComputed.summary.length > 0) {
+        setValidationComputed({ issues: [], summary: [] })
+      }
+      return
+    }
+
+    const state = getImportState()
+    const rawRows = Array.isArray(state?.rows) ? state.rows : []
+    const transformed = Array.isArray(transformedRows) ? transformedRows : []
+    const columnSet = new Set(columns.map((column) => column.key))
+    const issues = []
+    const summaryMap = new Map()
+
+    validationRules.forEach((rule) => {
+      if (!rule || !rule.id) {
+        return
+      }
+      const columnKey = typeof rule.column === 'string' ? rule.column : ''
+      if (!columnKey || !columnSet.has(columnKey)) {
+        return
+      }
+
+      const scope = rule.scope === 'transformed' ? 'transformed' : 'raw'
+      const sourceRows = scope === 'transformed' ? transformed : rawRows
+      if (!Array.isArray(sourceRows) || sourceRows.length === 0) {
+        return
+      }
+
+      const summaryEntry = summaryMap.get(rule.id) || {
+        id: rule.id,
+        name: rule.name || 'Regel',
+        column: columnKey,
+        scope,
+        failures: 0,
+        total: sourceRows.length
+      }
+
+      let evaluator = null
+      if (rule.type === 'regex' && rule.pattern) {
+        try {
+          evaluator = new RegExp(rule.pattern, rule.flags || '')
+        } catch (error) {
+          issues.push({
+            id: `${rule.id}-regex`,
+            ruleId: rule.id,
+            columnKey,
+            scope,
+            rowIndex: -1,
+            message: `Ungültiges Regex-Muster: ${(error && error.message) || 'Fehler'}`
+          })
+          summaryEntry.failures += sourceRows.length
+          summaryMap.set(rule.id, summaryEntry)
+          return
+        }
+      }
+
+      let customEvaluator = null
+      if (rule.type === 'custom' && typeof rule.expression === 'string' && rule.expression.trim()) {
+        try {
+          customEvaluator = new Function('value', 'row', rule.expression)
+        } catch (error) {
+          issues.push({
+            id: `${rule.id}-custom`,
+            ruleId: rule.id,
+            columnKey,
+            scope,
+            rowIndex: -1,
+            message: `Ausdruck kann nicht ausgewertet werden: ${(error && error.message) || 'Fehler'}`
+          })
+          summaryEntry.failures += sourceRows.length
+          summaryMap.set(rule.id, summaryEntry)
+          return
+        }
+      }
+
+      const minValue = rule.min !== undefined ? Number(rule.min) : null
+      const maxValue = rule.max !== undefined ? Number(rule.max) : null
+
+      sourceRows.forEach((row, rowIndex) => {
+        const value = row?.[columnKey]
+        let isValid = true
+        let message = ''
+
+        switch (rule.type) {
+          case 'required':
+            isValid = !isCellValueEmpty(value)
+            if (!isValid) message = rule.message || 'Pflichtfeld darf nicht leer sein.'
+            break
+          case 'numberRange': {
+            const numeric = Number(value)
+            if (!Number.isFinite(numeric)) {
+              isValid = false
+              message = rule.message || 'Wert muss eine Zahl sein.'
+              break
+            }
+            if (minValue !== null && Number.isFinite(minValue) && numeric < minValue) {
+              isValid = false
+              message = rule.message || `Wert muss ≥ ${minValue} sein.`
+              break
+            }
+            if (maxValue !== null && Number.isFinite(maxValue) && numeric > maxValue) {
+              isValid = false
+              message = rule.message || `Wert muss ≤ ${maxValue} sein.`
+            }
+            break
+          }
+          case 'regex':
+            isValid = evaluator ? evaluator.test(String(value ?? '')) : true
+            if (!isValid) {
+              message = rule.message || 'Wert erfüllt das Muster nicht.'
+            }
+            break
+          case 'custom':
+            if (customEvaluator) {
+              try {
+                isValid = Boolean(customEvaluator(value, row))
+                if (!isValid) {
+                  message = rule.message || 'Individuelle Regel verletzt.'
+                }
+              } catch (error) {
+                isValid = false
+                message = `Regel konnte nicht berechnet werden: ${(error && error.message) || 'Fehler'}`
+              }
+            }
+            break
+          default:
+            break
+        }
+
+        if (!isValid) {
+          summaryEntry.failures += 1
+          issues.push({
+            id: `${rule.id}-${scope}-${rowIndex}`,
+            ruleId: rule.id,
+            columnKey,
+            scope,
+            rowIndex,
+            value,
+            message
+          })
+        }
+      })
+
+      summaryMap.set(rule.id, summaryEntry)
+    })
+
+    const summary = Array.from(summaryMap.values())
+    setValidationComputed({ issues, summary })
+  }, [validationRules, columns, getImportState, transformedRows])
+
+  const handleValidationIssueFocus = useCallback(
+    (issue) => {
+      if (!issue) {
+        return
+      }
+      const { rowIndex, columnKey, scope } = issue
+      if (!Number.isInteger(rowIndex) || rowIndex < 0 || !columnKey) {
+        return
+      }
+
+      const entries = scope === 'transformed' ? transformedPreviewEntries : previewEntries
+      const rowPosition = entries.findIndex((entry) => entry.index === rowIndex)
+      if (rowPosition === -1) {
+        return
+      }
+
+      const target = createCellTarget(rowIndex, rowPosition, columnKey)
+      setSelectionState({ anchor: target, focus: target })
+      pendingFocusRef.current = { rowIndex, columnKey }
+      setActiveTab(scope === 'transformed' ? 'transformations' : 'mapping')
+    },
+    [previewEntries, transformedPreviewEntries, createCellTarget]
+  )
+
+  const recentVersions = useMemo(() => {
+    if (!Array.isArray(versionTimeline)) {
+      return []
+    }
+    return versionTimeline.slice(-10).reverse()
+  }, [versionTimeline])
+
+  const handleVersionSelect = useCallback(
+    (versionId) => {
+      if (typeof internalSetActiveVersionId === 'function') {
+        internalSetActiveVersionId(versionId)
+      }
+    },
+    [internalSetActiveVersionId]
+  )
 
   const handleOpenFindReplace = useCallback(() => {
     if (!canOpenFindReplace) {
@@ -2051,6 +2829,11 @@ export default function CsvWorkbench({
         }
       ]
       setIsFindReplaceOpen(false)
+        registerVersionEvent({
+          type: 'find-replace',
+          description: `Suchen & Ersetzen: ${updates.length} Zellen angepasst`,
+          meta: { scope: targetScope, updatedCells: updates.length, replacement }
+        })
       return { applied: true, updatedCells: updates.length }
     },
     [
@@ -2061,7 +2844,8 @@ export default function CsvWorkbench({
       searchColumns,
       searchMode,
       searchQuery,
-      updateCell
+        updateCell,
+        registerVersionEvent
     ]
   )
 
@@ -2191,6 +2975,14 @@ export default function CsvWorkbench({
     }
     return result
   }, [internalUndoLastManualEdit, schedulePersist])
+
+  const redoLastManualEdit = useCallback(() => {
+    const result = internalRedoLastManualEdit()
+    if (result?.redone) {
+      schedulePersist()
+    }
+    return result
+  }, [internalRedoLastManualEdit, schedulePersist])
 
   const handleResetWorkbench = useCallback(() => {
     reset()
@@ -3882,31 +4674,75 @@ export default function CsvWorkbench({
                             <span>Ersetzen…</span>
                           </button>
                         </div>
-                        {(manualEditCount > 0 || canUndoManualEdit) && (
-                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
-                            <span
-                              className={`rounded-md border px-2 py-1 ${
-                                manualEditCount > 0
-                                  ? 'border-dark-accent1/40 bg-dark-accent1/10 text-dark-accent1'
-                                  : 'border-gray-700 text-dark-textGray/70'
-                              }`}
-                            >
-                              {manualEditCount} manuelle Änderung{manualEditCount === 1 ? '' : 'en'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={undoLastManualEdit}
-                              disabled={!canUndoManualEdit}
-                              className={`rounded-md border px-2 py-1 transition-colors ${
-                                canUndoManualEdit
-                                  ? 'border-dark-accent1/60 text-dark-textLight hover:border-dark-accent1 hover:text-dark-textLight'
-                                  : 'cursor-not-allowed border-gray-700 text-dark-textGray'
-                              }`}
-                            >
-                              Rückgängig
-                            </button>
-                          </div>
-                        )}
+                          {(manualEditCount > 0 || canUndoManualEdit || canRedoManualEdit) && (
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-dark-textGray">
+                              <span
+                                className={`rounded-md border px-2 py-1 ${
+                                  manualEditCount > 0
+                                    ? 'border-dark-accent1/40 bg-dark-accent1/10 text-dark-accent1'
+                                    : 'border-gray-700 text-dark-textGray/70'
+                                }`}
+                              >
+                                {manualEditCount} manuelle Änderung{manualEditCount === 1 ? '' : 'en'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={undoLastManualEdit}
+                                disabled={!canUndoManualEdit}
+                                className={`rounded-md border px-2 py-1 transition-colors ${
+                                  canUndoManualEdit
+                                    ? 'border-dark-accent1/60 text-dark-textLight hover:border-dark-accent1 hover:text-dark-textLight'
+                                    : 'cursor-not-allowed border-gray-700 text-dark-textGray'
+                                }`}
+                              >
+                                Rückgängig
+                              </button>
+                              <button
+                                type="button"
+                                onClick={redoLastManualEdit}
+                                disabled={!canRedoManualEdit}
+                                className={`rounded-md border px-2 py-1 transition-colors ${
+                                  canRedoManualEdit
+                                    ? 'border-dark-accent1/60 text-dark-textLight hover:border-dark-accent1 hover:text-dark-textLight'
+                                    : 'cursor-not-allowed border-gray-700 text-dark-textGray'
+                                }`}
+                              >
+                                Wiederholen
+                              </button>
+                            </div>
+                          )}
+                          {recentVersions.length > 0 && (
+                            <div className="mt-2 w-full rounded-md border border-gray-800 bg-dark-bg/40 p-3 text-[11px] text-dark-textGray">
+                              <div className="mb-1 flex items-center justify-between">
+                                <span className="font-semibold text-dark-textLight">Versionsverlauf</span>
+                                <span>{recentVersions.length} Ereignisse</span>
+                              </div>
+                              <ul className="space-y-1">
+                                {recentVersions.map((entry) => {
+                                  const isActive = activeVersionId === entry.id
+                                  const formatted = entry.timestamp ? new Date(entry.timestamp).toLocaleString('de-DE') : ''
+                                  return (
+                                    <li
+                                      key={entry.id}
+                                      className={`flex items-center justify-between gap-2 rounded px-2 py-1 ${
+                                        isActive ? 'bg-dark-accent1/10 text-dark-textLight' : 'hover:bg-dark-secondary/40'
+                                      }`}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => handleVersionSelect(entry.id)}
+                                        className={`flex-1 text-left ${isActive ? 'text-dark-textLight' : 'text-dark-textGray'}`}
+                                      >
+                                        <span className="block text-[11px] font-medium text-dark-textLight">{entry.description}</span>
+                                        {formatted && <span className="text-[10px] text-dark-textGray">{formatted}</span>}
+                                      </button>
+                                      <span className="text-[10px] uppercase text-dark-textGray/80">{entry.type || 'Änderung'}</span>
+                                    </li>
+                                  )
+                                })}
+                              </ul>
+                            </div>
+                          )}
                         {searchError && (
                           <p className="text-[11px] text-red-300">Regex-Fehler: {searchError}</p>
                         )}
@@ -4395,33 +5231,54 @@ export default function CsvWorkbench({
                                 placeholder={activeCellLabel ? `Formel für ${activeCellLabel}` : 'Formel eingeben'}
                                 className="flex-1 rounded-md border border-gray-700 bg-dark-secondary px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
                               />
-                              {suggestionsOpen && (
-                                <div className="absolute left-0 right-0 z-50 mt-1 max-h-52 overflow-auto rounded-md border border-gray-700 bg-dark-secondary shadow-lg">
-                                  {formulaSuggestions.map((suggestion, index) => {
-                                    const isActive = index === highlightedSuggestionIndex
-                                    return (
-                                      <button
-                                        key={`formula-suggestion-${suggestion.name}`}
-                                        type="button"
-                                        className={`flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-xs transition-colors ${
-                                          isActive
-                                            ? 'bg-dark-accent1/20 text-dark-textLight'
-                                            : 'text-dark-textGray hover:bg-dark-secondary/60 hover:text-dark-textLight'
-                                        }`}
-                                        onMouseEnter={() => setActiveSuggestionIndex(index)}
-                                        onMouseDown={(event) => {
-                                          event.preventDefault()
-                                          applyFormulaSuggestion(suggestion)
-                                        }}
-                                      >
-                                        <span className="font-semibold text-dark-textLight">{suggestion.name}</span>
-                                        <span className="font-mono text-[11px] text-dark-textLight/70">{`=${suggestion.syntax}`}</span>
-                                        <span className="text-[11px] text-dark-textGray/80">{suggestion.description}</span>
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              )}
+                                {suggestionsOpen && (
+                                  <div className="absolute left-0 right-0 z-50 mt-1 max-h-52 overflow-auto rounded-md border border-gray-700 bg-dark-secondary shadow-lg">
+                                    {suggestionDataset.items.map((suggestion, index) => {
+                                      const isActive = index === highlightedSuggestionIndex
+                                      if (suggestionDataset.type === 'formula') {
+                                        return (
+                                          <button
+                                            key={`formula-suggestion-${suggestion.name}`}
+                                            type="button"
+                                            className={`flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-xs transition-colors ${
+                                              isActive
+                                                ? 'bg-dark-accent1/20 text-dark-textLight'
+                                                : 'text-dark-textGray hover:bg-dark-secondary/60 hover:text-dark-textLight'
+                                            }`}
+                                            onMouseEnter={() => setActiveSuggestionIndex(index)}
+                                            onMouseDown={(event) => {
+                                              event.preventDefault()
+                                              applySuggestion(suggestion)
+                                            }}
+                                          >
+                                            <span className="font-semibold text-dark-textLight">{suggestion.name}</span>
+                                            <span className="font-mono text-[11px] text-dark-textLight/70">{`=${suggestion.syntax}`}</span>
+                                            <span className="text-[11px] text-dark-textGray/80">{suggestion.description}</span>
+                                          </button>
+                                        )
+                                      }
+                                      return (
+                                        <button
+                                          key={`value-suggestion-${suggestion.label}-${index}`}
+                                          type="button"
+                                          className={`flex w-full items-center justify-between px-3 py-2 text-left text-xs transition-colors ${
+                                            isActive
+                                              ? 'bg-dark-accent1/20 text-dark-textLight'
+                                              : 'text-dark-textGray hover:bg-dark-secondary/60 hover:text-dark-textLight'
+                                          }`}
+                                          onMouseEnter={() => setActiveSuggestionIndex(index)}
+                                          onMouseDown={(event) => {
+                                            event.preventDefault()
+                                            applySuggestion(suggestion)
+                                          }}
+                                        >
+                                          <span className="text-dark-textLight">{suggestion.label}</span>
+                                          <span className="text-[10px] uppercase text-dark-textGray/70">Wert</span>
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                )}
                               {currentFormulaHelp && (
                                 <div className="absolute left-full top-0 hidden w-64 translate-x-3 sm:block">
                                   <div className="rounded-md border border-gray-700 bg-dark-secondary/70 p-3 text-xs text-dark-textGray">
@@ -4808,6 +5665,35 @@ export default function CsvWorkbench({
                         onChangeFilter={handleFilterChange}
                         onRemoveFilter={handleRemoveFilter}
                       />
+                        <SavedViewsPanel
+                          views={savedViews}
+                          activeViewId={activeSavedViewId}
+                          draftName={savedViewDraftName}
+                          onDraftNameChange={setSavedViewDraftName}
+                          onSave={handleSaveCurrentView}
+                          onApply={handleApplySavedView}
+                          onDelete={handleDeleteSavedView}
+                          onRename={handleRenameSavedView}
+                        />
+                        <ValidationRulesPanel
+                          columns={columns}
+                          rules={validationRules}
+                          issues={validationComputed.issues}
+                          summary={validationComputed.summary}
+                          onAddRule={handleAddValidationRule}
+                          onUpdateRule={handleUpdateValidationRule}
+                          onRemoveRule={handleRemoveValidationRule}
+                          onFocusIssue={handleValidationIssueFocus}
+                        />
+                        <QuickAggregationPanel
+                          config={quickAggregationConfig}
+                          numericColumns={numericColumns}
+                          textColumns={textColumns}
+                          result={quickAggregationResult}
+                          onConfigChange={handleQuickAggregationConfigChange}
+                          onRun={runQuickAggregation}
+                          onExport={handleQuickAggregationExport}
+                        />
 
                     <div className="space-y-3 rounded-lg border border-gray-700 bg-dark-bg/40 p-4">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

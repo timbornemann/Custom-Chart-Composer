@@ -39,7 +39,7 @@ const createDefaultTransformations = () => ({
   },
   grouping: {
     enabled: false,
-    column: '',
+    columns: [],
     customGroups: [],
     fallbackLabel: 'Andere'
   },
@@ -55,12 +55,37 @@ const mergeTransformationsWithDefaults = (transformations) => {
   }
 
   const defaults = createDefaultTransformations()
+  const rawGrouping = transformations.grouping || {}
+  const mergedGrouping = { ...defaults.grouping, ...rawGrouping }
+  const legacyColumn = typeof rawGrouping.column === 'string' ? rawGrouping.column : null
+  const normalizedColumns = Array.isArray(rawGrouping.columns)
+    ? rawGrouping.columns
+    : []
+  const columnsWithLegacy = normalizedColumns.length === 0 && legacyColumn ? [legacyColumn] : normalizedColumns
+  const dedupedColumns = []
+  const seenColumns = new Set()
+  columnsWithLegacy.forEach((column) => {
+    if (column === null || column === undefined) {
+      return
+    }
+    const normalized = String(column).trim()
+    if (!normalized || seenColumns.has(normalized)) {
+      return
+    }
+    seenColumns.add(normalized)
+    dedupedColumns.push(normalized)
+  })
+  mergedGrouping.columns = dedupedColumns
+  if (Object.prototype.hasOwnProperty.call(mergedGrouping, 'column')) {
+    delete mergedGrouping.column
+  }
+
   return {
     ...defaults,
     ...transformations,
     pivot: { ...defaults.pivot, ...(transformations.pivot || {}) },
     unpivot: { ...defaults.unpivot, ...(transformations.unpivot || {}) },
-    grouping: { ...defaults.grouping, ...(transformations.grouping || {}) },
+    grouping: mergedGrouping,
     aggregations: { ...defaults.aggregations, ...(transformations.aggregations || {}) }
   }
 }
@@ -1449,14 +1474,27 @@ const prepareGroupingHelpers = (grouping) => {
       valueSet: new Set(group.values.map((value) => value.toLowerCase()))
     }))
 
-  const findGroup = (value) => {
-    const normalized = normalizeLabel(value)
-    if (!normalized) {
+  const findGroup = (value, options = {}) => {
+    const { isEmpty = false, displayLabel = '' } = options
+
+    if (isEmpty) {
       return { label: fallbackLabel, matched: false, isEmpty: true }
     }
-    if (normalizedGroups.length === 0) {
-      return { label: normalized, matched: true, isEmpty: false }
+
+    const normalized = normalizeLabel(value)
+    const effectiveLabel = displayLabel || normalized
+    if (!normalized && !effectiveLabel) {
+      return { label: fallbackLabel, matched: false, isEmpty: true }
     }
+
+    if (normalizedGroups.length === 0) {
+      return {
+        label: effectiveLabel || fallbackLabel,
+        matched: true,
+        isEmpty: false
+      }
+    }
+
     const lower = normalized.toLowerCase()
     for (const group of normalizedGroups) {
       if (group.valueSet.has(lower)) {
@@ -1477,10 +1515,36 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
   const labelKey = mapping?.label
   const valueColumns = mapping?.valueColumns || []
   const datasetKey = mapping?.datasetLabel
-  const groupColumn = grouping?.column || labelKey
+  const configuredColumns = Array.isArray(grouping?.columns)
+    ? grouping.columns
+        .filter((column) => typeof column === 'string')
+        .map((column) => column.trim())
+        .filter(Boolean)
+    : []
+  const legacyColumn = grouping?.column && typeof grouping.column === 'string'
+    ? grouping.column.trim()
+    : ''
+  const groupColumns = configuredColumns.length > 0
+    ? configuredColumns
+    : legacyColumn
+      ? [legacyColumn]
+      : labelKey
+        ? [labelKey]
+        : []
   const helpers = prepareGroupingHelpers(grouping)
   let unmatchedCount = 0
   let emptyCount = 0
+
+  const buildGroupKeyInfo = (row) => {
+    if (groupColumns.length === 0) {
+      return { value: '', displayLabel: '', isEmpty: true }
+    }
+    const normalizedParts = groupColumns.map((column) => normalizeLabel(row[column]))
+    const isEmpty = normalizedParts.every((part) => !part)
+    const displayParts = normalizedParts.map((part) => (part ? part : '∅'))
+    const displayLabel = displayParts.join(' | ')
+    return { value: displayLabel, displayLabel, isEmpty }
+  }
 
   const resolveOperation = (column) => {
     const perColumn = aggregations?.perColumn || {}
@@ -1501,14 +1565,15 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
     return Array.isArray(selected) ? selected : [selected]
   }
 
-  if (!groupColumn) {
+  if (groupColumns.length === 0) {
     return {
       rows: rows.map((row) => ({ ...row })),
       info: {
         aggregatedFrom: rows.length,
         aggregatedTo: rows.length,
         unmatchedCount,
-        emptyCount
+        emptyCount,
+        groupingColumns: []
       }
     }
   }
@@ -1518,7 +1583,11 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
     const groups = new Map()
 
     rows.forEach((row) => {
-      const groupInfo = helpers.findGroup(row[groupColumn])
+      const keyInfo = buildGroupKeyInfo(row)
+      const groupInfo = helpers.findGroup(keyInfo.value, {
+        isEmpty: keyInfo.isEmpty,
+        displayLabel: keyInfo.displayLabel
+      })
       if (!groupInfo.matched) {
         if (groupInfo.isEmpty) {
           emptyCount += 1
@@ -1593,7 +1662,8 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
         aggregatedFrom: rows.length,
         aggregatedTo: aggregatedRows.length,
         unmatchedCount,
-        emptyCount
+        emptyCount,
+        groupingColumns: [...groupColumns]
       }
     }
   }
@@ -1601,7 +1671,11 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
   const groups = new Map()
 
   rows.forEach((row) => {
-    const groupInfo = helpers.findGroup(row[groupColumn])
+    const keyInfo = buildGroupKeyInfo(row)
+    const groupInfo = helpers.findGroup(keyInfo.value, {
+      isEmpty: keyInfo.isEmpty,
+      displayLabel: keyInfo.displayLabel
+    })
     if (!groupInfo.matched) {
       if (groupInfo.isEmpty) {
         emptyCount += 1
@@ -1678,7 +1752,8 @@ const aggregateRows = (rows, mapping, grouping, aggregations) => {
       aggregatedFrom: rows.length,
       aggregatedTo: aggregatedRows.length,
       unmatchedCount,
-      emptyCount
+      emptyCount,
+      groupingColumns: [...groupColumns]
     }
   }
 }
@@ -2278,6 +2353,7 @@ const applyTransformations = (rows, mapping, transformations) => {
       fillValueUsed: Object.prototype.hasOwnProperty.call(pivotConfig || {}, 'fillValue'),
       prefix: pivotConfig?.prefix || ''
     },
+    groupingColumns: [],
     unpivot: {
       enabled: !!unpivotConfig?.enabled,
       idColumns: Array.isArray(unpivotConfig?.idColumns) ? [...unpivotConfig.idColumns] : [],
@@ -2350,6 +2426,7 @@ const applyTransformations = (rows, mapping, transformations) => {
     meta.aggregatedTo = info.aggregatedTo
     meta.unmatchedCount = info.unmatchedCount
     meta.emptyCount = info.emptyCount
+    meta.groupingColumns = Array.isArray(info.groupingColumns) ? [...info.groupingColumns] : []
 
     if (info.aggregatedTo < info.aggregatedFrom) {
       warnings.push(
@@ -4713,8 +4790,42 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         }
       })
 
-      const nextGroupingColumn = prev.grouping.enabled ? mapping.label || '' : prev.grouping.column
-      const groupingChanged = prev.grouping.enabled && prev.grouping.column !== nextGroupingColumn
+      const existingGroupingColumns = Array.isArray(prev.grouping?.columns)
+        ? prev.grouping.columns
+            .filter((column) => typeof column === 'string')
+            .map((column) => column.trim())
+            .filter(Boolean)
+        : []
+      let nextGroupingColumns = existingGroupingColumns
+      let groupingChanged = false
+
+      if (prev.grouping.enabled) {
+        const legacyColumn = prev.grouping?.column && typeof prev.grouping.column === 'string'
+          ? prev.grouping.column.trim()
+          : ''
+        if (existingGroupingColumns.length === 0) {
+          const fallback = legacyColumn || mapping.label || ''
+          if (fallback) {
+            nextGroupingColumns = [fallback]
+            groupingChanged = true
+          }
+        } else if (legacyColumn && !existingGroupingColumns.includes(legacyColumn)) {
+          // Preserve legacy column if it existed but was not migrated yet
+          nextGroupingColumns = [legacyColumn, ...existingGroupingColumns]
+          groupingChanged = true
+        }
+        if (groupingChanged) {
+          const deduped = []
+          const seen = new Set()
+          nextGroupingColumns.forEach((column) => {
+            if (!seen.has(column)) {
+              seen.add(column)
+              deduped.push(column)
+            }
+          })
+          nextGroupingColumns = deduped
+        }
+      }
 
       if (!changed && !groupingChanged) {
         return prev
@@ -4722,7 +4833,15 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
 
       return {
         ...prev,
-        grouping: groupingChanged ? { ...prev.grouping, column: nextGroupingColumn } : prev.grouping,
+        grouping: groupingChanged
+          ? (() => {
+              const updated = { ...prev.grouping, columns: nextGroupingColumns }
+              if (Object.prototype.hasOwnProperty.call(updated, 'column')) {
+                delete updated.column
+              }
+              return updated
+            })()
+          : prev.grouping,
         aggregations: changed
           ? {
               ...prev.aggregations,
@@ -5039,9 +5158,30 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
           errors.push('Aktivierte Gruppierung benötigt eine ausgewählte Beschriftungs-Spalte.')
         }
       }
-      if (transformations.grouping.column && !columnKeys.has(transformations.grouping.column)) {
-        errors.push('Die ausgewählte Gruppierungs-Spalte ist nicht mehr verfügbar.')
+      const groupingColumns = Array.isArray(transformations.grouping?.columns)
+        ? transformations.grouping.columns
+            .filter((column) => typeof column === 'string')
+            .map((column) => column.trim())
+            .filter(Boolean)
+        : []
+      const legacyGroupingColumn = transformations.grouping?.column && typeof transformations.grouping.column === 'string'
+        ? transformations.grouping.column.trim()
+        : ''
+      const effectiveGroupingColumns = groupingColumns.length > 0
+        ? groupingColumns
+        : legacyGroupingColumn
+          ? [legacyGroupingColumn]
+          : []
+
+      if (effectiveGroupingColumns.length === 0) {
+        errors.push('Aktivierte Gruppierung benötigt mindestens eine Gruppierungs-Spalte.')
       }
+
+      effectiveGroupingColumns.forEach((columnKey) => {
+        if (!columnKeys.has(columnKey)) {
+          errors.push('Die ausgewählte Gruppierungs-Spalte ist nicht mehr verfügbar.')
+        }
+      })
     }
 
     if (errors.length > 0) {

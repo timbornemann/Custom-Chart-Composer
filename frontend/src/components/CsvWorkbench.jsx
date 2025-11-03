@@ -1022,6 +1022,7 @@ export default function CsvWorkbench({
   const formulaInputRef = useRef(null)
   const formulaEditingRef = useRef(false)
   const [duplicateActionFeedback, setDuplicateActionFeedback] = useState(null)
+  const [groupingColumnToAdd, setGroupingColumnToAdd] = useState('')
   const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1)
   const searchMatchSignatureRef = useRef('')
   const formulaMetadataByName = useMemo(() => {
@@ -3679,7 +3680,31 @@ export default function CsvWorkbench({
   const filters = transformations.filters || []
   const grouping = transformations.grouping || {}
   const aggregations = transformations.aggregations || {}
+  const selectedGroupingColumns = useMemo(
+    () =>
+      Array.isArray(grouping.columns)
+        ? grouping.columns
+            .filter((column) => typeof column === 'string')
+            .map((column) => column.trim())
+            .filter(Boolean)
+        : [],
+    [grouping.columns]
+  )
+  const availableGroupingOptions = useMemo(() => {
+    const selectedSet = new Set(selectedGroupingColumns)
+    return groupingColumns.filter((column) => !selectedSet.has(column.key))
+  }, [groupingColumns, selectedGroupingColumns])
   const valueRules = transformations.valueRules || []
+
+  useEffect(() => {
+    if (!groupingColumnToAdd) {
+      return
+    }
+    const stillAvailable = availableGroupingOptions.some((option) => option.key === groupingColumnToAdd)
+    if (!stillAvailable) {
+      setGroupingColumnToAdd('')
+    }
+  }, [groupingColumnToAdd, availableGroupingOptions])
   const pivotConfig = { ...DEFAULT_PIVOT_CONFIG, ...(transformations.pivot || {}) }
   const unpivotConfig = { ...DEFAULT_UNPIVOT_CONFIG, ...(transformations.unpivot || {}) }
   const pivotHasFillValue = Object.prototype.hasOwnProperty.call(transformations.pivot || {}, 'fillValue')
@@ -3911,24 +3936,32 @@ export default function CsvWorkbench({
   }
 
   const handleToggleGrouping = (enabled) => {
-    updateTransformations((prev) => ({
-      ...prev,
-      grouping: {
-        ...prev.grouping,
-        enabled,
-        column: enabled ? prev.grouping.column || mapping.label || '' : prev.grouping.column
+    updateTransformations((prev) => {
+      const existingColumns = Array.isArray(prev.grouping?.columns)
+        ? prev.grouping.columns
+            .filter((column) => typeof column === 'string')
+            .map((column) => column.trim())
+            .filter(Boolean)
+        : []
+      const legacyColumn = prev.grouping?.column && typeof prev.grouping.column === 'string'
+        ? prev.grouping.column.trim()
+        : ''
+      let nextColumns = existingColumns
+      if (enabled) {
+        if (existingColumns.length === 0) {
+          const fallback = legacyColumn || mapping.label || ''
+          nextColumns = fallback ? [fallback] : []
+        }
       }
-    }))
-  }
-
-  const handleGroupingColumnChange = (column) => {
-    updateTransformations((prev) => ({
-      ...prev,
-      grouping: {
-        ...prev.grouping,
-        column
+      const updatedGrouping = { ...prev.grouping, enabled, columns: nextColumns }
+      if (Object.prototype.hasOwnProperty.call(updatedGrouping, 'column')) {
+        delete updatedGrouping.column
       }
-    }))
+      return {
+        ...prev,
+        grouping: updatedGrouping
+      }
+    })
   }
 
   const handleGroupingFallbackChange = (fallbackLabel) => {
@@ -3939,6 +3972,85 @@ export default function CsvWorkbench({
         fallbackLabel
       }
     }))
+  }
+
+  const handleAddGroupingColumn = (column) => {
+    const normalized = typeof column === 'string' ? column.trim() : ''
+    if (!normalized) {
+      return
+    }
+    updateTransformations((prev) => {
+      const existing = Array.isArray(prev.grouping?.columns)
+        ? prev.grouping.columns
+            .filter((value) => typeof value === 'string')
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : []
+      if (existing.includes(normalized)) {
+        return prev
+      }
+      const updatedGrouping = { ...prev.grouping, columns: [...existing, normalized] }
+      if (Object.prototype.hasOwnProperty.call(updatedGrouping, 'column')) {
+        delete updatedGrouping.column
+      }
+      return {
+        ...prev,
+        grouping: updatedGrouping
+      }
+    })
+  }
+
+  const handleRemoveGroupingColumn = (index) => {
+    updateTransformations((prev) => {
+      const existing = Array.isArray(prev.grouping?.columns)
+        ? prev.grouping.columns
+            .filter((value) => typeof value === 'string')
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : []
+      if (index < 0 || index >= existing.length) {
+        return prev
+      }
+      const next = existing.filter((_, idx) => idx !== index)
+      const updatedGrouping = { ...prev.grouping, columns: next }
+      if (Object.prototype.hasOwnProperty.call(updatedGrouping, 'column')) {
+        delete updatedGrouping.column
+      }
+      return {
+        ...prev,
+        grouping: updatedGrouping
+      }
+    })
+  }
+
+  const handleMoveGroupingColumn = (index, direction) => {
+    updateTransformations((prev) => {
+      const existing = Array.isArray(prev.grouping?.columns)
+        ? prev.grouping.columns
+            .filter((value) => typeof value === 'string')
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : []
+      const targetIndex = index + direction
+      if (index < 0 || index >= existing.length || targetIndex < 0 || targetIndex >= existing.length) {
+        return prev
+      }
+      const next = [...existing]
+      const [moved] = next.splice(index, 1)
+      next.splice(targetIndex, 0, moved)
+      const isSameOrder = next.length === existing.length && next.every((value, idx) => value === existing[idx])
+      if (isSameOrder) {
+        return prev
+      }
+      const updatedGrouping = { ...prev.grouping, columns: next }
+      if (Object.prototype.hasOwnProperty.call(updatedGrouping, 'column')) {
+        delete updatedGrouping.column
+      }
+      return {
+        ...prev,
+        grouping: updatedGrouping
+      }
+    })
   }
 
   const handleAddGroup = () => {
@@ -4052,6 +4164,9 @@ export default function CsvWorkbench({
     filteredOut: transformationMeta?.filteredOut ?? 0,
     aggregatedFrom: transformationMeta?.aggregatedFrom ?? 0,
     aggregatedTo: transformationMeta?.aggregatedTo ?? 0,
+    groupingColumns: Array.isArray(transformationMeta?.groupingColumns)
+      ? transformationMeta.groupingColumns.filter((column) => typeof column === 'string' && column.trim())
+      : [],
     pivot: pivotMeta,
     unpivot: unpivotMeta
   }
@@ -6327,22 +6442,80 @@ export default function CsvWorkbench({
                           <div className="grid gap-3 md:grid-cols-2">
                             <div>
                               <label className="mb-1 block text-[11px] uppercase tracking-wide text-dark-textGray">
-                                Gruppieren nach
+                                Gruppieren nach Spalten
                               </label>
-                              <select
-                                value={grouping.column || mapping.label || ''}
-                                onChange={(event) => handleGroupingColumnChange(event.target.value)}
-                                className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                              >
-                                <option value="">Beschriftung verwenden</option>
-                                {groupingColumns.map((column) => (
-                                  <option key={column.key} value={column.key}>
-                                    {column.key}
-                                  </option>
-                                ))}
-                              </select>
+                              <div className="space-y-2">
+                                {selectedGroupingColumns.length === 0 ? (
+                                  <p className="text-[11px] text-dark-textGray">
+                                    Keine Spalte ausgewählt. Fügen Sie mindestens eine Spalte hinzu, um Gruppen zu bilden.
+                                  </p>
+                                ) : (
+                                  <ul className="space-y-1">
+                                    {selectedGroupingColumns.map((columnKey, index) => (
+                                      <li key={`${columnKey}-${index}`} className="flex items-center gap-2">
+                                        <span className="flex-1 truncate rounded-md border border-gray-700 bg-dark-secondary/40 px-2 py-1.5 text-sm text-dark-textLight">
+                                          {columnKey}
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleMoveGroupingColumn(index, -1)}
+                                            disabled={index === 0}
+                                            className="rounded-md border border-gray-700 px-2 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-accent1 disabled:cursor-not-allowed disabled:border-gray-700 disabled:text-dark-textGray"
+                                            title="Nach oben verschieben"
+                                          >
+                                            ↑
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleMoveGroupingColumn(index, 1)}
+                                            disabled={index === selectedGroupingColumns.length - 1}
+                                            className="rounded-md border border-gray-700 px-2 py-1 text-[11px] text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-accent1 disabled:cursor-not-allowed disabled:border-gray-700 disabled:text-dark-textGray"
+                                            title="Nach unten verschieben"
+                                          >
+                                            ↓
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveGroupingColumn(index)}
+                                            className="rounded-md border border-red-600 px-2 py-1 text-[11px] text-red-200 transition-colors hover:bg-red-900/40"
+                                          >
+                                            Entfernen
+                                          </button>
+                                        </div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                  <select
+                                    value={groupingColumnToAdd}
+                                    onChange={(event) => setGroupingColumnToAdd(event.target.value)}
+                                    disabled={availableGroupingOptions.length === 0}
+                                    className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none disabled:cursor-not-allowed disabled:text-dark-textGray"
+                                  >
+                                    <option value="">Spalte auswählen…</option>
+                                    {availableGroupingOptions.map((column) => (
+                                      <option key={column.key} value={column.key}>
+                                        {column.key}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleAddGroupingColumn(groupingColumnToAdd)
+                                      setGroupingColumnToAdd('')
+                                    }}
+                                    disabled={!groupingColumnToAdd}
+                                    className="rounded-md border border-gray-700 px-2 py-1 text-xs text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-accent1 disabled:cursor-not-allowed disabled:border-gray-700 disabled:text-dark-textGray"
+                                  >
+                                    Hinzufügen
+                                  </button>
+                                </div>
+                              </div>
                               <p className="mt-1 text-[11px] text-dark-textGray">
-                                Legt fest, welche Spalte zur Bildung der Gruppen verwendet wird.
+                                Die ausgewählten Spalten werden kombiniert (Reihenfolge zählt) und bilden den Gruppenschlüssel.
                               </p>
                             </div>
                             <div>
@@ -6678,8 +6851,22 @@ export default function CsvWorkbench({
                       <span>
                         Gruppen nach Aggregation:{' '}
                         <span className="text-dark-textLight">{transformationMetaInfo.aggregatedTo}</span>
+                        {transformationMetaInfo.aggregatedFrom > 0 &&
+                          transformationMetaInfo.aggregatedFrom !== transformationMetaInfo.aggregatedTo && (
+                            <span className="ml-1 text-dark-textGray">
+                              (aus {transformationMetaInfo.aggregatedFrom})
+                            </span>
+                          )}
                       </span>
                     </div>
+                    {transformationMetaInfo.groupingColumns.length > 0 && (
+                      <div className="text-[11px] text-dark-textGray">
+                        Gruppiert nach:{' '}
+                        <span className="text-dark-textLight">
+                          {transformationMetaInfo.groupingColumns.join(' → ')}
+                        </span>
+                      </div>
+                    )}
                     {transformationWarnings.length > 0 && (
                       <div className="space-y-1 rounded-md border border-yellow-600/40 bg-yellow-900/30 px-3 py-2 text-xs text-yellow-100">
                         <div className="font-semibold text-yellow-200">Hinweise zur Transformation</div>

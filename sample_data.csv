@@ -1,0 +1,52 @@
+id,category,subcategory,group,date,value,value2,size,label,note
+1,Alpha,A1,G1,2024-01-05,10,5,3,Alpha A1 G1,"baseline"
+2,Alpha,A1,G1,2024-01-12,12,7,4,Alpha A1 G1,"slight increase"
+3,Alpha,A1,G1,2024-01-19,9,6,5,Alpha A1 G1,"dip"
+4,Alpha,A2,G1,2024-02-02,18,9,6,Alpha A2 G1,"peak"
+5,Alpha,A2,G1,2024-02-09,16,8,6,Alpha A2 G1,
+6,Alpha,A2,G2,2024-02-16,22,11,7,Alpha A2 G2,"outlier high"
+7,Alpha,A3,G2,2024-03-01,5,2,2,Alpha A3 G2,"low"
+8,Alpha,A3,G2,2024-03-08,7,3,2,Alpha A3 G2,
+9,Alpha,A3,G2,2024-03-15,0,0,1,Alpha A3 G2,"zero"
+10,Beta,B1,G1,2024-01-05,14,4,3,Beta B1 G1,
+11,Beta,B1,G1,2024-01-12,13,5,3,Beta B1 G1,
+12,Beta,B1,G1,2024-01-19,15,6,4,Beta B1 G1,
+13,Beta,B2,G1,2024-02-02,20,10,5,Beta B2 G1,
+14,Beta,B2,G1,2024-02-09,19,9,5,Beta B2 G1,
+15,Beta,B2,G2,2024-02-16,25,12,8,Beta B2 G2,"outlier high"
+16,Beta,B3,G2,2024-03-01,6,1,2,Beta B3 G2,
+17,Beta,B3,G2,2024-03-08,8,2,2,Beta B3 G2,
+18,Beta,B3,G2,2024-03-15,7,3,2,Beta B3 G2,
+19,Gamma,C1,G1,2024-01-05,3,8,1,Gamma C1 G1,"inverted value2"
+20,Gamma,C1,G1,2024-01-12,4,7,1,Gamma C1 G1,
+21,Gamma,C1,G1,2024-01-19,2,9,1,Gamma C1 G1,
+22,Gamma,C2,G1,2024-02-02,11,5,3,Gamma C2 G1,
+23,Gamma,C2,G1,2024-02-09,12,6,3,Gamma C2 G1,
+24,Gamma,C2,G2,2024-02-16,30,15,9,Gamma C2 G2,"extreme outlier"
+25,Gamma,C3,G2,2024-03-01,-2,1,1,Gamma C3 G2,"negative"
+26,Gamma,C3,G2,2024-03-08,1,1,1,Gamma C3 G2,
+27,Gamma,C3,G2,2024-03-15,,2,1,Gamma C3 G2,"missing value"
+28,Delta,D1,G1,2024-01-07,9,4,2,Delta D1 G1,
+29,Delta,D1,G1,2024-01-14,10,4,2,Delta D1 G1,
+30,Delta,D1,G1,2024-01-21,8,3,2,Delta D1 G1,
+31,Delta,D2,G1,2024-02-04,17,8,5,Delta D2 G1,
+32,Delta,D2,G1,2024-02-11,16,7,5,Delta D2 G1,
+33,Delta,D2,G2,2024-02-18,23,12,7,Delta D2 G2,
+34,Delta,D3,G2,2024-03-03,4,2,1,Delta D3 G2,
+35,Delta,D3,G2,2024-03-10,6,3,1,Delta D3 G2,
+36,Delta,D3,G2,2024-03-17,5,2,1,Delta D3 G2,
+37,Epsilon,E1,G3,2024-01-05,50,25,10,Epsilon E1 G3,"cluster high"
+38,Epsilon,E1,G3,2024-01-12,48,22,10,Epsilon E1 G3,
+39,Epsilon,E1,G3,2024-01-19,55,28,11,Epsilon E1 G3,
+40,Epsilon,E2,G3,2024-02-02,12,6,3,Epsilon E2 G3,
+41,Epsilon,E2,G3,2024-02-09,14,7,3,Epsilon E2 G3,
+42,Epsilon,E2,G3,2024-02-16,13,6,3,Epsilon E2 G3,
+43,Epsilon,E3,G3,2024-03-01,2,1,1,Epsilon E3 G3,
+44,Epsilon,E3,G3,2024-03-08,3,1,1,Epsilon E3 G3,
+45,Epsilon,E3,G3,2024-03-15,2,1,1,Epsilon E3 G3,
+46,Zeta,Z1,G1,2024-01-06,100,10,12,Zeta Z1 G1,"very high for scaling"
+47,Zeta,Z1,G2,2024-01-13,1,10,1,Zeta Z1 G2,"value vs value2 contrast"
+48,Zeta,Z2,G1,2024-02-03,15,,4,Zeta Z2 G1,"missing value2"
+49,Zeta,Z2,G2,2024-02-17,15,15,4,Zeta Z2 G2,"equal values"
+50,Zeta,Z3,G3,2024-03-09,0,-1,1,Zeta Z3 G3,"zero & negative value2"
+

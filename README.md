@@ -534,6 +534,17 @@ NODE_ENV=development
 VITE_API_URL=http://localhost:3003/api
 ```
 
+## 📥 Beispieldaten (CSV)
+
+Für schnelle Tests ist eine Beispieldatei im Projekt-Root verfügbar:
+
+- Datei: `sample_data.csv`
+- Inhalt: Kategorische Spalten (`category`, `subcategory`, `group`), Zeitspalte (`date`), numerische Spalten (`value`, `value2`, `size`) sowie Labels und Notizen. Enthält bewusste Ausreißer, fehlende Werte, negative und Null-Werte, um Import- und Chart-Funktionen (z. B. Box-Plot, Balken, Linie, Scatter, Bubble) realistisch zu prüfen.
+
+Verwendung in der App:
+- Über den CSV-Import im Tab „Daten“ die Datei `sample_data.csv` auswählen.
+- Je nach Diagrammtyp passende Spalten zuordnen (z. B. `value` als Wert, `category` als Label, `group` für Gruppierungen, `date` für Zeitachsen, `size` für Bubble-Größen).
+
 ## 🧪 Testing
 
 ```bash

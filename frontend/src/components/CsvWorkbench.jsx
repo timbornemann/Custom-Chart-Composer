@@ -220,13 +220,191 @@ export default function CsvWorkbench({
     },
     [internalRegisterVersionEvent]
   )
+
+  const schedulePersist = useCallback(
+    (extraState = {}) => {
+      if (!onImportStateChange) return
+      setTimeout(() => {
+        const state = getImportState()
+        onImportStateChange({
+          ...state,
+          ...extraState,
+          savedViews,
+          activeSavedViewId,
+          validationRules,
+          quickAggregationConfig,
+          stateVersion: Date.now()
+        })
+      }, 0)
+    },
+    [
+      onImportStateChange,
+      getImportState,
+      savedViews,
+      activeSavedViewId,
+      validationRules,
+      quickAggregationConfig
+    ]
+  )
+
+  const reorderColumns = useCallback(
+    (orderedKeys) => {
+      internalReorderColumns(orderedKeys)
+      schedulePersist()
+    },
+    [internalReorderColumns, schedulePersist]
+  )
+
+  const setColumnWidth = useCallback(
+    (columnKey, width) => {
+      internalSetColumnWidth(columnKey, width)
+      schedulePersist()
+    },
+    [internalSetColumnWidth, schedulePersist]
+  )
+
+  const setColumnVisibility = useCallback(
+    (columnKey, isVisible) => {
+      internalSetColumnVisibility(columnKey, isVisible)
+      schedulePersist()
+    },
+    [internalSetColumnVisibility, schedulePersist]
+  )
+
+  const setColumnPinned = useCallback(
+    (columnKey, pinned) => {
+      internalSetColumnPinned(columnKey, pinned)
+      schedulePersist()
+    },
+    [internalSetColumnPinned, schedulePersist]
+  )
+
+  const setRowHidden = useCallback(
+    (source, rowIndex, hidden) => {
+      internalSetRowHidden(source, rowIndex, hidden)
+      schedulePersist()
+    },
+    [internalSetRowHidden, schedulePersist]
+  )
+
+  const setRowPinned = useCallback(
+    (source, rowIndex, pinned) => {
+      internalSetRowPinned(source, rowIndex, pinned)
+      schedulePersist()
+    },
+    [internalSetRowPinned, schedulePersist]
+  )
+
+  const updateCell = useCallback(
+    (config, columnKey, value) => {
+      internalUpdateCell(config, columnKey, value)
+      schedulePersist()
+    },
+    [internalUpdateCell, schedulePersist]
+  )
+
+  const updateCellValue = useCallback(
+    (rowIndex, columnKey, value, options) => {
+      const changed = internalUpdateCellValue(rowIndex, columnKey, value, options)
+      if (changed) {
+        schedulePersist()
+      }
+      return changed
+    },
+    [internalUpdateCellValue, schedulePersist]
+  )
+
+  const setDuplicateKeyColumns = useCallback(
+    (updater) => {
+      internalSetDuplicateKeyColumns(updater)
+      schedulePersist()
+    },
+    [internalSetDuplicateKeyColumns, schedulePersist]
+  )
+
+  const resolveDuplicates = useCallback(
+    (mode) => {
+      const result = internalResolveDuplicates(mode)
+      if (result?.changed) {
+        schedulePersist()
+      }
+      return result
+    },
+    [internalResolveDuplicates, schedulePersist]
+  )
+
+  const undoLastManualEdit = useCallback(() => {
+    const result = internalUndoLastManualEdit()
+    if (result?.undone) {
+      schedulePersist()
+    }
+    return result
+  }, [internalUndoLastManualEdit, schedulePersist])
+
+  const redoLastManualEdit = useCallback(() => {
+    const result = internalRedoLastManualEdit()
+    if (result?.redone) {
+      schedulePersist()
+    }
+    return result
+  }, [internalRedoLastManualEdit, schedulePersist])
+
+  const parseFile = useCallback(
+    async (file) => {
+      if (!file) return
+      await internalParseFile(file)
+      schedulePersist()
+    },
+    [internalParseFile, schedulePersist]
+  )
+
+  const updateMapping = useCallback(
+    (changes) => {
+      internalUpdateMapping(changes)
+      schedulePersist()
+    },
+    [internalUpdateMapping, schedulePersist]
+  )
+
+  const updateTransformations = useCallback(
+    (updater) => {
+      internalUpdateTransformations(updater)
+      schedulePersist()
+    },
+    [internalUpdateTransformations, schedulePersist]
+  )
+
+  const toggleValueColumn = useCallback(
+    (columnKey) => {
+      internalToggleValueColumn(columnKey)
+      schedulePersist()
+    },
+    [internalToggleValueColumn, schedulePersist]
+  )
+
+  const handleDuplicateColumnToggle = useCallback(
+    (columnKey, enabled) => {
+      setDuplicateKeyColumns((previous) => {
+        const current = Array.isArray(previous) ? previous : []
+        if (enabled) {
+          if (current.includes(columnKey)) {
+            return current
+          }
+          return [...current, columnKey]
+        }
+        return current.filter((key) => key !== columnKey)
+      })
+    },
+    [setDuplicateKeyColumns]
+  )
+
+  const handleDuplicateClear = useCallback(() => {
+    setDuplicateKeyColumns([])
+  }, [setDuplicateKeyColumns])
+
   const activeSearchConfig = useMemo(
     () => createSearchConfig({ query: searchQuery, mode: searchMode, columns: searchColumns }),
     [searchQuery, searchMode, searchColumns]
-  )
-  const availableColumnsForModal = useMemo(
-    () => columns.map((column) => ({ key: column.key, label: column.key })),
-    [columns]
   )
   const transformedScopeDisabledReason = useMemo(() => {
     if (!Array.isArray(transformedRows) || transformedRows.length === 0) {
@@ -253,163 +431,6 @@ export default function CsvWorkbench({
   }, [transformationMeta, transformedRows, totalRows])
   const canReplaceInTransformed = transformedScopeDisabledReason === ''
   const canOpenFindReplace = activeSearchConfig?.isActive && totalRows > 0
-  const searchMatches = useMemo(() => {
-    if (!activeSearchConfig?.isActive) {
-      return []
-    }
-    const columnOrder = new Map()
-    visibleColumns.forEach((column, index) => {
-      columnOrder.set(column.key, index)
-    })
-    const collectMatches = (entries, scope) => {
-      if (!Array.isArray(entries) || entries.length === 0) {
-        return []
-      }
-      const result = []
-      entries.forEach((entry, rowPosition) => {
-        const matchInfo = entry?.matchInfo || null
-        if (!matchInfo) {
-          return
-        }
-        Object.entries(matchInfo).forEach(([columnKey, positions]) => {
-          if (!Array.isArray(positions) || positions.length === 0) {
-            return
-          }
-          result.push({
-            scope,
-            rowIndex: entry.index,
-            rowPosition,
-            columnKey,
-            positions,
-            rowRefKey: `${scope}-${entry.index}`
-          })
-        })
-      })
-      return result
-    }
-    const rawMatches = collectMatches(previewEntries, 'raw')
-    const transformedMatches = collectMatches(transformedPreviewEntries, 'transformed')
-    const combined = [...rawMatches, ...transformedMatches]
-    combined.sort((a, b) => {
-      if (a.scope !== b.scope) {
-        if (a.scope === 'raw') return -1
-        if (b.scope === 'raw') return 1
-        return a.scope.localeCompare(b.scope)
-      }
-      if (a.rowIndex !== b.rowIndex) {
-        return a.rowIndex - b.rowIndex
-      }
-      const orderA = columnOrder.has(a.columnKey) ? columnOrder.get(a.columnKey) : Number.MAX_SAFE_INTEGER
-      const orderB = columnOrder.has(b.columnKey) ? columnOrder.get(b.columnKey) : Number.MAX_SAFE_INTEGER
-      if (orderA !== orderB) {
-        return orderA - orderB
-      }
-      return a.columnKey.localeCompare(b.columnKey, undefined, { sensitivity: 'base' })
-    })
-    return combined
-  }, [activeSearchConfig, previewEntries, transformedPreviewEntries, visibleColumns])
-  const activeSearchMatch = activeSearchMatchIndex >= 0 ? searchMatches[activeSearchMatchIndex] : null
-  const hasSearchMatches = searchMatches.length > 0
-  const searchMatchSummary = hasSearchMatches && activeSearchMatchIndex >= 0
-    ? `${activeSearchMatchIndex + 1}/${searchMatches.length}`
-    : `0/${searchMatches.length}`
-  useEffect(() => {
-    if (!activeSearchConfig?.isActive) {
-      searchMatchSignatureRef.current = ''
-      setActiveSearchMatchIndex(-1)
-      return
-    }
-    const columnsKey = Array.isArray(activeSearchConfig.columns) && activeSearchConfig.columns.length > 0
-      ? activeSearchConfig.columns.join('|')
-      : 'ALL'
-    const signature = `${activeSearchConfig.mode || 'normal'}|${activeSearchConfig.query || ''}|${columnsKey}`
-    if (signature !== searchMatchSignatureRef.current) {
-      searchMatchSignatureRef.current = signature
-      setActiveSearchMatchIndex(searchMatches.length > 0 ? 0 : -1)
-      return
-    }
-    if (searchMatches.length === 0) {
-      setActiveSearchMatchIndex(-1)
-      return
-    }
-    setActiveSearchMatchIndex((previous) => {
-      if (previous >= 0 && previous < searchMatches.length) {
-        return previous
-      }
-      return 0
-    })
-  }, [activeSearchConfig, searchMatches.length])
-  useEffect(() => {
-    if (!activeSearchMatch || activeSearchMatch.scope !== 'raw') {
-      return
-    }
-    const rowPosition = previewEntries.findIndex((entry) => entry.index === activeSearchMatch.rowIndex)
-    if (rowPosition === -1) {
-      return
-    }
-    const target = createCellTarget(activeSearchMatch.rowIndex, rowPosition, activeSearchMatch.columnKey)
-    setSelectionState((previous) => {
-      const focus = previous.focus || previous.anchor
-      if (
-        focus &&
-        focus.rowIndex === target.rowIndex &&
-        focus.columnKey === target.columnKey &&
-        focus.rowPosition === target.rowPosition &&
-        focus.columnIndex === target.columnIndex
-      ) {
-        return previous
-      }
-      return { anchor: target, focus: target }
-    })
-    pendingFocusRef.current = { rowIndex: target.rowIndex, columnKey: target.columnKey }
-  }, [activeSearchMatch, createCellTarget, previewEntries])
-  useEffect(() => {
-    if (!activeSearchMatch) {
-      return
-    }
-    const key = activeSearchMatch.rowRefKey || `${activeSearchMatch.scope}-${activeSearchMatch.rowIndex}`
-    const node = rowRefs.current.get(key)
-    if (node && typeof node.scrollIntoView === 'function') {
-      try {
-        node.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      } catch (_error) {
-        node.scrollIntoView()
-      }
-    }
-  }, [activeSearchMatch])
-  const handleSearchMatchNavigate = useCallback(
-    (direction) => {
-      if (!Array.isArray(searchMatches) || searchMatches.length === 0) {
-        return
-      }
-      setActiveSearchMatchIndex((previous) => {
-        if (previous === -1) {
-          return direction >= 0 ? 0 : searchMatches.length - 1
-        }
-        const next = (previous + direction + searchMatches.length) % searchMatches.length
-        return next
-      })
-    },
-    [searchMatches]
-  )
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.defaultPrevented) {
-        return
-      }
-      if (event.key === 'F3') {
-        if (!activeSearchConfig?.isActive) {
-          return
-        }
-        event.preventDefault()
-        handleSearchMatchNavigate(event.shiftKey ? -1 : 1)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [activeSearchConfig, handleSearchMatchNavigate])
 
   useEffect(() => {
     if (!correlationMatrix || !Array.isArray(correlationMatrix.columns) || correlationMatrix.columns.length === 0) {
@@ -432,85 +453,6 @@ export default function CsvWorkbench({
     })
     setCorrelationSortKey((prev) => (prev && availableColumns.includes(prev) ? prev : ''))
   }, [correlationMatrix])
-
-  const computeMatchesForRows = useCallback(
-    (rowsSource, scopeLabel) => {
-      if (!activeSearchConfig?.isActive || !Array.isArray(rowsSource)) {
-        return { matches: [], total: 0 }
-      }
-      const columnKeys = new Set(columns.map((column) => column.key))
-      const columnOrder = new Map()
-      columns.forEach((column, index) => {
-        columnOrder.set(column.key, index)
-      })
-      const matches = []
-      rowsSource.forEach((row, rowIndex) => {
-        if (!row) return
-        const result = rowMatchesQuery(row, activeSearchConfig)
-        const entries = Object.entries(result.matchesByColumn || {})
-        entries.forEach(([columnKey, positions]) => {
-          if (!columnKeys.has(columnKey)) return
-          if (!Array.isArray(positions) || positions.length === 0) return
-          const rawValue = row[columnKey]
-          const formattedRaw = formatCellValue(rawValue)
-          const formattedValue =
-            formattedRaw === null || formattedRaw === undefined
-              ? ''
-              : typeof formattedRaw === 'string'
-                ? formattedRaw
-                : String(formattedRaw)
-          matches.push({
-            scope: scopeLabel,
-            rowIndex,
-            columnKey,
-            positions,
-            formattedValue,
-            rawValue
-          })
-        })
-      })
-      matches.sort((a, b) => {
-        if (a.rowIndex !== b.rowIndex) {
-          return a.rowIndex - b.rowIndex
-        }
-        const orderA = columnOrder.has(a.columnKey) ? columnOrder.get(a.columnKey) : Number.MAX_SAFE_INTEGER
-        const orderB = columnOrder.has(b.columnKey) ? columnOrder.get(b.columnKey) : Number.MAX_SAFE_INTEGER
-        if (orderA !== orderB) {
-          return orderA - orderB
-        }
-        return a.columnKey.localeCompare(b.columnKey, undefined, { sensitivity: 'base' })
-      })
-      const total = matches.reduce((sum, entry) => sum + (entry.positions?.length || 0), 0)
-      return { matches, total }
-    },
-    [activeSearchConfig, columns, rowMatchesQuery]
-  )
-
-  useEffect(() => {
-    if (!isFindReplaceOpen) {
-      return
-    }
-
-    if (!activeSearchConfig?.isActive) {
-      setFindReplaceData({ raw: { matches: [], total: 0 }, transformed: { matches: [], total: 0 } })
-      return
-    }
-
-    const state = getImportState()
-    const rawRows = Array.isArray(state?.rows) ? state.rows : []
-    const rawResult = computeMatchesForRows(rawRows, 'raw')
-    const transformedResult = canReplaceInTransformed
-      ? computeMatchesForRows(transformedRows || [], 'transformed')
-      : { matches: [], total: 0 }
-    setFindReplaceData({ raw: rawResult, transformed: transformedResult })
-  }, [
-    isFindReplaceOpen,
-    activeSearchConfig,
-    getImportState,
-    computeMatchesForRows,
-    canReplaceInTransformed,
-    transformedRows
-  ])
 
   const correlationDisplayIndices = useMemo(() => {
     if (!correlationMatrix || !Array.isArray(correlationMatrix.columns) || correlationMatrix.columns.length === 0) {
@@ -685,10 +627,231 @@ export default function CsvWorkbench({
 
   const columns = orderedColumns
 
+  const availableColumnsForModal = useMemo(
+    () => columns.map((column) => ({ key: column.key, label: column.key })),
+    [columns]
+  )
+
   const visibleColumns = useMemo(
     () => columns.filter((column) => column.display?.isVisible !== false),
     [columns]
   )
+
+  const computeMatchesForRows = useCallback(
+    (rowsSource, scopeLabel) => {
+      if (!activeSearchConfig?.isActive || !Array.isArray(rowsSource)) {
+        return { matches: [], total: 0 }
+      }
+      const columnKeys = new Set(columns.map((column) => column.key))
+      const columnOrder = new Map()
+      columns.forEach((column, index) => {
+        columnOrder.set(column.key, index)
+      })
+      const matches = []
+      rowsSource.forEach((row, rowIndex) => {
+        if (!row) return
+        const result = rowMatchesQuery(row, activeSearchConfig)
+        const entries = Object.entries(result.matchesByColumn || {})
+        entries.forEach(([columnKey, positions]) => {
+          if (!columnKeys.has(columnKey)) return
+          if (!Array.isArray(positions) || positions.length === 0) return
+          const rawValue = row[columnKey]
+          const formattedRaw = formatCellValue(rawValue)
+          const formattedValue =
+            formattedRaw === null || formattedRaw === undefined
+              ? ''
+              : typeof formattedRaw === 'string'
+                ? formattedRaw
+                : String(formattedRaw)
+          matches.push({
+            scope: scopeLabel,
+            rowIndex,
+            columnKey,
+            positions,
+            formattedValue,
+            rawValue
+          })
+        })
+      })
+      matches.sort((a, b) => {
+        if (a.rowIndex !== b.rowIndex) {
+          return a.rowIndex - b.rowIndex
+        }
+        const orderA = columnOrder.has(a.columnKey) ? columnOrder.get(a.columnKey) : Number.MAX_SAFE_INTEGER
+        const orderB = columnOrder.has(b.columnKey) ? columnOrder.get(b.columnKey) : Number.MAX_SAFE_INTEGER
+        if (orderA !== orderB) {
+          return orderA - orderB
+        }
+        return a.columnKey.localeCompare(b.columnKey, undefined, { sensitivity: 'base' })
+      })
+      const total = matches.reduce((sum, entry) => sum + (entry.positions?.length || 0), 0)
+      return { matches, total }
+    },
+    [activeSearchConfig, columns, rowMatchesQuery]
+  )
+
+  useEffect(() => {
+    if (!isFindReplaceOpen) {
+      return
+    }
+
+    if (!activeSearchConfig?.isActive) {
+      setFindReplaceData({ raw: { matches: [], total: 0 }, transformed: { matches: [], total: 0 } })
+      return
+    }
+
+    const state = getImportState()
+    const rawRows = Array.isArray(state?.rows) ? state.rows : []
+    const rawResult = computeMatchesForRows(rawRows, 'raw')
+    const transformedResult = canReplaceInTransformed
+      ? computeMatchesForRows(transformedRows || [], 'transformed')
+      : { matches: [], total: 0 }
+    setFindReplaceData({ raw: rawResult, transformed: transformedResult })
+  }, [
+    isFindReplaceOpen,
+    activeSearchConfig,
+    getImportState,
+    computeMatchesForRows,
+    canReplaceInTransformed,
+    transformedRows
+  ])
+
+  const searchMatches = useMemo(() => {
+    if (!activeSearchConfig?.isActive) {
+      return []
+    }
+    const columnOrder = new Map()
+    visibleColumns.forEach((column, index) => {
+      columnOrder.set(column.key, index)
+    })
+    const collectMatches = (entries, scope) => {
+      if (!Array.isArray(entries) || entries.length === 0) {
+        return []
+      }
+      const result = []
+      entries.forEach((entry, rowPosition) => {
+        const matchInfo = entry?.matchInfo || null
+        if (!matchInfo) {
+          return
+        }
+        Object.entries(matchInfo).forEach(([columnKey, positions]) => {
+          if (!Array.isArray(positions) || positions.length === 0) {
+            return
+          }
+          result.push({
+            scope,
+            rowIndex: entry.index,
+            rowPosition,
+            columnKey,
+            positions,
+            rowRefKey: `${scope}-${entry.index}`
+          })
+        })
+      })
+      return result
+    }
+    const rawMatches = collectMatches(previewEntries, 'raw')
+    const transformedMatches = collectMatches(transformedPreviewEntries, 'transformed')
+    const combined = [...rawMatches, ...transformedMatches]
+    combined.sort((a, b) => {
+      if (a.scope !== b.scope) {
+        if (a.scope === 'raw') return -1
+        if (b.scope === 'raw') return 1
+        return a.scope.localeCompare(b.scope)
+      }
+      if (a.rowIndex !== b.rowIndex) {
+        return a.rowIndex - b.rowIndex
+      }
+      const orderA = columnOrder.has(a.columnKey) ? columnOrder.get(a.columnKey) : Number.MAX_SAFE_INTEGER
+      const orderB = columnOrder.has(b.columnKey) ? columnOrder.get(b.columnKey) : Number.MAX_SAFE_INTEGER
+      if (orderA !== orderB) {
+        return orderA - orderB
+      }
+      return a.columnKey.localeCompare(b.columnKey, undefined, { sensitivity: 'base' })
+    })
+    return combined
+  }, [activeSearchConfig, previewEntries, transformedPreviewEntries, visibleColumns])
+  const activeSearchMatch = activeSearchMatchIndex >= 0 ? searchMatches[activeSearchMatchIndex] : null
+  const hasSearchMatches = searchMatches.length > 0
+  const searchMatchSummary = hasSearchMatches && activeSearchMatchIndex >= 0
+    ? `${activeSearchMatchIndex + 1}/${searchMatches.length}`
+    : `0/${searchMatches.length}`
+
+  useEffect(() => {
+    if (!activeSearchConfig?.isActive) {
+      searchMatchSignatureRef.current = ''
+      setActiveSearchMatchIndex(-1)
+      return
+    }
+    const columnsKey = Array.isArray(activeSearchConfig.columns) && activeSearchConfig.columns.length > 0
+      ? activeSearchConfig.columns.join('|')
+      : 'ALL'
+    const signature = `${activeSearchConfig.mode || 'normal'}|${activeSearchConfig.query || ''}|${columnsKey}`
+    if (signature !== searchMatchSignatureRef.current) {
+      searchMatchSignatureRef.current = signature
+      setActiveSearchMatchIndex(searchMatches.length > 0 ? 0 : -1)
+      return
+    }
+    if (searchMatches.length === 0) {
+      setActiveSearchMatchIndex(-1)
+      return
+    }
+    setActiveSearchMatchIndex((previous) => {
+      if (previous >= 0 && previous < searchMatches.length) {
+        return previous
+      }
+      return 0
+    })
+  }, [activeSearchConfig, searchMatches.length])
+  useEffect(() => {
+    if (!activeSearchMatch) {
+      return
+    }
+    const key = activeSearchMatch.rowRefKey || `${activeSearchMatch.scope}-${activeSearchMatch.rowIndex}`
+    const node = rowRefs.current.get(key)
+    if (node && typeof node.scrollIntoView === 'function') {
+      try {
+        node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } catch (_error) {
+        node.scrollIntoView()
+      }
+    }
+  }, [activeSearchMatch])
+
+  const handleSearchMatchNavigate = useCallback(
+    (direction) => {
+      if (!Array.isArray(searchMatches) || searchMatches.length === 0) {
+        return
+      }
+      setActiveSearchMatchIndex((previous) => {
+        if (previous === -1) {
+          return direction >= 0 ? 0 : searchMatches.length - 1
+        }
+        const next = (previous + direction + searchMatches.length) % searchMatches.length
+        return next
+      })
+    },
+    [searchMatches]
+  )
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.defaultPrevented) {
+        return
+      }
+      if (event.key === 'F3') {
+        if (!activeSearchConfig?.isActive) {
+          return
+        }
+        event.preventDefault()
+        handleSearchMatchNavigate(event.shiftKey ? -1 : 1)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [activeSearchConfig, handleSearchMatchNavigate])
 
   const hiddenColumns = useMemo(
     () => columns.filter((column) => column.display?.isVisible === false),
@@ -724,29 +887,9 @@ export default function CsvWorkbench({
     setDuplicateActionFeedback(null)
   }, [duplicateKeyColumns, duplicateGroups.length])
 
-  const handleDuplicateColumnToggle = useCallback(
-    (columnKey, enabled) => {
-      setDuplicateKeyColumns((previous) => {
-        const current = Array.isArray(previous) ? previous : []
-        if (enabled) {
-          if (current.includes(columnKey)) {
-            return current
-          }
-          return [...current, columnKey]
-        }
-        return current.filter((key) => key !== columnKey)
-      })
-    },
-    [setDuplicateKeyColumns]
-  )
-
   const handleDuplicateSelectAll = useCallback(() => {
     setDuplicateKeyColumns(columns.map((column) => column.key))
   }, [setDuplicateKeyColumns, columns])
-
-  const handleDuplicateClear = useCallback(() => {
-    setDuplicateKeyColumns([])
-  }, [setDuplicateKeyColumns])
 
   const handleResolveDuplicatesAction = useCallback(
     (mode) => {
@@ -780,6 +923,7 @@ export default function CsvWorkbench({
     },
     [resolveDuplicates]
   )
+
   const [columnMeasurements, setColumnMeasurements] = useState({})
   const [rowMeasurements, setRowMeasurements] = useState({})
   const headerRef = useRef(null)
@@ -1181,6 +1325,31 @@ export default function CsvWorkbench({
     },
     [columnIndexMap, visibleColumns]
   )
+
+  useEffect(() => {
+    if (!activeSearchMatch || activeSearchMatch.scope !== 'raw') {
+      return
+    }
+    const rowPosition = previewEntries.findIndex((entry) => entry.index === activeSearchMatch.rowIndex)
+    if (rowPosition === -1) {
+      return
+    }
+    const target = createCellTarget(activeSearchMatch.rowIndex, rowPosition, activeSearchMatch.columnKey)
+    setSelectionState((previous) => {
+      const focus = previous.focus || previous.anchor
+      if (
+        focus &&
+        focus.rowIndex === target.rowIndex &&
+        focus.columnKey === target.columnKey &&
+        focus.rowPosition === target.rowPosition &&
+        focus.columnIndex === target.columnIndex
+      ) {
+        return previous
+      }
+      return { anchor: target, focus: target }
+    })
+    pendingFocusRef.current = { rowIndex: target.rowIndex, columnKey: target.columnKey }
+  }, [activeSearchMatch, createCellTarget, previewEntries])
 
   const selectedRange = useMemo(() => {
     if (!selectionState.anchor || !selectionState.focus) {
@@ -1815,6 +1984,30 @@ export default function CsvWorkbench({
     [isSelecting, createCellTarget]
   )
 
+  const startEditCell = useCallback(
+    (entry, columnKey, rowPosition = 0) => {
+      if (!entry) return
+      const target = createCellTarget(entry.index, rowPosition, columnKey)
+      pendingFocusRef.current = target
+      setSelectionState({ anchor: target, focus: target })
+      setEditingCell({ rowIndex: entry.index, columnKey })
+      const currentValue = entry.row?.[columnKey]
+      setEditingValue(currentValue === undefined || currentValue === null ? '' : String(currentValue))
+    },
+    [createCellTarget]
+  )
+
+  const cancelEdit = useCallback(() => {
+    setEditingCell(null)
+    setEditingValue('')
+  }, [])
+
+  const confirmEdit = useCallback(() => {
+    if (!editingCell) return
+    updateCellValue(editingCell.rowIndex, editingCell.columnKey, editingValue)
+    cancelEdit()
+  }, [editingCell, editingValue, updateCellValue, cancelEdit])
+
   const handleCellKeyDown = useCallback(
     (event, entry, rowPosition, columnKey) => {
       if (event.key === 'Enter') {
@@ -2075,32 +2268,6 @@ export default function CsvWorkbench({
       updateCell({ type: 'copy', updates, columnOrder: selectedColumnOrder, direction })
     },
     [hasSelection, selectedTargets, previewEntries, visibleColumns, updateCell, selectedColumnOrder]
-  )
-
-  const schedulePersist = useCallback(
-    (extraState = {}) => {
-      if (!onImportStateChange) return
-      setTimeout(() => {
-        const state = getImportState()
-        onImportStateChange({
-          ...state,
-          ...extraState,
-          savedViews,
-          activeSavedViewId,
-          validationRules,
-          quickAggregationConfig,
-          stateVersion: Date.now()
-        })
-      }, 0)
-    },
-    [
-      onImportStateChange,
-      getImportState,
-      savedViews,
-      activeSavedViewId,
-      validationRules,
-      quickAggregationConfig
-    ]
   )
 
   const buildCurrentViewState = useCallback(() => {
@@ -2849,141 +3016,6 @@ export default function CsvWorkbench({
     ]
   )
 
-  const parseFile = useCallback(
-    async (file) => {
-      if (!file) return
-      await internalParseFile(file)
-      schedulePersist()
-    },
-    [internalParseFile, schedulePersist]
-  )
-
-  const updateMapping = useCallback(
-    (changes) => {
-      internalUpdateMapping(changes)
-      schedulePersist()
-    },
-    [internalUpdateMapping, schedulePersist]
-  )
-
-  const updateTransformations = useCallback(
-    (updater) => {
-      internalUpdateTransformations(updater)
-      schedulePersist()
-    },
-    [internalUpdateTransformations, schedulePersist]
-  )
-
-  const toggleValueColumn = useCallback(
-    (columnKey) => {
-      internalToggleValueColumn(columnKey)
-      schedulePersist()
-    },
-    [internalToggleValueColumn, schedulePersist]
-  )
-
-  const reorderColumns = useCallback(
-    (orderedKeys) => {
-      internalReorderColumns(orderedKeys)
-      schedulePersist()
-    },
-    [internalReorderColumns, schedulePersist]
-  )
-
-  const setColumnWidth = useCallback(
-    (columnKey, width) => {
-      internalSetColumnWidth(columnKey, width)
-      schedulePersist()
-    },
-    [internalSetColumnWidth, schedulePersist]
-  )
-
-  const setColumnVisibility = useCallback(
-    (columnKey, isVisible) => {
-      internalSetColumnVisibility(columnKey, isVisible)
-      schedulePersist()
-    },
-    [internalSetColumnVisibility, schedulePersist]
-  )
-
-  const setColumnPinned = useCallback(
-    (columnKey, pinned) => {
-      internalSetColumnPinned(columnKey, pinned)
-      schedulePersist()
-    },
-    [internalSetColumnPinned, schedulePersist]
-  )
-
-  const setRowHidden = useCallback(
-    (source, rowIndex, hidden) => {
-      internalSetRowHidden(source, rowIndex, hidden)
-      schedulePersist()
-    },
-    [internalSetRowHidden, schedulePersist]
-  )
-
-  const setRowPinned = useCallback(
-    (source, rowIndex, pinned) => {
-      internalSetRowPinned(source, rowIndex, pinned)
-      schedulePersist()
-    },
-    [internalSetRowPinned, schedulePersist]
-  )
-
-  const updateCell = useCallback(
-    (config, columnKey, value) => {
-      internalUpdateCell(config, columnKey, value)
-      schedulePersist()
-    },
-    [internalUpdateCell, schedulePersist]
-  )
-
-  const updateCellValue = useCallback(
-    (rowIndex, columnKey, value, options) => {
-      const changed = internalUpdateCellValue(rowIndex, columnKey, value, options)
-      if (changed) {
-        schedulePersist()
-      }
-      return changed
-    },
-    [internalUpdateCellValue, schedulePersist]
-  )
-
-  const setDuplicateKeyColumns = useCallback(
-    (updater) => {
-      internalSetDuplicateKeyColumns(updater)
-      schedulePersist()
-    },
-    [internalSetDuplicateKeyColumns, schedulePersist]
-  )
-
-  const resolveDuplicates = useCallback(
-    (mode) => {
-      const result = internalResolveDuplicates(mode)
-      if (result?.changed) {
-        schedulePersist()
-      }
-      return result
-    },
-    [internalResolveDuplicates, schedulePersist]
-  )
-
-  const undoLastManualEdit = useCallback(() => {
-    const result = internalUndoLastManualEdit()
-    if (result?.undone) {
-      schedulePersist()
-    }
-    return result
-  }, [internalUndoLastManualEdit, schedulePersist])
-
-  const redoLastManualEdit = useCallback(() => {
-    const result = internalRedoLastManualEdit()
-    if (result?.redone) {
-      schedulePersist()
-    }
-    return result
-  }, [internalRedoLastManualEdit, schedulePersist])
-
   const handleResetWorkbench = useCallback(() => {
     reset()
     setEditingCell(null)
@@ -3064,30 +3096,6 @@ export default function CsvWorkbench({
     },
     [setSortConfig, schedulePersist]
   )
-
-  const startEditCell = useCallback(
-    (entry, columnKey, rowPosition = 0) => {
-      if (!entry) return
-      const target = createCellTarget(entry.index, rowPosition, columnKey)
-      pendingFocusRef.current = target
-      setSelectionState({ anchor: target, focus: target })
-      setEditingCell({ rowIndex: entry.index, columnKey })
-      const currentValue = entry.row?.[columnKey]
-      setEditingValue(currentValue === undefined || currentValue === null ? '' : String(currentValue))
-    },
-    [createCellTarget]
-  )
-
-  const cancelEdit = useCallback(() => {
-    setEditingCell(null)
-    setEditingValue('')
-  }, [])
-
-  const confirmEdit = useCallback(() => {
-    if (!editingCell) return
-    updateCellValue(editingCell.rowIndex, editingCell.columnKey, editingValue)
-    cancelEdit()
-  }, [editingCell, editingValue, updateCellValue, cancelEdit])
 
   const handleExportTransformed = useCallback(() => {
     if (!transformedRows || transformedRows.length === 0) {
@@ -3505,6 +3513,24 @@ export default function CsvWorkbench({
     [setChartPreviewHighlight]
   )
 
+  const handleApply = useCallback(
+    (mappingOverride = null) => {
+      const result = getImportResult(mappingOverride)
+      if (!result) {
+        return
+      }
+      if (!onApplyToChart) {
+        return
+      }
+      const importState = getImportState()
+      onApplyToChart({
+        ...result,
+        importState: { ...importState, stateVersion: Date.now() }
+      }, mappingOverride)
+    },
+    [getImportResult, getImportState, onApplyToChart]
+  )
+
   const handleSuggestionApply = useCallback(
     (suggestion) => {
       const selection = suggestionSelections[suggestion.id] || {}
@@ -3523,24 +3549,6 @@ export default function CsvWorkbench({
       parseFile(file)
     }
   }
-
-  const handleApply = useCallback(
-    (mappingOverride = null) => {
-      const result = getImportResult(mappingOverride)
-      if (!result) {
-        return
-      }
-      if (!onApplyToChart) {
-        return
-      }
-      const importState = getImportState()
-      onApplyToChart({
-        ...result,
-        importState: { ...importState, stateVersion: Date.now() }
-      }, mappingOverride)
-    },
-    [getImportResult, getImportState, onApplyToChart]
-  )
 
   const availableDatasetColumns = columns.filter(
     (column) =>
@@ -3582,10 +3590,6 @@ export default function CsvWorkbench({
     })
     return extras
   }, [visibleColumns, transformedPreviewEntries])
-
-  if (!isOpen) {
-    return null
-  }
 
   const filters = transformations.filters || []
   const grouping = transformations.grouping || {}

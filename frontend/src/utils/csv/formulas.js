@@ -241,45 +241,84 @@ const gatherNumericValues = (args, context, visited) => {
   return { values: numbers }
 }
 
+const FORMULA_DEFINITIONS = [
+  {
+    name: 'SUM',
+    description: 'Addiert alle numerischen Werte in den angegebenen Argumenten.',
+    syntax: 'SUM(A1:A10, B2)',
+    evaluate: (args, context, visited) => {
+      const result = gatherNumericValues(args, context, visited)
+      if (result.error) return result
+      const total = result.values.reduce((sum, value) => sum + value, 0)
+      return { value: total, type: 'scalar' }
+    }
+  },
+  {
+    name: 'AVERAGE',
+    description: 'Berechnet den Mittelwert der numerischen Werte der Argumente.',
+    syntax: 'AVERAGE(A1:A10)',
+    evaluate: (args, context, visited) => {
+      const result = gatherNumericValues(args, context, visited)
+      if (result.error) return result
+      if (result.values.length === 0) {
+        return { value: null, type: 'scalar' }
+      }
+      const total = result.values.reduce((sum, value) => sum + value, 0)
+      return { value: total / result.values.length, type: 'scalar' }
+    }
+  },
+  {
+    name: 'MIN',
+    description: 'Gibt den kleinsten numerischen Wert in den Argumenten zurück.',
+    syntax: 'MIN(A1, B1:B5)',
+    evaluate: (args, context, visited) => {
+      const result = gatherNumericValues(args, context, visited)
+      if (result.error) return result
+      if (result.values.length === 0) {
+        return { value: null, type: 'scalar' }
+      }
+      return { value: Math.min(...result.values), type: 'scalar' }
+    }
+  },
+  {
+    name: 'MAX',
+    description: 'Gibt den größten numerischen Wert in den Argumenten zurück.',
+    syntax: 'MAX(A1:A10)',
+    evaluate: (args, context, visited) => {
+      const result = gatherNumericValues(args, context, visited)
+      if (result.error) return result
+      if (result.values.length === 0) {
+        return { value: null, type: 'scalar' }
+      }
+      return { value: Math.max(...result.values), type: 'scalar' }
+    }
+  },
+  {
+    name: 'COUNT',
+    description: 'Zählt die numerischen Werte in den angegebenen Argumenten.',
+    syntax: 'COUNT(A1:A10)',
+    evaluate: (args, context, visited) => {
+      const result = gatherNumericValues(args, context, visited)
+      if (result.error) return result
+      return { value: result.values.length, type: 'scalar' }
+    }
+  }
+]
+
+const FORMULA_REGISTRY = FORMULA_DEFINITIONS.reduce((registry, definition) => {
+  registry[definition.name.toUpperCase()] = definition
+  return registry
+}, {})
+
+export const AVAILABLE_FORMULAS = FORMULA_DEFINITIONS.map(({ evaluate, ...metadata }) => metadata)
+
 const evaluateFunction = (name, args, context, visited) => {
   const upper = name.toUpperCase()
-  if (upper === 'SUM') {
-    const result = gatherNumericValues(args, context, visited)
-    if (result.error) return result
-    const total = result.values.reduce((sum, value) => sum + value, 0)
-    return { value: total, type: 'scalar' }
+  const definition = FORMULA_REGISTRY[upper]
+  if (!definition) {
+    return { error: `Unbekannte Funktion „${name}“` }
   }
-  if (upper === 'AVERAGE') {
-    const result = gatherNumericValues(args, context, visited)
-    if (result.error) return result
-    if (result.values.length === 0) {
-      return { value: null, type: 'scalar' }
-    }
-    const total = result.values.reduce((sum, value) => sum + value, 0)
-    return { value: total / result.values.length, type: 'scalar' }
-  }
-  if (upper === 'MIN') {
-    const result = gatherNumericValues(args, context, visited)
-    if (result.error) return result
-    if (result.values.length === 0) {
-      return { value: null, type: 'scalar' }
-    }
-    return { value: Math.min(...result.values), type: 'scalar' }
-  }
-  if (upper === 'MAX') {
-    const result = gatherNumericValues(args, context, visited)
-    if (result.error) return result
-    if (result.values.length === 0) {
-      return { value: null, type: 'scalar' }
-    }
-    return { value: Math.max(...result.values), type: 'scalar' }
-  }
-  if (upper === 'COUNT') {
-    const result = gatherNumericValues(args, context, visited)
-    if (result.error) return result
-    return { value: result.values.length, type: 'scalar' }
-  }
-  return { error: `Unbekannte Funktion „${name}“` }
+  return definition.evaluate(args, context, visited)
 }
 
 function evaluateExpressionInternal(expression, context, visited) {

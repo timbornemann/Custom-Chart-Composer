@@ -7,7 +7,7 @@ import ChartPreview from './ChartPreview'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { formatCellReference, formatRangeReference } from '../utils/csv/formulas'
+import { AVAILABLE_FORMULAS, formatCellReference, formatRangeReference } from '../utils/csv/formulas'
 
 const formatCellValue = (value) => {
   if (value === null || value === undefined) return ''
@@ -1015,12 +1015,22 @@ export default function CsvWorkbench({
   const [chartPreviewHighlight, setChartPreviewHighlight] = useState(null)
   const findReplaceHistoryRef = useRef([])
   const [formulaInputValue, setFormulaInputValue] = useState('')
+  const [formulaCaretPosition, setFormulaCaretPosition] = useState(null)
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0)
+  const [suppressFormulaSuggestions, setSuppressFormulaSuggestions] = useState(false)
   const [isFormulaEditing, setIsFormulaEditing] = useState(false)
   const formulaInputRef = useRef(null)
   const formulaEditingRef = useRef(false)
   const [duplicateActionFeedback, setDuplicateActionFeedback] = useState(null)
   const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1)
   const searchMatchSignatureRef = useRef('')
+  const formulaMetadataByName = useMemo(() => {
+    const map = new Map()
+    AVAILABLE_FORMULAS.forEach((formula) => {
+      map.set(formula.name.toUpperCase(), formula)
+    })
+    return map
+  }, [])
   const activeSearchConfig = useMemo(
     () => createSearchConfig({ query: searchQuery, mode: searchMode, columns: searchColumns }),
     [searchQuery, searchMode, searchColumns]
@@ -2077,6 +2087,8 @@ export default function CsvWorkbench({
     if (isFormulaEditing) {
       return
     }
+    setSuppressFormulaSuggestions(true)
+    setFormulaCaretPosition(null)
     setFormulaInputValue(getDisplayValueForCell(activeCell))
   }, [activeCell, getDisplayValueForCell, isFormulaEditing])
 
@@ -2123,20 +2135,176 @@ export default function CsvWorkbench({
     return formulaErrors?.[rowKey]?.[activeCell.columnKey] || ''
   }, [activeCell, formulaErrors])
 
+  const formulaSuggestionContext = useMemo(() => {
+    if (suppressFormulaSuggestions) {
+      return null
+    }
+    if (typeof formulaInputValue !== 'string') {
+      return null
+    }
+    if (!formulaInputValue.startsWith('=')) {
+      return null
+    }
+    if (!Number.isInteger(formulaCaretPosition)) {
+      return null
+    }
+    const clampedCaret = Math.min(
+      Math.max(formulaCaretPosition, 1),
+      formulaInputValue.length
+    )
+    if (clampedCaret < 1) {
+      return null
+    }
+    const query = formulaInputValue.slice(1, clampedCaret)
+    if (!/^[A-Za-z]*$/.test(query)) {
+      return null
+    }
+    return {
+      query,
+      start: 1,
+      end: clampedCaret
+    }
+  }, [formulaInputValue, formulaCaretPosition, suppressFormulaSuggestions])
+
+  const formulaSuggestions = useMemo(() => {
+    if (!formulaSuggestionContext) {
+      return []
+    }
+    const normalizedQuery = formulaSuggestionContext.query.toLowerCase()
+    return AVAILABLE_FORMULAS.filter((formula) =>
+      formula.name.toLowerCase().startsWith(normalizedQuery)
+    )
+  }, [formulaSuggestionContext])
+
+  const suggestionsOpen = formulaSuggestionContext && formulaSuggestions.length > 0
+
+  useEffect(() => {
+    if (!suggestionsOpen) {
+      setActiveSuggestionIndex(0)
+      return
+    }
+    setActiveSuggestionIndex((previous) => {
+      if (previous < 0 || previous >= formulaSuggestions.length) {
+        return 0
+      }
+      return previous
+    })
+  }, [suggestionsOpen, formulaSuggestions.length])
+
+  const highlightedSuggestionIndex = suggestionsOpen
+    ? Math.min(activeSuggestionIndex, formulaSuggestions.length - 1)
+    : -1
+
+  const activeSuggestion =
+    highlightedSuggestionIndex >= 0 ? formulaSuggestions[highlightedSuggestionIndex] : null
+
+  const typedFunctionName = useMemo(() => {
+    if (typeof formulaInputValue !== 'string') {
+      return ''
+    }
+    const trimmed = formulaInputValue.trim()
+    if (!trimmed.startsWith('=')) {
+      return ''
+    }
+    const match = trimmed.slice(1).match(/^([A-Za-z_][A-Za-z0-9_]*)/)
+    if (!match) {
+      return ''
+    }
+    return match[1].toUpperCase()
+  }, [formulaInputValue])
+
+  const currentFormulaHelp = useMemo(() => {
+    if (activeSuggestion) {
+      return activeSuggestion
+    }
+    if (!typedFunctionName) {
+      return null
+    }
+    return formulaMetadataByName.get(typedFunctionName) || null
+  }, [activeSuggestion, typedFunctionName, formulaMetadataByName])
+
   const hasActiveCell = Boolean(activeCell)
 
-  const handleFormulaInputChange = useCallback((event) => {
-    setFormulaInputValue(event.target.value)
+  const handleFormulaSelectionChange = useCallback((event) => {
+    const target = event?.target
+    if (!target) {
+      return
+    }
+    const position =
+      typeof target.selectionStart === 'number'
+        ? target.selectionStart
+        : target.value?.length ?? 0
+    setFormulaCaretPosition(position)
   }, [])
 
-  const handleFormulaFocus = useCallback(() => {
+  const applyFormulaSuggestion = useCallback(
+    (suggestion) => {
+      if (!suggestion) {
+        return
+      }
+      let nextCursorPosition = null
+      setFormulaInputValue((previous) => {
+        const baseText = typeof previous === 'string' ? previous : ''
+        const ensuredBase = baseText.startsWith('=') ? baseText : `=${baseText}`
+        const context = formulaSuggestionContext || { start: 1, end: 1 }
+        const safeStart = Math.max(1, Math.min(context.start, ensuredBase.length))
+        const safeEnd = Math.max(safeStart, Math.min(context.end, ensuredBase.length))
+        const before = ensuredBase.slice(0, safeStart)
+        const after = ensuredBase.slice(safeEnd)
+        const insertion = `${suggestion.name}()`
+        nextCursorPosition = before.length + suggestion.name.length + 1
+        const schedule =
+          typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+            ? window.requestAnimationFrame
+            : (callback) => setTimeout(callback, 0)
+        schedule(() => {
+          if (formulaInputRef.current) {
+            formulaInputRef.current.focus()
+            formulaInputRef.current.setSelectionRange(nextCursorPosition, nextCursorPosition)
+          }
+        })
+        return `${before}${insertion}${after}`
+      })
+      if (nextCursorPosition !== null) {
+        setFormulaCaretPosition(nextCursorPosition)
+      }
+      setSuppressFormulaSuggestions(true)
+      setActiveSuggestionIndex(0)
+      formulaEditingRef.current = true
+      setIsFormulaEditing(true)
+    },
+    [formulaSuggestionContext, formulaInputRef]
+  )
+
+  const handleFormulaInputChange = useCallback((event) => {
+    const { value, selectionStart } = event.target
+    setSuppressFormulaSuggestions(false)
+    setFormulaInputValue(value)
+    if (typeof selectionStart === 'number') {
+      setFormulaCaretPosition(selectionStart)
+    } else {
+      setFormulaCaretPosition(value.length)
+    }
+  }, [])
+
+  const handleFormulaFocus = useCallback((event) => {
     formulaEditingRef.current = true
     setIsFormulaEditing(true)
+    setSuppressFormulaSuggestions(false)
+    if (event?.target) {
+      const position =
+        typeof event.target.selectionStart === 'number'
+          ? event.target.selectionStart
+          : event.target.value?.length ?? 0
+      setFormulaCaretPosition(position)
+    }
   }, [])
 
   const handleFormulaCancel = useCallback(() => {
     formulaEditingRef.current = false
     setIsFormulaEditing(false)
+    setSuppressFormulaSuggestions(true)
+    setFormulaCaretPosition(null)
     setFormulaInputValue(getDisplayValueForCell(activeCell))
     if (formulaInputRef.current) {
       formulaInputRef.current.blur()
@@ -2172,17 +2340,59 @@ export default function CsvWorkbench({
     }
     formulaEditingRef.current = false
     setIsFormulaEditing(false)
+    setSuppressFormulaSuggestions(true)
+    setFormulaCaretPosition(null)
   }, [activeCell, formulaInputValue, visibleColumns, setCellFormula, clearCellFormula, updateCellValue])
 
   const handleFormulaBlur = useCallback(() => {
     if (!formulaEditingRef.current) {
       return
     }
+    setSuppressFormulaSuggestions(true)
     applyFormulaInput()
   }, [applyFormulaInput])
 
   const handleFormulaKeyDown = useCallback(
     (event) => {
+      if (suggestionsOpen && formulaSuggestions.length > 0) {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault()
+          setActiveSuggestionIndex((previous) => {
+            if (formulaSuggestions.length === 0) {
+              return 0
+            }
+            const nextIndex = previous + 1
+            return nextIndex >= formulaSuggestions.length ? 0 : nextIndex
+          })
+          return
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault()
+          setActiveSuggestionIndex((previous) => {
+            if (formulaSuggestions.length === 0) {
+              return 0
+            }
+            const nextIndex = previous - 1
+            return nextIndex < 0 ? formulaSuggestions.length - 1 : nextIndex
+          })
+          return
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          const suggestion =
+            (highlightedSuggestionIndex >= 0
+              ? formulaSuggestions[highlightedSuggestionIndex]
+              : formulaSuggestions[0]) || null
+          applyFormulaSuggestion(suggestion)
+          return
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          setSuppressFormulaSuggestions(true)
+          return
+        }
+      }
+
       if (event.key === 'Enter') {
         event.preventDefault()
         applyFormulaInput()
@@ -2191,13 +2401,21 @@ export default function CsvWorkbench({
         handleFormulaCancel()
       }
     },
-    [applyFormulaInput, handleFormulaCancel]
+    [
+      applyFormulaInput,
+      applyFormulaSuggestion,
+      formulaSuggestions,
+      handleFormulaCancel,
+      highlightedSuggestionIndex,
+      suggestionsOpen
+    ]
   )
 
   const handleInsertRange = useCallback(() => {
     if (!selectionReference) {
       return
     }
+    let nextCursorPosition = null
     setFormulaInputValue((previous) => {
       const base = typeof previous === 'string' ? previous : ''
       const inputElement = formulaInputRef.current
@@ -2211,11 +2429,14 @@ export default function CsvWorkbench({
             inputElement.focus()
             const position = selectionReference.length + 1
             inputElement.setSelectionRange(position, position)
+            setFormulaCaretPosition(position)
           })
         }
+        nextCursorPosition = selectionReference.length + 1
         return `=${selectionReference}`
       }
       if (!inputElement) {
+        nextCursorPosition = base.length + selectionReference.length
         return `${base}${selectionReference}`
       }
       const start = inputElement.selectionStart ?? base.length
@@ -2225,11 +2446,17 @@ export default function CsvWorkbench({
         inputElement.focus()
         const position = start + selectionReference.length
         inputElement.setSelectionRange(position, position)
+        setFormulaCaretPosition(position)
       })
+      nextCursorPosition = start + selectionReference.length
       return next
     })
+    if (nextCursorPosition !== null) {
+      setFormulaCaretPosition(nextCursorPosition)
+    }
     formulaEditingRef.current = true
     setIsFormulaEditing(true)
+    setSuppressFormulaSuggestions(false)
     if (formulaInputRef.current) {
       formulaInputRef.current.focus()
     }
@@ -4919,18 +5146,61 @@ export default function CsvWorkbench({
                               Bereich einfügen
                             </button>
                           </div>
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                            <input
-                              ref={formulaInputRef}
-                              type="text"
-                              value={formulaInputValue}
-                              onChange={handleFormulaInputChange}
-                              onFocus={handleFormulaFocus}
-                              onBlur={handleFormulaBlur}
-                              onKeyDown={handleFormulaKeyDown}
-                              placeholder={activeCellLabel ? `Formel für ${activeCellLabel}` : 'Formel eingeben'}
-                              className="flex-1 rounded-md border border-gray-700 bg-dark-secondary px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
-                            />
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+                            <div className="relative flex-1">
+                              <input
+                                ref={formulaInputRef}
+                                type="text"
+                                value={formulaInputValue}
+                                onChange={handleFormulaInputChange}
+                                onFocus={handleFormulaFocus}
+                                onBlur={handleFormulaBlur}
+                                onKeyDown={handleFormulaKeyDown}
+                                onSelect={handleFormulaSelectionChange}
+                                onKeyUp={handleFormulaSelectionChange}
+                                onClick={handleFormulaSelectionChange}
+                                placeholder={activeCellLabel ? `Formel für ${activeCellLabel}` : 'Formel eingeben'}
+                                className="flex-1 rounded-md border border-gray-700 bg-dark-secondary px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                              />
+                              {suggestionsOpen && (
+                                <div className="absolute left-0 right-0 z-50 mt-1 max-h-52 overflow-auto rounded-md border border-gray-700 bg-dark-secondary shadow-lg">
+                                  {formulaSuggestions.map((suggestion, index) => {
+                                    const isActive = index === highlightedSuggestionIndex
+                                    return (
+                                      <button
+                                        key={`formula-suggestion-${suggestion.name}`}
+                                        type="button"
+                                        className={`flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-xs transition-colors ${
+                                          isActive
+                                            ? 'bg-dark-accent1/20 text-dark-textLight'
+                                            : 'text-dark-textGray hover:bg-dark-secondary/60 hover:text-dark-textLight'
+                                        }`}
+                                        onMouseEnter={() => setActiveSuggestionIndex(index)}
+                                        onMouseDown={(event) => {
+                                          event.preventDefault()
+                                          applyFormulaSuggestion(suggestion)
+                                        }}
+                                      >
+                                        <span className="font-semibold text-dark-textLight">{suggestion.name}</span>
+                                        <span className="font-mono text-[11px] text-dark-textLight/70">{`=${suggestion.syntax}`}</span>
+                                        <span className="text-[11px] text-dark-textGray/80">{suggestion.description}</span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                              {currentFormulaHelp && (
+                                <div className="absolute left-full top-0 hidden w-64 translate-x-3 sm:block">
+                                  <div className="rounded-md border border-gray-700 bg-dark-secondary/70 p-3 text-xs text-dark-textGray">
+                                    <div className="font-semibold text-dark-textLight">{currentFormulaHelp.name}</div>
+                                    <div className="mt-1 font-mono text-[11px] text-dark-textLight/80">{`=${currentFormulaHelp.syntax}`}</div>
+                                    <p className="mt-1 text-[11px] text-dark-textGray/80">
+                                      {currentFormulaHelp.description}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                             <div className="flex gap-2">
                               <button
                                 type="button"
@@ -4953,6 +5223,13 @@ export default function CsvWorkbench({
                               </button>
                             </div>
                           </div>
+                          {currentFormulaHelp && (
+                            <div className="mt-1 rounded-md border border-gray-700 bg-dark-secondary/70 p-3 text-xs text-dark-textGray sm:hidden">
+                              <div className="font-semibold text-dark-textLight">{currentFormulaHelp.name}</div>
+                              <div className="mt-1 font-mono text-[11px] text-dark-textLight/80">{`=${currentFormulaHelp.syntax}`}</div>
+                              <p className="mt-1 text-[11px] text-dark-textGray/80">{currentFormulaHelp.description}</p>
+                            </div>
+                          )}
                           {activeFormulaError && (
                             <p className="mt-2 text-xs text-red-300">{activeFormulaError}</p>
                           )}

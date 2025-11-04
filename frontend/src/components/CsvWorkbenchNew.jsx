@@ -617,7 +617,6 @@ export default function CsvWorkbenchNew({
           {totalRows === 0 ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center max-w-md">
-                <div className="text-6xl mb-4">📊</div>
                 <h3 className="text-xl font-semibold text-dark-textLight mb-2">
                   Keine Daten geladen
                 </h3>

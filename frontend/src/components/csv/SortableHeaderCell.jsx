@@ -90,9 +90,7 @@ export default function SortableHeaderCell({
             {column.key}
           </span>
           {isGroupingColumn && (
-            <span className="rounded bg-blue-500/20 px-1 text-[9px] leading-none text-blue-200" title="Gruppierungsspalte">
-              📊
-            </span>
+            <span className="rounded bg-blue-500/20 px-1 text-[9px] leading-none text-blue-200" title="Gruppierungsspalte"></span>
           )}
           {isAggregatedValue && aggregationOperation && (
             <span className="rounded bg-green-500/20 px-1 text-[9px] leading-none text-green-200" title={`Aggregiert: ${aggregationOperation === 'sum' ? 'Summe' : aggregationOperation === 'average' ? 'Durchschnitt' : aggregationOperation === 'min' ? 'Minimum' : aggregationOperation === 'max' ? 'Maximum' : aggregationOperation === 'count' ? 'Anzahl' : aggregationOperation}`}>

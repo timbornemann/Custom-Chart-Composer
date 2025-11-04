@@ -1529,7 +1529,7 @@ function AnnotationEditor({ annotations, onChange, chartType, config }) {
             onClick={() => setShowAutoAnnotations(!showAutoAnnotations)}
             className="px-3 py-1.5 text-xs font-medium text-dark-textLight bg-blue-600/20 border border-blue-500/40 rounded hover:border-blue-500 transition-colors"
           >
-            📊 Auto-Statistiken
+            Auto-Statistiken
           </button>
         </div>
       </div>
@@ -3140,7 +3140,7 @@ function AutoAnnotationPanel({ onAddAnnotations, chartType, config }) {
 
   return (
     <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-      <h4 className="text-sm font-medium text-blue-300 mb-3">📊 Automatische Statistiken</h4>
+      <h4 className="text-sm font-medium text-blue-300 mb-3">Automatische Statistiken</h4>
       <p className="text-xs text-blue-200 mb-4">
         Erstelle automatisch Linien für wichtige statistische Werte basierend auf Ihren Daten.
       </p>

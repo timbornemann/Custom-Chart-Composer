@@ -1513,7 +1513,10 @@ const prepareGroupingHelpers = (grouping) => {
 
 const aggregateRows = (rows, mapping, grouping, aggregations) => {
   const labelKey = mapping?.label
-  const valueColumns = mapping?.valueColumns || []
+  // Use aggregations.valueColumns if available, otherwise fall back to mapping.valueColumns
+  const valueColumns = Array.isArray(aggregations?.valueColumns) && aggregations.valueColumns.length > 0
+    ? aggregations.valueColumns
+    : (mapping?.valueColumns || [])
   const datasetKey = mapping?.datasetLabel
   const configuredColumns = Array.isArray(grouping?.columns)
     ? grouping.columns
@@ -3165,7 +3168,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         setFormulaMap({})
         setFormulaErrors({})
         setTransformations(createDefaultTransformations())
-        setPreviewLimit(5)
+        setPreviewLimit(50)
         setSearchQuery('')
         setSortConfig([])
 

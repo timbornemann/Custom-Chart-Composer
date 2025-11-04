@@ -12,6 +12,8 @@ export default function CsvToolbar({
   onFileChange,
   onApply,
   onReset,
+  onSave,
+  onExportTransformed,
   canApply,
   manualEditCount,
   canUndo,
@@ -66,6 +68,17 @@ export default function CsvToolbar({
           >
             📁 Datei
           </label>
+          {/* Reset */}
+          {totalRows > 0 && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-red-600 hover:text-red-200"
+              title="Daten zurücksetzen"
+            >
+              ⟲ Zurücksetzen
+            </button>
+          )}
           
           {totalRows > 0 && (
             <>
@@ -133,6 +146,26 @@ export default function CsvToolbar({
                     </button>
                   </>
                 )}
+              </div>
+
+              {/* Save / Export */}
+              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
+                <button
+                  type="button"
+                  onClick={onSave}
+                  className="rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-dark-accent1"
+                  title="Originaldaten als CSV speichern"
+                >
+                  💾 Speichern
+                </button>
+                <button
+                  type="button"
+                  onClick={onExportTransformed}
+                  className="rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-dark-accent1"
+                  title="Aktuelle (gefilterte/ gruppierte) Ansicht als CSV exportieren"
+                >
+                  ⭳ Export Ansicht
+                </button>
               </div>
 
               {/* Data Scope Switcher */}
@@ -280,6 +313,8 @@ CsvToolbar.propTypes = {
   onFileChange: PropTypes.func,
   onApply: PropTypes.func,
   onReset: PropTypes.func,
+  onSave: PropTypes.func,
+  onExportTransformed: PropTypes.func,
   canApply: PropTypes.bool,
   manualEditCount: PropTypes.number,
   canUndo: PropTypes.bool,

@@ -474,7 +474,7 @@ export default function CsvWorkbench({
 
   const {
     columns,
-    visibleColumns,
+    visibleColumns: baseVisibleColumns,
     hiddenColumns,
     columnByKey,
     columnIndexMap,
@@ -497,6 +497,123 @@ export default function CsvWorkbench({
     pinnedLeftOffsets,
     pinnedRightOffsets
   } = columnsHook
+
+  // Create dynamic columns for grouped view or use base columns
+  const visibleColumns = useMemo(() => {
+    // In raw scope, always use base columns
+    if (dataScope !== 'transformed') {
+      return baseVisibleColumns
+    }
+
+    // Check if grouping is active
+    const groupingCols = transformationMeta?.groupingColumns || []
+    const hasGrouping = groupingCols.length > 0 && transformations?.grouping?.enabled
+    
+    if (!hasGrouping) {
+      return baseVisibleColumns
+    }
+
+    // Create new columns for grouped view
+    const aggregationsConfig = transformations?.aggregations || {}
+    // Use aggregations.valueColumns if available, otherwise fall back to mapping.valueColumns
+    const valueCols = Array.isArray(aggregationsConfig?.valueColumns) && aggregationsConfig.valueColumns.length > 0
+      ? aggregationsConfig.valueColumns
+      : (mapping?.valueColumns || [])
+    const datasetCol = mapping?.datasetLabel
+    const operationLabelMap = {
+      sum: 'Summe',
+      average: 'Durchschnitt',
+      min: 'Minimum',
+      max: 'Maximum',
+      count: 'Anzahl',
+      countRows: 'Anzahl Datenpunkte',
+      countValid: 'Anzahl (nach Kriterien)',
+      median: 'Median',
+      stdDev: 'Standardabweichung',
+      variance: 'Varianz',
+      product: 'Produkt',
+      first: 'Erster Wert',
+      last: 'Letzter Wert'
+    }
+
+    const newColumns = []
+    
+    // 1. Add grouping columns first
+    groupingCols.forEach((colKey, index) => {
+      const originalCol = columnByKey.get(colKey)
+      if (originalCol) {
+        newColumns.push({
+          ...originalCol,
+          key: colKey,
+          display: {
+            ...originalCol.display,
+            order: index
+          },
+          isGroupingColumn: true
+        })
+      } else {
+        // Create new column if it doesn't exist in base columns
+        const transformedRows = transformedPreviewEntries?.map(e => e.row) || []
+        const sampleValue = transformedRows[0]?.[colKey]
+        const isNumeric = typeof sampleValue === 'number' || (!isNaN(parseFloat(sampleValue)) && isFinite(sampleValue))
+        newColumns.push({
+          key: colKey,
+          type: isNumeric ? 'number' : 'text',
+          display: {
+            order: index,
+            width: null,
+            isVisible: true,
+            pinned: null
+          },
+          isGroupingColumn: true
+        })
+      }
+    })
+
+    // 2. Add aggregated value columns with descriptive names
+    valueCols.forEach((colKey, index) => {
+      const operation = aggregationsConfig?.perColumn?.[colKey] || aggregationsConfig?.defaultOperation || 'sum'
+      const operationLabel = operationLabelMap[operation] || operation
+      const originalCol = columnByKey.get(colKey)
+      const baseType = originalCol?.type || 'number'
+      
+      // Create new column name based on aggregation
+      const newColumnKey = `${colKey}_${operation}`
+      const newColumnName = `${colKey} (${operationLabel})`
+      
+      newColumns.push({
+        key: newColumnKey,
+        originalKey: colKey,
+        displayName: newColumnName,
+        type: baseType,
+        display: {
+          order: groupingCols.length + index,
+          width: null,
+          isVisible: true,
+          pinned: null
+        },
+        isAggregatedValue: true,
+        aggregationOperation: operation
+      })
+    })
+
+    // 3. Add dataset column if present
+    if (datasetCol) {
+      const originalCol = columnByKey.get(datasetCol)
+      if (originalCol) {
+        newColumns.push({
+          ...originalCol,
+          key: datasetCol,
+          display: {
+            ...originalCol.display,
+            order: groupingCols.length + valueCols.length
+          }
+        })
+      }
+    }
+
+    return newColumns
+  }, [baseVisibleColumns, dataScope, transformationMeta, mapping, transformations, columnByKey, transformedPreviewEntries])
 
   // ==========================================================================
   // SEARCH & FIND/REPLACE
@@ -1470,6 +1587,80 @@ export default function CsvWorkbench({
     if (onResetWorkbench) onResetWorkbench()
   }, [reset, onImportStateChange, onResetWorkbench])
 
+  const downloadCsv = useCallback((rowsToExport, fileBaseName = 'daten') => {
+    try {
+      if (!Array.isArray(rowsToExport)) return
+      const fields = columns.map((c) => c.key)
+      const csv = Papa.unparse({ fields, data: rowsToExport.map((row) => fields.map((f) => row[f])) })
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `${fileBaseName}.csv`
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
+      URL.revokeObjectURL(url)
+    } catch (_) {}
+  }, [columns])
+
+  const fileHandleRef = useRef(null)
+
+  const saveBlobToHandle = useCallback(async (handle, blob) => {
+    const writable = await handle.createWritable()
+    await writable.write(blob)
+    await writable.close()
+  }, [])
+
+  const saveRowsViaPicker = useCallback(async (rowsToExport, suggestedName) => {
+    const fields = columns.map((c) => c.key)
+    const csv = Papa.unparse({ fields, data: rowsToExport.map((row) => fields.map((f) => row[f])) })
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    if (window.showSaveFilePicker) {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: `${suggestedName}.csv`,
+        types: [{ description: 'CSV', accept: { 'text/csv': ['.csv'] } }]
+      })
+      await saveBlobToHandle(handle, blob)
+      fileHandleRef.current = handle
+      return true
+    }
+    // Fallback to download
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${suggestedName}.csv`
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    URL.revokeObjectURL(url)
+    return true
+  }, [columns, saveBlobToHandle])
+
+  const handleSaveOriginalCsv = useCallback(async () => {
+    const state = getImportState()
+    const baseRows = state?.rows || []
+    if (!baseRows || baseRows.length === 0) return
+    const base = (state?.fileName ? state.fileName.replace(/\.[^.]+$/, '') : 'daten') + '-bearbeitet'
+    // Try to overwrite existing handle if available
+    if (fileHandleRef.current && fileHandleRef.current.createWritable) {
+      const fields = columns.map((c) => c.key)
+      const csv = Papa.unparse({ fields, data: baseRows.map((row) => fields.map((f) => row[f])) })
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      try {
+        await saveBlobToHandle(fileHandleRef.current, blob)
+        return
+      } catch (_) { /* fall back to picker */ }
+    }
+    await saveRowsViaPicker(baseRows, base)
+  }, [getImportState, columns, saveBlobToHandle, saveRowsViaPicker])
+
+  const handleExportTransformedCsv = useCallback(async () => {
+    if (!transformedRows || transformedRows.length === 0) return
+    const base = (fileName ? fileName.replace(/\.[^.]+$/, '') : 'daten') + '-ansicht'
+    await saveRowsViaPicker(transformedRows, base)
+  }, [transformedRows, fileName, saveRowsViaPicker])
+
   const handleApplyToChart = useCallback(() => {
     const result = getImportResult()
     if (!result) return
@@ -1521,6 +1712,8 @@ export default function CsvWorkbench({
         onFileChange={handleFileChange}
         onApply={handleApplyToChart}
         onReset={handleResetWorkbench}
+        onSave={handleSaveOriginalCsv}
+        onExportTransformed={handleExportTransformedCsv}
         canApply={totalRows > 0}
         manualEditCount={manualEdits?.count || 0}
         canUndo={canUndoManualEdit}
@@ -1621,7 +1814,6 @@ export default function CsvWorkbench({
           {totalRows === 0 ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center max-w-md">
-                <div className="text-6xl mb-4">📊</div>
                 <h3 className="text-xl font-semibold text-dark-textLight mb-2">Keine Daten geladen</h3>
                 <p className="text-sm text-dark-textGray mb-6">
                   Laden Sie eine CSV, TSV oder Excel-Datei um zu starten

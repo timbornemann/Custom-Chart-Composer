@@ -63,15 +63,17 @@ export default function CsvTable({
                 {visibleColumns.map((column) => {
                   const sortIndex = activeSorts.findIndex((entry) => entry.column === column.key)
                   const sortEntry = sortIndex >= 0 ? activeSorts[sortIndex] : null
-                  const isGroupingColumn = scope === 'transformed' && groupingColumns.includes(column.key)
-                  const isValueColumn = scope === 'transformed' && mapping?.valueColumns?.includes(column.key)
-                  const aggregationOperation = isValueColumn && aggregations?.perColumn?.[column.key] 
+                  const isGroupingColumn = column.isGroupingColumn || (scope === 'transformed' && groupingColumns.includes(column.key))
+                  const isValueColumn = column.isAggregatedValue || (scope === 'transformed' && mapping?.valueColumns?.includes(column.key))
+                  const aggregationOperation = column.aggregationOperation || (isValueColumn && aggregations?.perColumn?.[column.key] 
                     ? aggregations.perColumn[column.key] 
-                    : (isValueColumn && aggregations?.defaultOperation) || null
+                    : (isValueColumn && aggregations?.defaultOperation) || null)
+                  // Use displayName if available, otherwise use key
+                  const columnDisplayName = column.displayName || column.key
                   return (
                     <SortableHeaderCell
                       key={column.key}
-                      column={column}
+                      column={{ ...column, key: columnDisplayName }}
                       sortEntry={sortEntry}
                       sortIndex={sortIndex}
                       onSortToggle={onSortToggle}
@@ -167,9 +169,17 @@ export default function CsvTable({
 
                     {/* Data cells */}
                     {visibleColumns.map((column) => {
+                      // For aggregated columns, use originalKey to get the value from transformed data
+                      // The transformed rows still have the original column names with aggregated values
+                      const dataKey = column.originalKey || column.key
                       const isEditing = editingCell?.rowIndex === entry.index && editingCell.columnKey === column.key
-                      const matches = entry.matchInfo?.[column.key]
-                      const highlightedValue = renderHighlightedValue(entry.row[column.key], matches)
+                      const matches = entry.matchInfo?.[dataKey] || entry.matchInfo?.[column.key]
+                      // Get value: try originalKey first (for aggregated columns), then column.key, then displayName
+                      let cellValue = entry.row[dataKey]
+                      if (cellValue === undefined && entry.row[column.key] !== undefined) {
+                        cellValue = entry.row[column.key]
+                      }
+                      const highlightedValue = renderHighlightedValue(cellValue, matches)
                       const hasContent = Array.isArray(highlightedValue) ? highlightedValue.length > 0 : Boolean(highlightedValue)
                       const isSelected = selectedCellSet.has(`${entry.index}::${column.key}`)
                       const isActiveMatch =
@@ -181,9 +191,8 @@ export default function CsvTable({
                       const cellLeft = pinnedLeftOffsets.get(column.key)
                       const cellRight = pinnedRightOffsets.get(column.key)
                       const cellWidth = getColumnWidth(column.key)
-                      const isGroupingColumn = scope === 'transformed' && groupingColumns.includes(column.key)
-                      const isValueColumn = scope === 'transformed' && mapping?.valueColumns?.includes(column.key)
-                      const isIrrelevantInGroupedView = scope === 'transformed' && groupingColumns.length > 0 && !isGroupingColumn && !isValueColumn
+                      const isGroupingColumn = column.isGroupingColumn || (scope === 'transformed' && groupingColumns.includes(column.key))
+                      const isValueColumn = column.isAggregatedValue || (scope === 'transformed' && mapping?.valueColumns?.includes(column.key))
                       
                       const cellStyle = {
                         minWidth: `${Math.max(cellWidth, MIN_COLUMN_WIDTH)}px`,
@@ -210,13 +219,11 @@ export default function CsvTable({
                         <td
                           key={column.key}
                           className={`px-3 py-2 text-xs ${
-                            isIrrelevantInGroupedView 
-                              ? 'text-dark-textGray/40 bg-dark-bg/20' 
-                              : isGroupingColumn 
-                                ? 'text-blue-200/90' 
-                                : isValueColumn 
-                                  ? 'text-green-200/90' 
-                                  : 'text-dark-textLight/90'
+                            isGroupingColumn 
+                              ? 'text-blue-200/90' 
+                              : isValueColumn 
+                                ? 'text-green-200/90' 
+                                : 'text-dark-textLight/90'
                           } ${
                             isSelected ? 'bg-dark-accent1/20 text-dark-textLight ring-1 ring-dark-accent1/40' : ''
                           } ${
@@ -227,7 +234,6 @@ export default function CsvTable({
                               : ''
                           }`}
                           style={cellStyle}
-                          title={isIrrelevantInGroupedView ? 'Diese Spalte ist bei Gruppierung nicht relevant' : undefined}
                         >
                           {isEditing ? (
                             <input

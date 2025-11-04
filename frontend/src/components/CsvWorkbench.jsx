@@ -1677,6 +1677,10 @@ export default function CsvWorkbench({
               onCancelEdit={cancelEdit}
               onToggleRowHidden={handleToggleRowHidden}
               onToggleRowPinned={handleToggleRowPinned}
+              transformationMeta={dataScope === 'transformed' ? transformationMeta : null}
+              groupingColumns={dataScope === 'transformed' && transformationMeta?.groupingColumns ? transformationMeta.groupingColumns : []}
+              mapping={mapping}
+              aggregations={transformations?.aggregations}
             />
           )}
         </div>

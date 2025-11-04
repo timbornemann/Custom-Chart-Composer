@@ -39,7 +39,11 @@ export default function CsvTable({
   onConfirmEdit,
   onCancelEdit,
   onToggleRowHidden,
-  onToggleRowPinned
+  onToggleRowPinned,
+  transformationMeta,
+  groupingColumns = [],
+  mapping = {},
+  aggregations = {}
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -59,6 +63,11 @@ export default function CsvTable({
                 {visibleColumns.map((column) => {
                   const sortIndex = activeSorts.findIndex((entry) => entry.column === column.key)
                   const sortEntry = sortIndex >= 0 ? activeSorts[sortIndex] : null
+                  const isGroupingColumn = scope === 'transformed' && groupingColumns.includes(column.key)
+                  const isValueColumn = scope === 'transformed' && mapping?.valueColumns?.includes(column.key)
+                  const aggregationOperation = isValueColumn && aggregations?.perColumn?.[column.key] 
+                    ? aggregations.perColumn[column.key] 
+                    : (isValueColumn && aggregations?.defaultOperation) || null
                   return (
                     <SortableHeaderCell
                       key={column.key}
@@ -75,6 +84,9 @@ export default function CsvTable({
                       leftOffset={pinnedLeftOffsets.get(column.key)}
                       rightOffset={pinnedRightOffsets.get(column.key)}
                       width={getColumnWidth(column.key)}
+                      isGroupingColumn={isGroupingColumn}
+                      isAggregatedValue={isValueColumn && aggregationOperation}
+                      aggregationOperation={aggregationOperation}
                     />
                   )
                 })}
@@ -169,6 +181,9 @@ export default function CsvTable({
                       const cellLeft = pinnedLeftOffsets.get(column.key)
                       const cellRight = pinnedRightOffsets.get(column.key)
                       const cellWidth = getColumnWidth(column.key)
+                      const isGroupingColumn = scope === 'transformed' && groupingColumns.includes(column.key)
+                      const isValueColumn = scope === 'transformed' && mapping?.valueColumns?.includes(column.key)
+                      const isIrrelevantInGroupedView = scope === 'transformed' && groupingColumns.length > 0 && !isGroupingColumn && !isValueColumn
                       
                       const cellStyle = {
                         minWidth: `${Math.max(cellWidth, MIN_COLUMN_WIDTH)}px`,
@@ -194,7 +209,15 @@ export default function CsvTable({
                       return (
                         <td
                           key={column.key}
-                          className={`px-3 py-2 text-xs text-dark-textLight/90 ${
+                          className={`px-3 py-2 text-xs ${
+                            isIrrelevantInGroupedView 
+                              ? 'text-dark-textGray/40 bg-dark-bg/20' 
+                              : isGroupingColumn 
+                                ? 'text-blue-200/90' 
+                                : isValueColumn 
+                                  ? 'text-green-200/90' 
+                                  : 'text-dark-textLight/90'
+                          } ${
                             isSelected ? 'bg-dark-accent1/20 text-dark-textLight ring-1 ring-dark-accent1/40' : ''
                           } ${
                             isActiveMatch
@@ -204,6 +227,7 @@ export default function CsvTable({
                               : ''
                           }`}
                           style={cellStyle}
+                          title={isIrrelevantInGroupedView ? 'Diese Spalte ist bei Gruppierung nicht relevant' : undefined}
                         >
                           {isEditing ? (
                             <input
@@ -321,6 +345,10 @@ CsvTable.propTypes = {
   onConfirmEdit: PropTypes.func,
   onCancelEdit: PropTypes.func,
   onToggleRowHidden: PropTypes.func,
-  onToggleRowPinned: PropTypes.func
+  onToggleRowPinned: PropTypes.func,
+  transformationMeta: PropTypes.object,
+  groupingColumns: PropTypes.array,
+  mapping: PropTypes.object,
+  aggregations: PropTypes.object
 }
 

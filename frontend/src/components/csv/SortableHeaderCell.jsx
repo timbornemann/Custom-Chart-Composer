@@ -16,7 +16,10 @@ export default function SortableHeaderCell({
   isPinnedRight,
   leftOffset,
   rightOffset,
-  width
+  width,
+  isGroupingColumn = false,
+  isAggregatedValue = false,
+  aggregationOperation = null
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.key })
   const headerRef = useCallback(
@@ -57,7 +60,7 @@ export default function SortableHeaderCell({
   }
 
   const isSorted = Boolean(sortEntry)
-  const sortSymbol = sortEntry ? (sortEntry.direction === 'desc' ? '?' : '?') : ''
+  const sortSymbol = sortEntry ? (sortEntry.direction === 'desc' ? '▼' : '▲') : ''
 
   return (
     <th ref={headerRef} style={headerStyle} className="group border-b border-gray-700 px-3 py-2 text-left text-xs uppercase tracking-wide text-dark-textGray">
@@ -74,7 +77,7 @@ export default function SortableHeaderCell({
           title="Spalte ziehen"
           onMouseDown={(event) => event.stopPropagation()}
         >
-          ??
+          ☰
         </button>
         <button
           type="button"
@@ -83,7 +86,19 @@ export default function SortableHeaderCell({
             isSorted ? 'text-dark-textLight' : 'text-dark-textGray'
           } hover:text-dark-textLight focus:outline-none`}
         >
-          <span className="truncate font-medium">{column.key}</span>
+          <span className={`truncate font-medium ${isGroupingColumn ? 'text-blue-300' : isAggregatedValue ? 'text-green-300' : ''}`}>
+            {column.key}
+          </span>
+          {isGroupingColumn && (
+            <span className="rounded bg-blue-500/20 px-1 text-[9px] leading-none text-blue-200" title="Gruppierungsspalte">
+              📊
+            </span>
+          )}
+          {isAggregatedValue && aggregationOperation && (
+            <span className="rounded bg-green-500/20 px-1 text-[9px] leading-none text-green-200" title={`Aggregiert: ${aggregationOperation === 'sum' ? 'Summe' : aggregationOperation === 'average' ? 'Durchschnitt' : aggregationOperation === 'min' ? 'Minimum' : aggregationOperation === 'max' ? 'Maximum' : aggregationOperation === 'count' ? 'Anzahl' : aggregationOperation}`}>
+              {aggregationOperation === 'sum' ? 'Σ' : aggregationOperation === 'average' ? 'μ' : aggregationOperation === 'min' ? '↓' : aggregationOperation === 'max' ? '↑' : aggregationOperation === 'count' ? '#' : '⚡'}
+            </span>
+          )}
           {isSorted && (
             <span className="flex items-center gap-1 text-[10px]">
               <span>{sortSymbol}</span>
@@ -105,11 +120,11 @@ export default function SortableHeaderCell({
               column.display?.pinned === 'left'
                 ? 'Spalte rechts fixieren'
                 : column.display?.pinned === 'right'
-                  ? 'Fixierung l?sen'
+                  ? 'Fixierung lösen'
                   : 'Spalte links fixieren'
             }
           >
-            <span className="leading-none">??</span>
+            <span className="leading-none">📌</span>
             {column.display?.pinned && (
               <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-semibold">
                 {column.display.pinned === 'left' ? 'L' : 'R'}
@@ -125,7 +140,7 @@ export default function SortableHeaderCell({
             className="rounded px-1 text-[10px] text-dark-textGray transition-colors hover:text-dark-textLight focus:outline-none"
             title="Spalte ausblenden"
           >
-            ??
+            👁
           </button>
           <button
             type="button"

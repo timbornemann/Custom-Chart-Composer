@@ -16,18 +16,18 @@ export default function DuplicatesSection({
   return (
     <div className="space-y-5">
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-dark-textLight">Duplikate pr?fen</h3>
+        <h3 className="text-sm font-semibold text-dark-textLight">Duplikate prüfen</h3>
         <p className="text-xs text-dark-textGray">
-          W?hlen Sie Schl?sselspalten, um doppelte Zeilen zu identifizieren und zu bereinigen.
+          Wählen Sie Schlüsselspalten, um doppelte Zeilen zu identifizieren und zu bereinigen.
         </p>
       </div>
 
       <div className="space-y-4 rounded-lg border border-gray-700 bg-dark-bg/40 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h4 className="text-sm font-semibold text-dark-textLight">Schl?sselspalten</h4>
+            <h4 className="text-sm font-semibold text-dark-textLight">Schlüsselspalten</h4>
             <p className="text-[11px] text-dark-textGray">
-              Die Kombination dieser Spalten dient als eindeutiger Schl?ssel f?r Duplikate.
+              Die Kombination dieser Spalten dient als eindeutiger Schlüssel für Duplikate.
             </p>
           </div>
           <div className="flex gap-2 text-[11px]">
@@ -79,9 +79,9 @@ export default function DuplicatesSection({
         </div>
 
         <div className="rounded-md border border-gray-700/60 bg-dark-secondary/30 p-3 text-[11px] text-dark-textGray">
-          {!hasDuplicateSelection && <p>W?hlen Sie mindestens eine Spalte aus, um nach Duplikaten zu suchen.</p>}
+          {!hasDuplicateSelection && <p>Wählen Sie mindestens eine Spalte aus, um nach Duplikaten zu suchen.</p>}
           {hasDuplicateSelection && !hasDuplicates && (
-            <p className="text-dark-textLight/80">F?r die ausgew?hlten Schl?ssel wurden keine Duplikate gefunden.</p>
+            <p className="text-dark-textLight/80">Für die ausgewählten Schlüssel wurden keine Duplikate gefunden.</p>
           )}
           {hasDuplicateSelection && hasDuplicates && (
             <div className="space-y-1 text-dark-textLight/90">
@@ -103,7 +103,7 @@ export default function DuplicatesSection({
             className="rounded-md border border-gray-700 px-3 py-1.5 text-xs font-medium text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-accent1 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!hasDuplicates}
           >
-            ?lteste Zeile behalten
+            Älteste Zeile behalten
           </button>
           <button
             type="button"
@@ -111,7 +111,7 @@ export default function DuplicatesSection({
             className="rounded-md border border-gray-700 px-3 py-1.5 text-xs font-medium text-dark-textLight transition-colors hover:border-dark-accent1 hover:text-dark-accent1 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!hasDuplicates}
           >
-            Zusammenf?hren
+            Zusammenführen
           </button>
           {duplicateActionFeedback && (
             <span
@@ -129,8 +129,8 @@ export default function DuplicatesSection({
             <table className="min-w-full divide-y divide-gray-700 text-[11px]">
               <thead className="bg-dark-secondary/40 text-[10px] uppercase tracking-wide text-dark-textGray">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold">Schl?ssel</th>
-                  <th className="px-3 py-2 text-left font-semibold">Prim?rzeile</th>
+                  <th className="px-3 py-2 text-left font-semibold">Schlüssel</th>
+                  <th className="px-3 py-2 text-left font-semibold">Primärzeile</th>
                   <th className="px-3 py-2 text-left font-semibold">Weitere Zeilen</th>
                 </tr>
               </thead>

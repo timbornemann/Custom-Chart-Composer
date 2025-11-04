@@ -64,14 +64,14 @@ export const SUGGESTION_PREVIEW_COLORS = [
 export const FILTER_OPERATORS = [
   { value: 'equalsText', label: 'Text ist gleich' },
   { value: 'notEqualsText', label: 'Text ist ungleich' },
-  { value: 'containsText', label: 'Text enth?lt' },
-  { value: 'notContainsText', label: 'Text enth?lt nicht' },
+  { value: 'containsText', label: 'Text enthält' },
+  { value: 'notContainsText', label: 'Text enthält nicht' },
   { value: 'matchesRegex', label: 'passt auf Regex' },
   { value: 'notMatchesRegex', label: 'passt nicht auf Regex' },
   { value: 'equals', label: 'Zahl ist gleich' },
   { value: 'notEquals', label: 'Zahl ist ungleich' },
-  { value: 'greaterThan', label: 'gr??er als' },
-  { value: 'greaterThanOrEqual', label: 'gr??er oder gleich' },
+  { value: 'greaterThan', label: 'größer als' },
+  { value: 'greaterThanOrEqual', label: 'größer oder gleich' },
   { value: 'lessThan', label: 'kleiner als' },
   { value: 'lessThanOrEqual', label: 'kleiner oder gleich' },
   { value: 'between', label: 'liegt zwischen' },
@@ -105,8 +105,8 @@ export const AGGREGATION_OPTIONS = [
 ]
 
 export const VALUE_RULE_CONDITIONS = [
-  { value: 'containsText', label: 'wenn Text enth?lt' },
-  { value: 'notContainsText', label: 'wenn Text nicht enth?lt' },
+  { value: 'containsText', label: 'wenn Text enthält' },
+  { value: 'notContainsText', label: 'wenn Text nicht enthält' },
   { value: 'equalsText', label: 'wenn Text gleich ist' },
   { value: 'isNumber', label: 'wenn Zahl' },
   { value: 'isEmpty', label: 'wenn leer' },

@@ -52,7 +52,7 @@ export default function FilterEditor({ columns, filters, onAddFilter, onToggleFi
                       onChange={(event) => onChangeFilter(filter.id, { column: event.target.value })}
                       className="w-full rounded-md border border-gray-700 bg-dark-bg px-2 py-1.5 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
                     >
-                      <option value="">Spalte w?hlen ?</option>
+                      <option value="">Spalte wählen </option>
                       {columns.map((column) => (
                         <option key={column.key} value={column.key}>
                           {column.key}

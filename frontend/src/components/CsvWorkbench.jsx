@@ -109,6 +109,13 @@ export default function CsvWorkbench({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [leftPanelOpen, setLeftPanelOpen] = useState(false)
   const [rightPanelOpen, setRightPanelOpen] = useState(false)
+  const [leftPanelWidth, setLeftPanelWidth] = useState(320) // w-80 = 320px
+  const [rightPanelWidth, setRightPanelWidth] = useState(320)
+  const [isResizingLeft, setIsResizingLeft] = useState(false)
+  const [isResizingRight, setIsResizingRight] = useState(false)
+  const [dataScope, setDataScope] = useState('transformed') // 'raw' or 'transformed'
+  const [rowsPerPage, setRowsPerPage] = useState('50')
+  const [showLargeDatasetWarning, setShowLargeDatasetWarning] = useState(false)
   const [activeLeftTab, setActiveLeftTab] = useState('mapping')
   const [activeRightTab, setActiveRightTab] = useState('search')
   const [showSearch, setShowSearch] = useState(false)
@@ -169,6 +176,58 @@ export default function CsvWorkbench({
       }))
     }
   }, [initialData])
+
+  // ==========================================================================
+  // PANEL RESIZE HANDLERS
+  // ==========================================================================
+  useEffect(() => {
+    if (!isResizingLeft && !isResizingRight) return
+
+    const handleMouseMove = (e) => {
+      if (isResizingLeft) {
+        const newWidth = Math.max(200, Math.min(800, e.clientX))
+        setLeftPanelWidth(newWidth)
+      }
+      if (isResizingRight) {
+        // For right panel, calculate from right edge
+        const rightEdge = window.innerWidth - e.clientX
+        const newWidth = Math.max(200, Math.min(800, rightEdge))
+        setRightPanelWidth(newWidth)
+      }
+    }
+
+    const handleMouseUp = () => {
+      setIsResizingLeft(false)
+      setIsResizingRight(false)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizingLeft, isResizingRight])
+
+  // ==========================================================================
+  // PAGINATION & SCOPE HANDLERS
+  // ==========================================================================
+  useEffect(() => {
+    // Update previewLimit in useDataImport when rowsPerPage changes
+    if (typeof setPreviewLimit === 'function') {
+      setPreviewLimit(rowsPerPage === 'all' ? 'all' : Number(rowsPerPage) || 50)
+    }
+  }, [rowsPerPage, setPreviewLimit])
+
+  useEffect(() => {
+    // Show warning for large datasets when "all" is selected
+    if (rowsPerPage === 'all' && totalRows > 1000) {
+      setShowLargeDatasetWarning(true)
+    } else {
+      setShowLargeDatasetWarning(false)
+    }
+  }, [rowsPerPage, totalRows])
 
   const registerVersionEvent = useCallback(
     (event) => {
@@ -1208,6 +1267,19 @@ export default function CsvWorkbench({
     return offsets
   }, [previewEntries, rowDisplayRaw, headerHeight])
 
+  const pinnedTransformedRowOffsets = useMemo(() => {
+    let offset = headerHeight
+    const offsets = new Map()
+    transformedPreviewEntries.forEach((entry) => {
+      if (rowDisplayTransformed[entry.index]?.pinned) {
+        const height = DEFAULT_ROW_HEIGHT
+        offsets.set(entry.index, offset)
+        offset += height
+      }
+    })
+    return offsets
+  }, [transformedPreviewEntries, rowDisplayTransformed, headerHeight])
+
   const handleToggleRowHidden = useCallback(
     (source, rowIndex) => {
       const sourceState = source === 'transformed' ? rowDisplayTransformed : rowDisplayRaw
@@ -1391,13 +1463,23 @@ export default function CsvWorkbench({
         onToggleRightPanel={() => setRightPanelOpen(!rightPanelOpen)}
         isFullscreen={isFullscreen}
         onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
+        dataScope={dataScope}
+        onDataScopeChange={setDataScope}
+        rowsPerPage={rowsPerPage}
+        onRowsPerPageChange={setRowsPerPage}
+        showLargeDatasetWarning={showLargeDatasetWarning}
+        onDismissWarning={() => setShowLargeDatasetWarning(false)}
       />
 
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT PANEL - Mapping & Transformations */}
         {!isFullscreen && leftPanelOpen && totalRows > 0 && (
-          <div className="w-80 flex-none border-r border-gray-700 bg-dark-secondary overflow-y-auto">
-            <div className="p-4">
+          <>
+            <div
+              className="flex-none border-r border-gray-700 bg-dark-secondary overflow-y-auto"
+              style={{ width: `${leftPanelWidth}px` }}
+            >
+              <div className="p-4">
               <div className="flex gap-1 mb-4">
                 <button
                   onClick={() => setActiveLeftTab('mapping')}
@@ -1453,8 +1535,13 @@ export default function CsvWorkbench({
                   profilingMeta={profilingMeta}
                 />
               )}
+              </div>
             </div>
-          </div>
+            <div
+              className="w-1 cursor-col-resize bg-transparent hover:bg-dark-accent1 transition-colors"
+              onMouseDown={() => setIsResizingLeft(true)}
+            />
+          </>
         )}
 
         {/* CENTER - TABLE (Main Focus!) */}
@@ -1484,9 +1571,9 @@ export default function CsvWorkbench({
             </div>
           ) : (
             <CsvTable
-              entries={previewEntries}
+              entries={dataScope === 'transformed' ? transformedPreviewEntries : previewEntries}
               visibleColumns={visibleColumns}
-              rowDisplay={rowDisplayRaw}
+              rowDisplay={dataScope === 'transformed' ? rowDisplayTransformed : rowDisplayRaw}
               duplicateMetaByIndex={duplicateMetaByIndex}
               chartPreviewHighlight={chartPreviewHighlight}
               editingCell={editingCell}
@@ -1494,10 +1581,10 @@ export default function CsvWorkbench({
               selectedCellSet={selectedCellSet}
               activeSearchMatch={activeSearchMatch}
               manualEditMap={manualEditMap}
-              scope="raw"
+              scope={dataScope}
               activeSorts={activeSorts}
               headerRef={headerRef}
-              pinnedRowOffsets={pinnedRawRowOffsets}
+              pinnedRowOffsets={dataScope === 'transformed' ? pinnedTransformedRowOffsets : pinnedRawRowOffsets}
               headerHeight={headerHeight}
               pinnedLeftOffsets={pinnedLeftOffsets}
               pinnedRightOffsets={pinnedRightOffsets}
@@ -1524,9 +1611,17 @@ export default function CsvWorkbench({
 
         {/* RIGHT PANEL - Tools */}
         {!isFullscreen && rightPanelOpen && totalRows > 0 && (
-          <div className="w-80 flex-none border-l border-gray-700 bg-dark-secondary overflow-y-auto">
-            <div className="p-4">
-              <CsvToolsPanel
+          <>
+            <div
+              className="w-1 cursor-col-resize bg-transparent hover:bg-dark-accent1 transition-colors"
+              onMouseDown={() => setIsResizingRight(true)}
+            />
+            <div
+              className="flex-none border-l border-gray-700 bg-dark-secondary overflow-y-auto"
+              style={{ width: `${rightPanelWidth}px` }}
+            >
+              <div className="p-4">
+                <CsvToolsPanel
                 activeTab={activeRightTab}
                 onTabChange={setActiveRightTab}
                 columns={columns}
@@ -1562,8 +1657,9 @@ export default function CsvWorkbench({
                 transformations={transformations}
                 onUpdateTransformations={updateTransformations}
               />
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
 

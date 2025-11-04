@@ -25,7 +25,13 @@ export default function CsvToolbar({
   rightPanelOpen,
   onToggleRightPanel,
   isFullscreen,
-  onToggleFullscreen
+  onToggleFullscreen,
+  dataScope,
+  onDataScopeChange,
+  rowsPerPage,
+  onRowsPerPageChange,
+  showLargeDatasetWarning,
+  onDismissWarning
 }) {
   return (
     <div className="flex-none border-b border-gray-700 bg-dark-secondary">
@@ -128,6 +134,51 @@ export default function CsvToolbar({
                   </>
                 )}
               </div>
+
+              {/* Data Scope Switcher */}
+              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
+                <span className="text-xs text-dark-textGray mr-1">Ansicht:</span>
+                <button
+                  type="button"
+                  onClick={() => onDataScopeChange('raw')}
+                  className={`rounded px-2 py-1 text-xs transition-colors ${
+                    dataScope === 'raw'
+                      ? 'bg-dark-accent1 text-white'
+                      : 'bg-dark-bg text-dark-textGray hover:text-dark-textLight'
+                  }`}
+                  title="Original-Daten"
+                >
+                  Original
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDataScopeChange('transformed')}
+                  className={`rounded px-2 py-1 text-xs transition-colors ${
+                    dataScope === 'transformed'
+                      ? 'bg-dark-accent1 text-white'
+                      : 'bg-dark-bg text-dark-textGray hover:text-dark-textLight'
+                  }`}
+                  title="Transformierte Daten (mit Filter, Gruppierung, etc.)"
+                >
+                  Transformiert
+                </button>
+              </div>
+
+              {/* Pagination */}
+              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
+                <span className="text-xs text-dark-textGray mr-1">Zeilen:</span>
+                <select
+                  value={rowsPerPage}
+                  onChange={(e) => onRowsPerPageChange(e.target.value)}
+                  className="rounded border border-gray-700 bg-dark-bg px-2 py-1 text-xs text-dark-textLight"
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="all">Alle</option>
+                </select>
+              </div>
               
               {/* Search Toggle */}
               <button
@@ -182,6 +233,37 @@ export default function CsvToolbar({
           </div>
         </div>
       )}
+
+      {/* Large Dataset Warning */}
+      {showLargeDatasetWarning && (
+        <div className="border-t border-yellow-600 bg-yellow-900/20 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">⚠️</span>
+              <div className="text-sm text-yellow-200">
+                <strong>Großer Datensatz erkannt:</strong> {totalRows} Zeilen werden angezeigt. 
+                Dies kann die Performance beeinträchtigen.
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onRowsPerPageChange('100')}
+                className="rounded border border-yellow-600 bg-yellow-900/40 px-3 py-1 text-xs text-yellow-200 hover:bg-yellow-900/60"
+              >
+                100 Zeilen anzeigen
+              </button>
+              <button
+                type="button"
+                onClick={onDismissWarning}
+                className="rounded border border-yellow-600 bg-yellow-900/40 px-3 py-1 text-xs text-yellow-200 hover:bg-yellow-900/60"
+              >
+                Weiterhin alle anzeigen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -211,6 +293,12 @@ CsvToolbar.propTypes = {
   rightPanelOpen: PropTypes.bool,
   onToggleRightPanel: PropTypes.func,
   isFullscreen: PropTypes.bool,
-  onToggleFullscreen: PropTypes.func
+  onToggleFullscreen: PropTypes.func,
+  dataScope: PropTypes.oneOf(['raw', 'transformed']),
+  onDataScopeChange: PropTypes.func,
+  rowsPerPage: PropTypes.string,
+  onRowsPerPageChange: PropTypes.func,
+  showLargeDatasetWarning: PropTypes.bool,
+  onDismissWarning: PropTypes.func
 }
 

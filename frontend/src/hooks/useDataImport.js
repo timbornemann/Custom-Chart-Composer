@@ -2928,11 +2928,13 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       return
     }
 
+    // Don't include stateVersion in signature to avoid re-loading on every persist
     const signatureParts = [
-      initialData.stateVersion || 0,
       initialData.fileName || '',
       initialData.rows?.length || 0,
-      initialData.columns?.length || 0
+      initialData.columns?.length || 0,
+      JSON.stringify(initialData.mapping || {}),
+      JSON.stringify(initialData.sortConfig || [])
     ]
     const signature = signatureParts.join('|')
     if (initialDataSignatureRef.current === signature) {

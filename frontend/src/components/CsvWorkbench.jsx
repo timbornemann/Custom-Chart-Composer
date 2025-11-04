@@ -24,6 +24,7 @@ import {
   DEFAULT_UNPIVOT_CONFIG,
   DEFAULT_UNPIVOT_META,
   MIN_COLUMN_WIDTH,
+  SUGGESTION_PREVIEW_MAX_POINTS,
   WORKBENCH_STEPS
 } from './csv/constants'
 import {
@@ -224,7 +225,8 @@ export default function CsvWorkbench({
   const schedulePersist = useCallback(
     (extraState = {}) => {
       if (!onImportStateChange) return
-      setTimeout(() => {
+      // Use queueMicrotask instead of setTimeout for better timing
+      queueMicrotask(() => {
         const state = getImportState()
         onImportStateChange({
           ...state,
@@ -235,7 +237,7 @@ export default function CsvWorkbench({
           quickAggregationConfig,
           stateVersion: Date.now()
         })
-      }, 0)
+      })
     },
     [
       onImportStateChange,
@@ -3543,12 +3545,12 @@ export default function CsvWorkbench({
     [suggestionSelections, isSuggestionComplete, handleApply]
   )
 
-  const handleFileChange = (event) => {
+  const handleFileChange = useCallback((event) => {
     const file = event.target.files?.[0]
     if (file) {
       parseFile(file)
     }
-  }
+  }, [parseFile])
 
   const availableDatasetColumns = columns.filter(
     (column) =>
@@ -5359,10 +5361,10 @@ export default function CsvWorkbench({
                           </div>
                         )}
                         <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
-                          <table className="min-w-full divide-y divide-gray-700 text-sm">
-                            <thead className="text-xs uppercase tracking-wide text-dark-textGray">
-                              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
-                                <SortableContext items={visibleColumns.map((column) => column.key)} strategy={horizontalListSortingStrategy}>
+                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+                            <SortableContext items={visibleColumns.map((column) => column.key)} strategy={horizontalListSortingStrategy}>
+                              <table className="min-w-full divide-y divide-gray-700 text-sm">
+                                <thead className="text-xs uppercase tracking-wide text-dark-textGray">
                                   <tr ref={headerRef}>
                                     <th
                                       className="sticky left-0 z-50 border-r border-gray-700 bg-dark-bg/90 px-3 py-2 text-left"
@@ -5393,10 +5395,8 @@ export default function CsvWorkbench({
                                       )
                                     })}
                                   </tr>
-                                </SortableContext>
-                              </DndContext>
-                            </thead>
-                            <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
+                                </thead>
+                                <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
                               {previewEntries.map((entry, rowPosition) => {
                                 const rowState = rowDisplayRaw[entry.index] || {}
                                 const rowTop = rowState.pinned ? pinnedRawRowOffsets.get(entry.index) ?? headerHeight : undefined
@@ -5615,8 +5615,10 @@ export default function CsvWorkbench({
                                   </tr>
                                 )
                               })}
-                            </tbody>
-                          </table>
+                                </tbody>
+                              </table>
+                            </SortableContext>
+                          </DndContext>
                         </div>
                       </div>
                     </section>
@@ -6534,10 +6536,10 @@ export default function CsvWorkbench({
                             </div>
                           )}
                           <div className="max-h-64 overflow-auto rounded-lg border border-gray-700">
-                            <table className="min-w-full divide-y divide-gray-700 text-sm">
-                              <thead className="text-xs uppercase tracking-wide text-dark-textGray">
-                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
-                                  <SortableContext items={visibleColumns.map((column) => column.key)} strategy={horizontalListSortingStrategy}>
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+                              <SortableContext items={visibleColumns.map((column) => column.key)} strategy={horizontalListSortingStrategy}>
+                                <table className="min-w-full divide-y divide-gray-700 text-sm">
+                                  <thead className="text-xs uppercase tracking-wide text-dark-textGray">
                                     <tr ref={transformedHeaderRef}>
                                       <th
                                         className="sticky left-0 z-50 border-r border-gray-700 bg-dark-bg/90 px-3 py-2 text-left"
@@ -6600,10 +6602,8 @@ export default function CsvWorkbench({
                                         )
                                       })}
                                     </tr>
-                                  </SortableContext>
-                                </DndContext>
-                              </thead>
-                              <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-800 bg-dark-bg/40 text-dark-textLight">
                                 {transformedPreviewEntries.map((entry) => {
                                   const rowState = rowDisplayTransformed[entry.index] || {}
                                   const rowTop = rowState.pinned
@@ -6720,8 +6720,10 @@ export default function CsvWorkbench({
                                     </tr>
                                   )
                                 })}
-                              </tbody>
-                            </table>
+                                  </tbody>
+                                </table>
+                              </SortableContext>
+                            </DndContext>
                           </div>
                         </div>
                       </div>

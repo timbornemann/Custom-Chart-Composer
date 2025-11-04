@@ -26,8 +26,6 @@ export default function CsvToolbar({
   onToggleLeftPanel,
   rightPanelOpen,
   onToggleRightPanel,
-  isFullscreen,
-  onToggleFullscreen,
   dataScope,
   onDataScopeChange,
   rowsPerPage,
@@ -82,6 +80,26 @@ export default function CsvToolbar({
           
           {totalRows > 0 && (
             <>
+              {/* Save / Export */}
+              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
+                <button
+                  type="button"
+                  onClick={onSave}
+                  className="rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-dark-accent1"
+                  title="Originaldaten als CSV speichern"
+                >
+                  💾 Speichern
+                </button>
+                <button
+                  type="button"
+                  onClick={onExportTransformed}
+                  className="rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-dark-accent1"
+                  title="Aktuelle (gefilterte/ gruppierte) Ansicht als CSV exportieren"
+                >
+                  ⭳ Export Ansicht
+                </button>
+              </div>
+
               {/* Undo/Redo */}
               <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
                 <button
@@ -101,70 +119,6 @@ export default function CsvToolbar({
                   title="Wiederholen"
                 >
                   ↷
-                </button>
-              </div>
-              
-              {/* View Controls */}
-              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
-                <button
-                  type="button"
-                  onClick={onToggleFullscreen}
-                  className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                    isFullscreen
-                      ? 'border-dark-accent1 bg-dark-accent1 text-white'
-                      : 'border-gray-700 bg-dark-bg text-dark-textLight hover:border-dark-accent1'
-                  }`}
-                  title={isFullscreen ? 'Vollbild beenden' : 'Vollbild'}
-                >
-                  {isFullscreen ? '⊡' : '⊞'}
-                </button>
-                {!isFullscreen && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={onToggleLeftPanel}
-                      className={`rounded-lg border px-2 py-2 text-xs transition-colors ${
-                        leftPanelOpen
-                          ? 'border-dark-accent1 bg-dark-accent1 text-white'
-                          : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
-                      }`}
-                      title="Mapping/Transform Panel"
-                    >
-                      ◧
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onToggleRightPanel}
-                      className={`rounded-lg border px-2 py-2 text-xs transition-colors ${
-                        rightPanelOpen
-                          ? 'border-dark-accent1 bg-dark-accent1 text-white'
-                          : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
-                      }`}
-                      title="Tools Panel"
-                    >
-                      ◨
-                    </button>
-                  </>
-                )}
-              </div>
-
-              {/* Save / Export */}
-              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
-                <button
-                  type="button"
-                  onClick={onSave}
-                  className="rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-dark-accent1"
-                  title="Originaldaten als CSV speichern"
-                >
-                  💾 Speichern
-                </button>
-                <button
-                  type="button"
-                  onClick={onExportTransformed}
-                  className="rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-dark-accent1"
-                  title="Aktuelle (gefilterte/ gruppierte) Ansicht als CSV exportieren"
-                >
-                  ⭳ Export Ansicht
                 </button>
               </div>
 
@@ -213,6 +167,34 @@ export default function CsvToolbar({
                 </select>
               </div>
               
+              {/* Side Panels (compact) */}
+              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
+                <button
+                  type="button"
+                  onClick={onToggleLeftPanel}
+                  className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
+                    leftPanelOpen
+                      ? 'border-dark-accent1 bg-dark-accent1 text-white'
+                      : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
+                  }`}
+                  title="Linkes Seitenpanel umschalten"
+                >
+                  ◧
+                </button>
+                <button
+                  type="button"
+                  onClick={onToggleRightPanel}
+                  className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
+                    rightPanelOpen
+                      ? 'border-dark-accent1 bg-dark-accent1 text-white'
+                      : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
+                  }`}
+                  title="Rechtes Seitenpanel umschalten"
+                >
+                  ◨
+                </button>
+              </div>
+
               {/* Search Toggle */}
               <button
                 type="button"
@@ -327,8 +309,6 @@ CsvToolbar.propTypes = {
   onToggleLeftPanel: PropTypes.func,
   rightPanelOpen: PropTypes.bool,
   onToggleRightPanel: PropTypes.func,
-  isFullscreen: PropTypes.bool,
-  onToggleFullscreen: PropTypes.func,
   dataScope: PropTypes.oneOf(['raw', 'transformed']),
   onDataScopeChange: PropTypes.func,
   rowsPerPage: PropTypes.string,

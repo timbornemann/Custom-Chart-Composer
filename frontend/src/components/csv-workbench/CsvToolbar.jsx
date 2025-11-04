@@ -23,7 +23,9 @@ export default function CsvToolbar({
   leftPanelOpen,
   onToggleLeftPanel,
   rightPanelOpen,
-  onToggleRightPanel
+  onToggleRightPanel,
+  isFullscreen,
+  onToggleFullscreen
 }) {
   return (
     <div className="flex-none border-b border-gray-700 bg-dark-secondary">
@@ -83,32 +85,48 @@ export default function CsvToolbar({
                 </button>
               </div>
               
-              {/* Panel Toggles */}
+              {/* View Controls */}
               <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
                 <button
                   type="button"
-                  onClick={onToggleLeftPanel}
-                  className={`rounded-lg border px-2 py-2 text-xs transition-colors ${
-                    leftPanelOpen
+                  onClick={onToggleFullscreen}
+                  className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    isFullscreen
                       ? 'border-dark-accent1 bg-dark-accent1 text-white'
-                      : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
+                      : 'border-gray-700 bg-dark-bg text-dark-textLight hover:border-dark-accent1'
                   }`}
-                  title="Mapping/Transform Panel"
+                  title={isFullscreen ? 'Vollbild beenden' : 'Vollbild'}
                 >
-                  ◧
+                  {isFullscreen ? '⊡' : '⊞'}
                 </button>
-                <button
-                  type="button"
-                  onClick={onToggleRightPanel}
-                  className={`rounded-lg border px-2 py-2 text-xs transition-colors ${
-                    rightPanelOpen
-                      ? 'border-dark-accent1 bg-dark-accent1 text-white'
-                      : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
-                  }`}
-                  title="Tools Panel"
-                >
-                  ◨
-                </button>
+                {!isFullscreen && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={onToggleLeftPanel}
+                      className={`rounded-lg border px-2 py-2 text-xs transition-colors ${
+                        leftPanelOpen
+                          ? 'border-dark-accent1 bg-dark-accent1 text-white'
+                          : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
+                      }`}
+                      title="Mapping/Transform Panel"
+                    >
+                      ◧
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onToggleRightPanel}
+                      className={`rounded-lg border px-2 py-2 text-xs transition-colors ${
+                        rightPanelOpen
+                          ? 'border-dark-accent1 bg-dark-accent1 text-white'
+                          : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
+                      }`}
+                      title="Tools Panel"
+                    >
+                      ◨
+                    </button>
+                  </>
+                )}
               </div>
               
               {/* Search Toggle */}
@@ -191,6 +209,8 @@ CsvToolbar.propTypes = {
   leftPanelOpen: PropTypes.bool,
   onToggleLeftPanel: PropTypes.func,
   rightPanelOpen: PropTypes.bool,
-  onToggleRightPanel: PropTypes.func
+  onToggleRightPanel: PropTypes.func,
+  isFullscreen: PropTypes.bool,
+  onToggleFullscreen: PropTypes.func
 }
 

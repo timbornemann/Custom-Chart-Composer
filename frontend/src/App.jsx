@@ -27,6 +27,7 @@ function App() {
   const chartRef = useRef(null)
   const hasRestoredState = useRef(false)
   const [showNewChartModal, setShowNewChartModal] = useState(false)
+  const [isConfigFullscreen, setIsConfigFullscreen] = useState(false)
 
   useEffect(() => {
     loadChartTypes()
@@ -163,21 +164,25 @@ function App() {
         variant="info"
       />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar
-          chartTypes={chartTypes}
-          selectedChartType={selectedChartType}
-          onSelectChartType={handleChartTypeChange}
-        />
+        {!isConfigFullscreen && (
+          <Sidebar
+            chartTypes={chartTypes}
+            selectedChartType={selectedChartType}
+            onSelectChartType={handleChartTypeChange}
+          />
+        )}
         <main className="flex-1 p-6 overflow-y-auto">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-[1800px] mx-auto">
-            <div>
-              <ChartPreview
-                chartType={selectedChartType}
-                config={config}
-                chartRef={chartRef}
-              />
-            </div>
-            <div>
+          <div className={`grid grid-cols-1 ${isConfigFullscreen ? '' : 'xl:grid-cols-2'} gap-6 max-w-[1800px] mx-auto`}>
+            {!isConfigFullscreen && (
+              <div>
+                <ChartPreview
+                  chartType={selectedChartType}
+                  config={config}
+                  chartRef={chartRef}
+                />
+              </div>
+            )}
+            <div className={isConfigFullscreen ? 'w-full' : ''}>
               <ChartConfigPanel
                 chartType={selectedChartType}
                 config={config}
@@ -189,6 +194,8 @@ function App() {
                 onRedo={redo}
                 canUndo={canUndo}
                 canRedo={canRedo}
+                isFullscreen={isConfigFullscreen}
+                onToggleFullscreen={() => setIsConfigFullscreen(!isConfigFullscreen)}
               />
             </div>
           </div>

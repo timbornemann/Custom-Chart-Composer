@@ -29,7 +29,9 @@ export default function ChartConfigPanel({
   onUndo,
   onRedo,
   canUndo,
-  canRedo
+  canRedo,
+  isFullscreen,
+  onToggleFullscreen
 }) {
   const [activeTab, setActiveTab] = useState('data')
 
@@ -157,6 +159,18 @@ export default function ChartConfigPanel({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={onToggleFullscreen}
+              title={isFullscreen ? 'Vollbild beenden' : 'Vollbild aktivieren'}
+              className={`flex items-center justify-center rounded-md border p-2 text-sm transition-all ${
+                isFullscreen
+                  ? 'border-dark-accent1 bg-dark-accent1 text-white hover:bg-dark-accent1/90'
+                  : 'border-gray-700 text-dark-textLight hover:bg-gray-800'
+              }`}
+            >
+              {isFullscreen ? '⊡' : '⊞'}
+            </button>
+            <button
+              type="button"
               onClick={onUndo}
               disabled={!canUndo}
               title="Rückgängig (Strg+Z)"
@@ -189,7 +203,7 @@ export default function ChartConfigPanel({
         </div>
       </div>
 
-      <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto pr-2">
+      <div className={`space-y-4 ${activeTab === 'csv' ? '' : 'max-h-[calc(100vh-300px)] overflow-y-auto pr-2'}`}>
         {activeTab === 'csv' && supportsDataImport && (
           <CsvWorkbench
             allowMultipleValueColumns={csvAllowMultipleValueColumns}
@@ -3268,7 +3282,9 @@ ChartConfigPanel.propTypes = {
   onUndo: PropTypes.func.isRequired,
   onRedo: PropTypes.func.isRequired,
   canUndo: PropTypes.bool.isRequired,
-  canRedo: PropTypes.bool.isRequired
+  canRedo: PropTypes.bool.isRequired,
+  isFullscreen: PropTypes.bool,
+  onToggleFullscreen: PropTypes.func
 }
 
 DataTab.propTypes = {

@@ -7,7 +7,7 @@ import { useCsvWorkbenchColumns } from '../hooks/useCsvWorkbenchColumns'
 import CsvToolbar from './csv-workbench/CsvToolbar'
 import CsvTable from './csv-workbench/CsvTable'
 import CsvMappingPanel from './csv-workbench/CsvMappingPanel'
-import CsvTransformPanel from './csv-workbench/CsvTransformPanel'
+import CsvTransformPanelFull from './csv-workbench/CsvTransformPanelFull'
 import CsvProfilingPanel from './csv-workbench/CsvProfilingPanel'
 import CsvToolsPanel from './csv-workbench/CsvToolsPanel'
 import CsvFindReplaceModal from './CsvFindReplaceModal'
@@ -106,11 +106,13 @@ export default function CsvWorkbench({
   // ==========================================================================
   // LOCAL UI STATE
   // ==========================================================================
-  const [leftPanelOpen, setLeftPanelOpen] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [leftPanelOpen, setLeftPanelOpen] = useState(false)
   const [rightPanelOpen, setRightPanelOpen] = useState(false)
   const [activeLeftTab, setActiveLeftTab] = useState('mapping')
   const [activeRightTab, setActiveRightTab] = useState('search')
   const [showSearch, setShowSearch] = useState(false)
+  const [showMappingHelper, setShowMappingHelper] = useState(true)
   const [editingCell, setEditingCell] = useState(null)
   const [editingValue, setEditingValue] = useState('')
   const [selectionState, setSelectionState] = useState({ anchor: null, focus: null })
@@ -1339,7 +1341,7 @@ export default function CsvWorkbench({
   // RENDER
   // ==========================================================================
   return (
-    <div className="flex flex-col h-full bg-dark-bg">
+    <div className="flex flex-col h-[calc(100vh-200px)] bg-dark-bg border border-gray-700 rounded-lg overflow-hidden">
       <CsvFindReplaceModal
         isOpen={isFindReplaceOpen}
         onClose={() => setIsFindReplaceOpen(false)}
@@ -1387,11 +1389,13 @@ export default function CsvWorkbench({
         onToggleLeftPanel={() => setLeftPanelOpen(!leftPanelOpen)}
         rightPanelOpen={rightPanelOpen}
         onToggleRightPanel={() => setRightPanelOpen(!rightPanelOpen)}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
       />
 
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT PANEL - Mapping & Transformations */}
-        {leftPanelOpen && totalRows > 0 && (
+        {!isFullscreen && leftPanelOpen && totalRows > 0 && (
           <div className="w-80 flex-none border-r border-gray-700 bg-dark-secondary overflow-y-auto">
             <div className="p-4">
               <div className="flex gap-1 mb-4">
@@ -1435,8 +1439,9 @@ export default function CsvWorkbench({
               )}
 
               {activeLeftTab === 'transform' && (
-                <CsvTransformPanel
+                <CsvTransformPanelFull
                   columns={columns}
+                  mapping={mapping}
                   transformations={transformations}
                   onUpdateTransformations={updateTransformations}
                 />
@@ -1518,7 +1523,7 @@ export default function CsvWorkbench({
         </div>
 
         {/* RIGHT PANEL - Tools */}
-        {rightPanelOpen && totalRows > 0 && (
+        {!isFullscreen && rightPanelOpen && totalRows > 0 && (
           <div className="w-80 flex-none border-l border-gray-700 bg-dark-secondary overflow-y-auto">
             <div className="p-4">
               <CsvToolsPanel

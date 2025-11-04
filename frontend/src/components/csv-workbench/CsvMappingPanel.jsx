@@ -129,11 +129,19 @@ export default function CsvMappingPanel({
   // Standard mapping (Label + Values)
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-semibold text-dark-textLight mb-2">Spalten-Mapping</h3>
-        <p className="text-xs text-dark-textGray mb-4">
-          Ordnen Sie CSV-Spalten den Diagramm-Feldern zu
-        </p>
+      <div className="rounded-lg border border-blue-700/40 bg-blue-900/20 p-3 mb-4">
+        <div className="flex items-start gap-2">
+          <span className="text-lg">ℹ️</span>
+          <div className="text-xs text-blue-200">
+            <strong>Was ist Mapping?</strong>
+            <p className="mt-1">
+              Ordnen Sie Ihre CSV-Spalten den Diagramm-Feldern zu. 
+              {!isScatterBubble && !isCoordinate && (
+                <> <strong>Beschriftung</strong> = X-Achse (z.B. Kategorien), <strong>Werte</strong> = Y-Achse (z.B. Zahlen).</>
+              )}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-3">

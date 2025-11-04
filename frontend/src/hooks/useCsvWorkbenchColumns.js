@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useRef, useLayoutEffect, useState } from 'react'
-import { MIN_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, ACTION_COLUMN_WIDTH, DEFAULT_ROW_HEIGHT } from '../components/csv/constants'
+import { MIN_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, ACTION_COLUMN_WIDTH } from '../components/csv/constants'
 
 /**
  * Hook für Column-Management im CSV Workbench
@@ -7,8 +7,6 @@ import { MIN_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, ACTION_COLUMN_WIDTH, DEFAULT_RO
  */
 export const useCsvWorkbenchColumns = ({
   rawColumns,
-  visibleColumns,
-  columnByKey,
   previewEntries,
   transformedPreviewEntries,
   setColumnPinned,
@@ -47,10 +45,23 @@ export const useCsvWorkbenchColumns = ({
     [columns]
   )
 
+  const visibleColumns = useMemo(
+    () => columns.filter((column) => column.display?.isVisible !== false),
+    [columns]
+  )
+
   const hiddenColumns = useMemo(
     () => columns.filter((column) => column.display?.isVisible === false),
     [columns]
   )
+
+  const columnByKey = useMemo(() => {
+    const map = new Map()
+    columns.forEach((column) => {
+      map.set(column.key, column)
+    })
+    return map
+  }, [columns])
 
   const columnIndexMap = useMemo(() => {
     const map = new Map()
@@ -216,8 +227,10 @@ export const useCsvWorkbenchColumns = ({
   return {
     columns,
     orderedColumns,
+    visibleColumns,
     availableColumnsForModal,
     hiddenColumns,
+    columnByKey,
     columnIndexMap,
     columnMeasurements,
     rowMeasurements,

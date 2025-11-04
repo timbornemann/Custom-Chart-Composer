@@ -36,8 +36,8 @@ export default function CsvToolbar({
   return (
     <div className="flex-none border-b border-gray-700 bg-dark-secondary">
       {/* Main Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+        <div className="flex items-center gap-3 shrink-0">
           <h2 className="text-lg font-semibold text-dark-textLight">CSV Editor</h2>
           {fileName && (
             <span className="text-sm text-dark-textGray">
@@ -51,7 +51,7 @@ export default function CsvToolbar({
           )}
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap ml-auto w-full md:w-auto">
           {/* File Input */}
           <input
             type="file"
@@ -62,7 +62,7 @@ export default function CsvToolbar({
           />
           <label
             htmlFor="csv-file-input"
-            className="cursor-pointer rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-dark-accent1"
+            className="cursor-pointer rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-dark-accent1 shrink-0"
           >
             📁 Datei
           </label>
@@ -71,7 +71,7 @@ export default function CsvToolbar({
             <button
               type="button"
               onClick={onReset}
-              className="rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-red-600 hover:text-red-200"
+              className="rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-red-600 hover:text-red-200 shrink-0"
               title="Daten zurücksetzen"
             >
               ⟲ Zurücksetzen
@@ -81,7 +81,7 @@ export default function CsvToolbar({
           {totalRows > 0 && (
             <>
               {/* Save / Export */}
-              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
+              <div className="flex items-center gap-1 border-r border-gray-700 pr-2 shrink-0">
                 <button
                   type="button"
                   onClick={onSave}
@@ -100,8 +100,11 @@ export default function CsvToolbar({
                 </button>
               </div>
 
+              {/* Responsive break to second row on small widths */}
+              <div className="basis-full md:basis-auto" />
+
               {/* Undo/Redo */}
-              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
+              <div className="flex items-center gap-1 border-r border-gray-700 pr-2 shrink-0">
                 <button
                   type="button"
                   onClick={onUndo}
@@ -122,8 +125,10 @@ export default function CsvToolbar({
                 </button>
               </div>
 
-              {/* Data Scope Switcher */}
-              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
+              {/* Second-row controls container */}
+              <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
+                {/* Data Scope Switcher */}
+                <div className="flex items-center gap-1 border-r border-gray-700 pr-2 shrink-0">
                 <span className="text-xs text-dark-textGray mr-1">Ansicht:</span>
                 <button
                   type="button"
@@ -149,74 +154,75 @@ export default function CsvToolbar({
                 >
                   Transformiert
                 </button>
-              </div>
+                </div>
 
-              {/* Pagination */}
-              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
-                <span className="text-xs text-dark-textGray mr-1">Zeilen:</span>
-                <select
-                  value={rowsPerPage}
-                  onChange={(e) => onRowsPerPageChange(e.target.value)}
-                  className="rounded border border-gray-700 bg-dark-bg px-2 py-1 text-xs text-dark-textLight"
-                >
-                  <option value="5">5</option>
-                  <option value="10">10</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
-                  <option value="all">Alle</option>
-                </select>
-              </div>
-              
-              {/* Side Panels (compact) */}
-              <div className="flex items-center gap-1 border-r border-gray-700 pr-2">
+                {/* Pagination */}
+                <div className="flex items-center gap-1 border-r border-gray-700 pr-2 shrink-0">
+                  <span className="text-xs text-dark-textGray mr-1">Zeilen:</span>
+                  <select
+                    value={rowsPerPage}
+                    onChange={(e) => onRowsPerPageChange(e.target.value)}
+                    className="rounded border border-gray-700 bg-dark-bg px-2 py-1 text-xs text-dark-textLight"
+                  >
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="all">Alle</option>
+                  </select>
+                </div>
+
+                {/* Side Panels (compact) */}
+                <div className="flex items-center gap-1 border-r border-gray-700 pr-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={onToggleLeftPanel}
+                    className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
+                      leftPanelOpen
+                        ? 'border-dark-accent1 bg-dark-accent1 text-white'
+                        : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
+                    }`}
+                    title="Linkes Seitenpanel umschalten"
+                  >
+                    ◧
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onToggleRightPanel}
+                    className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
+                      rightPanelOpen
+                        ? 'border-dark-accent1 bg-dark-accent1 text-white'
+                        : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
+                    }`}
+                    title="Rechtes Seitenpanel umschalten"
+                  >
+                    ◨
+                  </button>
+                </div>
+
+                {/* Search Toggle */}
                 <button
                   type="button"
-                  onClick={onToggleLeftPanel}
-                  className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
-                    leftPanelOpen
+                  onClick={onToggleSearch}
+                  className={`rounded-lg border px-3 py-2 text-sm transition-colors shrink-0 ${
+                    showSearch
                       ? 'border-dark-accent1 bg-dark-accent1 text-white'
-                      : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
+                      : 'border-gray-700 bg-dark-bg text-dark-textLight hover:border-dark-accent1'
                   }`}
-                  title="Linkes Seitenpanel umschalten"
                 >
-                  ◧
+                  🔍 Suchen
                 </button>
+
+                {/* Apply to Chart (right-aligned on wrap) */}
                 <button
                   type="button"
-                  onClick={onToggleRightPanel}
-                  className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
-                    rightPanelOpen
-                      ? 'border-dark-accent1 bg-dark-accent1 text-white'
-                      : 'border-gray-700 bg-dark-bg text-dark-textGray hover:text-dark-textLight'
-                  }`}
-                  title="Rechtes Seitenpanel umschalten"
+                  onClick={onApply}
+                  disabled={!canApply}
+                  className="rounded-lg bg-dark-accent1 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-dark-accent1/90 disabled:cursor-not-allowed disabled:bg-gray-700 shrink-0 md:ml-2 ml-auto"
                 >
-                  ◨
+                  ✓ An Diagramm senden
                 </button>
               </div>
-
-              {/* Search Toggle */}
-              <button
-                type="button"
-                onClick={onToggleSearch}
-                className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                  showSearch
-                    ? 'border-dark-accent1 bg-dark-accent1 text-white'
-                    : 'border-gray-700 bg-dark-bg text-dark-textLight hover:border-dark-accent1'
-                }`}
-              >
-                🔍 Suchen
-              </button>
-              
-              {/* Apply to Chart */}
-              <button
-                type="button"
-                onClick={onApply}
-                disabled={!canApply}
-                className="rounded-lg bg-dark-accent1 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-dark-accent1/90 disabled:cursor-not-allowed disabled:bg-gray-700"
-              >
-                ✓ An Diagramm senden
-              </button>
             </>
           )}
         </div>

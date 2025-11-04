@@ -2419,8 +2419,17 @@ const applyTransformations = (rows, mapping, transformations) => {
 
   meta.aggregatedFrom = workingRows.length
 
-  if (grouping?.enabled) {
-    const { rows: aggregatedRows, info } = aggregateRows(workingRows, mapping, grouping, aggregations)
+  // Apply grouping if enabled OR if columns are selected (for live preview)
+  const groupingColumns = Array.isArray(grouping?.columns)
+    ? grouping.columns.filter((col) => typeof col === 'string').map((col) => col.trim()).filter(Boolean)
+    : []
+  const hasGroupingColumns = groupingColumns.length > 0
+  const shouldApplyGrouping = grouping?.enabled || hasGroupingColumns
+
+  if (shouldApplyGrouping) {
+    // For live preview without enabled, temporarily enable grouping
+    const groupingConfig = grouping?.enabled ? grouping : { ...grouping, enabled: true, columns: groupingColumns }
+    const { rows: aggregatedRows, info } = aggregateRows(workingRows, mapping, groupingConfig, aggregations)
     workingRows = aggregatedRows
     meta.aggregatedFrom = info.aggregatedFrom
     meta.aggregatedTo = info.aggregatedTo

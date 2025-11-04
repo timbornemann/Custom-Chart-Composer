@@ -146,10 +146,15 @@ export default function CsvWorkbench({
   const pendingFocusRef = useRef(null)
   const searchMatchSignatureRef = useRef('')
   const findReplaceHistoryRef = useRef([])
+  const isInitialMountRef = useRef(true)
+  const schedulePersistRef = useRef(null)
 
   // Load saved state from initialData
   useEffect(() => {
     if (!initialData) return
+    // Set flag to prevent persistence during initial load
+    isInitialMountRef.current = true
+    
     if (Array.isArray(initialData.savedViews)) {
       setSavedViews(initialData.savedViews)
       const activeView = initialData.savedViews.find((view) => view.id === initialData.activeSavedViewId)
@@ -175,6 +180,38 @@ export default function CsvWorkbench({
           : prev.operations
       }))
     }
+    // Load UI state (panels, scope, pagination)
+    if (initialData.uiState && typeof initialData.uiState === 'object') {
+      if (typeof initialData.uiState.leftPanelOpen === 'boolean') {
+        setLeftPanelOpen(initialData.uiState.leftPanelOpen)
+      }
+      if (typeof initialData.uiState.rightPanelOpen === 'boolean') {
+        setRightPanelOpen(initialData.uiState.rightPanelOpen)
+      }
+      if (typeof initialData.uiState.leftPanelWidth === 'number' && initialData.uiState.leftPanelWidth >= 200) {
+        setLeftPanelWidth(initialData.uiState.leftPanelWidth)
+      }
+      if (typeof initialData.uiState.rightPanelWidth === 'number' && initialData.uiState.rightPanelWidth >= 200) {
+        setRightPanelWidth(initialData.uiState.rightPanelWidth)
+      }
+      if (initialData.uiState.dataScope === 'raw' || initialData.uiState.dataScope === 'transformed') {
+        setDataScope(initialData.uiState.dataScope)
+      }
+      if (typeof initialData.uiState.rowsPerPage === 'string') {
+        setRowsPerPage(initialData.uiState.rowsPerPage)
+      }
+      if (typeof initialData.uiState.activeLeftTab === 'string') {
+        setActiveLeftTab(initialData.uiState.activeLeftTab)
+      }
+      if (typeof initialData.uiState.activeRightTab === 'string') {
+        setActiveRightTab(initialData.uiState.activeRightTab)
+      }
+    }
+    
+    // Reset flag after a short delay to allow state to settle
+    setTimeout(() => {
+      isInitialMountRef.current = false
+    }, 100)
   }, [initialData])
 
   // ==========================================================================
@@ -253,12 +290,47 @@ export default function CsvWorkbench({
           activeSavedViewId,
           validationRules,
           quickAggregationConfig,
+          uiState: {
+            leftPanelOpen,
+            rightPanelOpen,
+            leftPanelWidth,
+            rightPanelWidth,
+            dataScope,
+            rowsPerPage,
+            activeLeftTab,
+            activeRightTab
+          },
           stateVersion: Date.now()
         })
       })
     },
-    [onImportStateChange, getImportState, savedViews, activeSavedViewId, validationRules, quickAggregationConfig]
+    [onImportStateChange, getImportState, savedViews, activeSavedViewId, validationRules, quickAggregationConfig, leftPanelOpen, rightPanelOpen, leftPanelWidth, rightPanelWidth, dataScope, rowsPerPage, activeLeftTab, activeRightTab]
   )
+
+  // Keep schedulePersist ref up to date
+  useEffect(() => {
+    schedulePersistRef.current = schedulePersist
+  }, [schedulePersist])
+
+  // ==========================================================================
+  // UI STATE PERSISTENCE
+  // ==========================================================================
+  useEffect(() => {
+    // Skip on initial mount to avoid triggering on load
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false
+      return
+    }
+
+    // Persist UI state changes (debounced)
+    const timeoutId = setTimeout(() => {
+      if (schedulePersistRef.current) {
+        schedulePersistRef.current()
+      }
+    }, 300)
+    return () => clearTimeout(timeoutId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leftPanelOpen, rightPanelOpen, leftPanelWidth, rightPanelWidth, dataScope, rowsPerPage, activeLeftTab, activeRightTab])
 
   const reorderColumns = useCallback(
     (orderedKeys) => {

@@ -198,7 +198,7 @@ export default function CsvTransformPanelFull({
       </details>
 
       {/* Grouping & Aggregation */}
-      <details>
+      <details open>
         <summary className="cursor-pointer text-sm font-semibold text-dark-textLight mb-2">
           Gruppierung & Aggregation
         </summary>
@@ -218,7 +218,7 @@ export default function CsvTransformPanelFull({
             />
           </label>
 
-          {grouping.enabled && (
+          {(grouping.enabled || selectedGroupingColumns.length > 0) && (
             <div className="space-y-2">
               {selectedGroupingColumns.length > 0 && (
                 <div className="space-y-1">

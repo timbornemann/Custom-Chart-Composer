@@ -281,9 +281,43 @@ function ChartWrapper({ chartType, data, options, chartRef, onDataPointClick }) 
     [onDataPointClick]
   )
 
+  // Trigger animation after chart is created
+  const chartRefCallback = useCallback((chartInstance) => {
+    if (chartRef) {
+      if (typeof chartRef === 'function') {
+        chartRef(chartInstance)
+      } else if (chartRef.current !== undefined) {
+        chartRef.current = chartInstance
+      }
+    }
+    
+    // Trigger animation if enabled
+    if (chartInstance && options?.animation && options.animation !== false) {
+      // Chart.js animations only run on initial creation
+      // We need to ensure the chart is reset and updated to trigger animation
+      // Small delay to ensure chart is fully initialized
+      setTimeout(() => {
+        try {
+          if (chartInstance && typeof chartInstance.reset === 'function') {
+            // Set animation mode explicitly
+            const originalAnimation = chartInstance.options.animation
+            if (originalAnimation && originalAnimation !== false) {
+              // Reset chart to initial state
+              chartInstance.reset()
+              // Update with animation mode to trigger animation
+              chartInstance.update('active')
+            }
+          }
+        } catch (e) {
+          // Ignore errors
+        }
+      }, 200)
+    }
+  }, [chartRef, options?.animation])
+
   return (
     <ChartComponent
-      ref={chartRef}
+      ref={chartRefCallback}
       data={data}
       options={options}
       onClick={handleClick}
@@ -316,12 +350,7 @@ export default function ChartPreview({
     })
   }
 
-  // Sync local ref with parent ref
-  useEffect(() => {
-    if (localChartRef.current && chartRef) {
-      chartRef.current = localChartRef.current
-    }
-  }, [chartRef, chartData])
+  // Sync local ref with parent ref is now handled in ChartWrapper
 
   useEffect(() => {
     if (!chartType || !config) return
@@ -481,7 +510,7 @@ export default function ChartPreview({
           >
             <ChartErrorBoundary chartType={chartType}>
               <ChartWrapper
-                key={`${chartType.id}-${mountKey}`}
+                key={`${chartType.id}-${mountKey}-${config.options?.animation !== false ? '1' : '0'}-${config.options?.animationDuration || 1000}`}
                 chartType={chartType}
                 data={chartData}
                 options={chartOptions}
@@ -1204,13 +1233,18 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
                                  config.options?.aspectRatio !== undefined &&
                                  typeof config.options.aspectRatio === 'number'
   
+  // Determine if animation should be enabled
+  const animationEnabled = config.options?.animation !== false
+  const animationDuration = config.options?.animationDuration || 1000
+  
   const baseOptions = {
     responsive: true,
     maintainAspectRatio: shouldUseAspectRatio ? true : true,
     aspectRatio: shouldUseAspectRatio ? config.options.aspectRatio : undefined,
-    animation: {
-      duration: config.options?.animation !== false ? (config.options?.animationDuration || 1000) : 0
-    },
+    animation: animationEnabled ? {
+      duration: animationDuration,
+      easing: 'easeOutQuad'
+    } : false,
     plugins: {
       backgroundImage: backgroundImageObj && config.backgroundImage ? {
         image: backgroundImageObj,

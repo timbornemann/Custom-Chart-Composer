@@ -87,7 +87,7 @@ docker run -d --name custom-chart-composer -p 3003:3003 -v %cd%\modules:/app/bac
 
 ## ✨ Features
 
-- 🎨 **19 Diagrammtypen**: Balken, Linie, Fläche, Kreis, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Heatmap, Radiales Balkendiagramm, Range-Balkendiagramm und viele mehr
+- 🎨 **18 Diagrammtypen**: Balken, Linie, Fläche, Kreis, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Heatmap, Radiales Balkendiagramm und viele mehr
 - 🎯 **Modulares Plugin-System**: Neue Diagrammtypen einfach hinzufügen
 - 🖌️ **Umfangreiche Anpassungen**: Farben, Beschriftungen, Optionen
 - 📦 **Multiple Export-Formate**: PNG, JPEG, HTML
@@ -106,12 +106,11 @@ docker run -d --name custom-chart-composer -p 3003:3003 -v %cd%\modules:/app/bac
 
 Wählen Sie in der Sidebar den gewünschten Diagrammtyp:
 
-**Balkendiagramme (5 Typen):**
+**Balkendiagramme (4 Typen):**
 - **Balkendiagramm**: Klassische Wertevergleiche (mit Orientierungsoption: horizontal/vertikal)
 - **Gestapeltes Balkendiagramm**: Mehrere Datensätze übereinander (mit Orientierung und Prozentanzeige)
 - **Gruppiertes Balkendiagramm**: Mehrere Datensätze nebeneinander
 - **Radiales Balkendiagramm**: Kreisförmige Anordnung
-- **Range-Balkendiagramm**: Bereichswerte darstellen
 
 **Liniendiagramme (6 Typen):**
 - **Liniendiagramm**: Trends und Zeitreihen (mit Orientierungsoption: horizontal/vertikal)
@@ -345,7 +344,7 @@ Custom-Chart-Composer/
 │   ├── controllers/          # API-Controller
 │   ├── routes/              # API-Routes
 │   ├── services/            # Business Logic
-│   ├── modules/             # Chart-Module (19 Diagrammtypen)
+│   ├── modules/             # Chart-Module (18 Diagrammtypen)
 │   │   ├── areaChart.js
 │   │   ├── barChart.js
 │   │   ├── bubbleChart.js
@@ -360,7 +359,6 @@ Custom-Chart-Composer/
 │   │   ├── polarAreaChart.js
 │   │   ├── radarChart.js
 │   │   ├── radialBarChart.js
-│   │   ├── rangeBarChart.js
 │   │   ├── scatterChart.js
 │   │   ├── stackedBarChart.js
 │   │   ├── steppedLineChart.js

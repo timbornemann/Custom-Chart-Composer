@@ -4,7 +4,6 @@ import DatasetEditor from './DatasetEditor'
 import PointEditor from './PointEditor'
 import SimpleDataEditor from './SimpleDataEditor'
 import ColorListEditor from './ColorListEditor'
-import RangeBarEditor from './RangeBarEditor'
 import HeatmapEditor from './HeatmapEditor'
 import BubbleDatasetEditor from './BubbleDatasetEditor'
 import ScatterDatasetEditor from './ScatterDatasetEditor'
@@ -294,10 +293,9 @@ const getImportCapabilities = (chartType) => {
   const isBubbleDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'r' in sampleDatasetEntry && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry
   const isScatterDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && !('r' in sampleDatasetEntry) && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry && !('v' in sampleDatasetEntry)
   const isCoordinateDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'longitude' in sampleDatasetEntry && 'latitude' in sampleDatasetEntry
-  const isRangeDataset = Array.isArray(sampleDatasetEntry)
   const isHeatmapDataset = chartType?.id === 'heatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
 
-  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
+  const usesDatasetEditor = !!datasetsSchema && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues && chartType?.id !== 'radar'
   const isRadarChart = chartType?.id === 'radar'
 
@@ -340,13 +338,11 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
 
   const hasSimpleValues = Array.isArray(defaultValues) && sampleValue !== undefined && typeof sampleValue !== 'object'
   const hasPointValues = Array.isArray(defaultValues) && typeof sampleValue === 'object' && sampleValue !== null
-  const isBubbleValues = hasPointValues && !!((config.values?.[0] ?? sampleValue)?.r || (config.values?.[0] ?? sampleValue)?.v)
-  const isRangeDataset = Array.isArray(sampleDatasetEntry)
-  const isHeatmapDataset = chartType?.id === 'heatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
   const isBubbleDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'r' in sampleDatasetEntry && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry
   const isScatterDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && !('r' in sampleDatasetEntry) && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry && !('v' in sampleDatasetEntry)
   const isCoordinateDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'longitude' in sampleDatasetEntry && 'latitude' in sampleDatasetEntry
-  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
+  const isHeatmapDataset = chartType?.id === 'heatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
+  const usesDatasetEditor = !!datasetsSchema && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues && chartType?.id !== 'radar'
   // Radar charts always use datasets (can have multiple datasets with different colors)
   const isRadarChart = chartType?.id === 'radar'
@@ -359,17 +355,6 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
 
   const renderDatasetEditor = () => {
     if (!datasetsSchema) return null
-
-    if (isRangeDataset) {
-      return (
-        <RangeBarEditor
-          labels={config.labels || []}
-          datasets={config.datasets || []}
-          onLabelsChange={(labels) => onConfigChange({ labels })}
-          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
-        />
-      )
-    }
 
     if (isHeatmapDataset) {
       // Check if calendar type
@@ -543,7 +528,7 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
     if (!valuesSchema) return null
 
     // Don't show values if using specialized dataset editors or radar charts (they use DatasetEditor)
-    if (isBubbleDataset || isScatterDataset || isCoordinateDataset || isRangeDataset || isHeatmapDataset || isRadarChart) {
+    if (isBubbleDataset || isScatterDataset || isCoordinateDataset || isHeatmapDataset || isRadarChart) {
       return null
     }
 
@@ -1108,7 +1093,7 @@ function AnnotationsTab({ chartType, config, onConfigChange }) {
   const supportedChartTypes = [
     'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar',
     'line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea',
-    'scatter', 'bubble', 'matrix', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
+    'scatter', 'bubble', 'matrix', 'heatmap', 'mixed', 'horizontalBar', 'streamGraph'
   ]
   const showAnnotations = annotationSchema && supportedChartTypes.includes(chartType.id)
 
@@ -1826,7 +1811,7 @@ function BoxAnnotationForm({ annotation, onUpdate, chartType }) {
     : '#F8FAFC'
 
   // Determine scale options based on chart type
-  const isHorizontalChart = ['horizontalBar', 'rangeBar'].includes(chartType?.id)
+  const isHorizontalChart = ['horizontalBar'].includes(chartType?.id)
   const xScaleLabel = isHorizontalChart ? 'Y-Skala (vertikal)' : 'X-Skala (horizontal)'
   const yScaleLabel = isHorizontalChart ? 'X-Skala (horizontal)' : 'Y-Skala (vertikal)'
 
@@ -2012,7 +1997,7 @@ function LabelAnnotationForm({ annotation, onUpdate, chartType }) {
     : '#F8FAFC'
 
   // Determine scale options based on chart type
-  const isHorizontalChart = ['horizontalBar', 'rangeBar'].includes(chartType?.id)
+  const isHorizontalChart = ['horizontalBar'].includes(chartType?.id)
   const xScaleLabel = isHorizontalChart ? 'Y-Skala (vertikal)' : 'X-Skala (horizontal)'
   const yScaleLabel = isHorizontalChart ? 'X-Skala (horizontal)' : 'Y-Skala (vertikal)'
 
@@ -2176,7 +2161,7 @@ function createDefaultAnnotation(type, idOverride, chartType) {
   }
 
   // Determine default scale IDs based on chart type
-  const isHorizontalChart = ['horizontalBar', 'rangeBar'].includes(chartType?.id)
+  const isHorizontalChart = ['horizontalBar'].includes(chartType?.id)
   const defaultXScaleID = isHorizontalChart ? 'y' : 'x'
   const defaultYScaleID = isHorizontalChart ? 'x' : 'y'
 

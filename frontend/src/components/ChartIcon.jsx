@@ -43,7 +43,6 @@ function getColorPalette(chartType) {
     groupedBar: 'bar',
     percentageBar: 'bar',
     segmentedBar: 'bar',
-    rangeBar: 'bar',
     radialBar: 'bar',
     
     line: 'line',
@@ -93,7 +92,6 @@ function getChartComponent(type) {
     verticalLine: Line,
     percentageBar: Bar,
     segmentedBar: Bar,
-    rangeBar: Bar,
     smoothLine: Line,
     dashedLine: Line,
     curvedArea: Line,
@@ -239,7 +237,21 @@ function prepareIconData(chartType, config) {
     case 'groupedBar':
     case 'percentageBar':
     case 'segmentedBar':
-    case 'rangeBar':
+      if (config.datasets && Array.isArray(config.datasets)) {
+        return {
+          labels: (config.labels || []).slice(0, 4),
+          datasets: config.datasets.slice(0, 2).map((ds, idx) => ({
+            ...ds,
+            data: (ds.data || []).slice(0, 4),
+            backgroundColor: ds.backgroundColor || colorPalette[idx],
+            borderColor: ds.borderColor || colorPalette[idx],
+            borderWidth: 0,
+            borderRadius: 2
+          }))
+        }
+      }
+      return { labels: [], datasets: [] }
+
     case 'multiLine':
     case 'mixed':
     case 'smoothLine':
@@ -352,7 +364,7 @@ function prepareIconOptions(chartType, config = null) {
   }
 
   // Bar charts
-  if (['bar', 'horizontalBar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'rangeBar'].includes(chartType.id)) {
+  if (['bar', 'horizontalBar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         display: false,
@@ -366,7 +378,7 @@ function prepareIconOptions(chartType, config = null) {
     }
   }
 
-  if (chartType.id === 'horizontalBar' || chartType.id === 'rangeBar') {
+  if (chartType.id === 'horizontalBar') {
     baseOptions.indexAxis = 'y'
   }
 

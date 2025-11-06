@@ -517,7 +517,6 @@ function getChartComponent(type) {
     percentageBar: Bar,
     // Neue Balkendiagramme
     segmentedBar: Bar,
-    rangeBar: Bar,
     // Neue Liniendiagramme
     smoothLine: Line,
     dashedLine: Line,
@@ -827,55 +826,6 @@ function prepareChartData(chartType, config) {
       }
       return { labels: [], datasets: [] }
 
-    // Neue Balkendiagramme
-    case 'rangeBar':
-      if (config.datasets && Array.isArray(config.datasets)) {
-        // Convert range data [min, max] to stacked bar format
-        return {
-          labels: config.labels || [],
-          datasets: config.datasets.map(ds => {
-            // Transform range data to stacked format
-            const stackedData = (ds.data || []).map(range => {
-              if (Array.isArray(range) && range.length === 2) {
-                const [min, max] = range
-                return [min, max - min] // [base, range]
-              }
-              return [0, 0]
-            })
-            
-            return {
-              label: ds.label || 'Bereich',
-              data: stackedData.map(([base]) => base), // Base values (min)
-              backgroundColor: 'transparent',
-              borderWidth: 0,
-              order: 2
-            }
-          }).concat(
-            config.datasets.map(ds => {
-              const stackedData = (ds.data || []).map(range => {
-                if (Array.isArray(range) && range.length === 2) {
-                  const [min, max] = range
-                  return [min, max - min]
-                }
-                return [0, 0]
-              })
-              
-              return {
-                label: ds.label || 'Bereich',
-                data: stackedData.map(([, range]) => range), // Range values (max - min)
-                backgroundColor: ds.backgroundColor || '#3B82F6',
-                borderColor: ds.borderColor || ds.backgroundColor || '#3B82F6',
-                borderWidth: config.options?.borderWidth || 2,
-                borderRadius: config.options?.borderRadius || 8,
-                barThickness: config.options?.barThickness,
-                order: 1
-              }
-            })
-          )
-        }
-      }
-      return { labels: [], datasets: [] }
-
     // Neue Kreisdiagramme
     case 'semiCircle':
     case 'sunburst':
@@ -1012,7 +962,7 @@ function transformLineAnnotation(annotation, chartType) {
 
   // For horizontal charts, adjust scale ID if not explicitly set
   let finalScaleID = scaleID
-  if (['horizontalBar', 'rangeBar'].includes(chartType.id) && !annotation.scaleID) {
+  if (['horizontalBar'].includes(chartType.id) && !annotation.scaleID) {
     finalScaleID = annotation.orientation === 'horizontal' ? 'x' : 'y'
   }
 
@@ -1063,7 +1013,7 @@ function transformBoxAnnotation(annotation, chartType) {
   let yScaleID = annotation.yScaleID || 'y'
   
   // For horizontal charts, swap the scale IDs
-  if (['horizontalBar', 'rangeBar'].includes(chartType.id) && !annotation.xScaleID && !annotation.yScaleID) {
+  if (['horizontalBar'].includes(chartType.id) && !annotation.xScaleID && !annotation.yScaleID) {
     xScaleID = 'y'
     yScaleID = 'x'
   }
@@ -1125,7 +1075,7 @@ function transformLabelAnnotation(annotation, chartType) {
   let yScaleID = annotation.yScaleID || 'y'
   
   // For horizontal charts, swap the scale IDs
-  if (['horizontalBar', 'rangeBar'].includes(chartType.id) && !annotation.xScaleID && !annotation.yScaleID) {
+  if (['horizontalBar'].includes(chartType.id) && !annotation.xScaleID && !annotation.yScaleID) {
     xScaleID = 'y'
     yScaleID = 'x'
   }
@@ -1174,7 +1124,7 @@ function buildAnnotationConfig(annotations = [], chartType) {
   const supportedChartTypes = [
     'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'funnel', 'treemap', 'sankey',
     'line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea',
-    'scatter', 'bubble', 'matrix', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
+    'scatter', 'bubble', 'matrix', 'heatmap', 'mixed', 'horizontalBar', 'streamGraph'
   ]
 
   if (!supportedChartTypes.includes(chartType.id)) {
@@ -1454,66 +1404,6 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     // Apply bar-specific options
     if (config.options?.barThickness) {
       baseOptions.barThickness = config.options.barThickness
-    }
-  }
-
-  // Range Bar (horizontal with special config)
-  if (chartType.id === 'rangeBar') {
-    baseOptions.indexAxis = config.options?.horizontal ? 'y' : 'x'
-    const isHorizontal = config.options?.horizontal
-    baseOptions.scales = {
-      x: {
-        beginAtZero: config.options?.beginAtZero !== false,
-        stacked: true, // Enable stacking for range bars
-        min: isHorizontal && config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
-        max: isHorizontal && config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
-        grid: {
-          display: config.options?.showGrid !== false,
-          color: config.options?.gridColor || '#334155'
-        },
-        ticks: {
-          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
-          font: { 
-            size: 12,
-            family: config.options?.fontStyles?.ticks?.family || 'Inter'
-          },
-          stepSize: isHorizontal && config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
-        },
-        title: {
-          display: !!config.options?.xAxisLabel,
-          text: config.options?.xAxisLabel || '',
-          color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
-          font: { 
-            size: 13, 
-            family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
-          }
-        }
-      },
-      y: {
-        beginAtZero: !isHorizontal && config.options?.beginAtZero !== false,
-        min: !isHorizontal && config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
-        max: !isHorizontal && config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
-        grid: {
-          display: false
-        },
-        ticks: {
-          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
-          font: { 
-            size: 12,
-            family: config.options?.fontStyles?.ticks?.family || 'Inter'
-          },
-          stepSize: !isHorizontal && config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
-        },
-        title: {
-          display: !!config.options?.yAxisLabel,
-          text: config.options?.yAxisLabel || '',
-          color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
-          font: { 
-            size: 13, 
-            family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
-          }
-        }
-      }
     }
   }
 

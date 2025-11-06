@@ -22,6 +22,12 @@ const createDefaultTransformations = () => ({
   // Value transformation rules applied before filters/grouping
   valueRules: [],
   filters: [],
+  pivotTable: {
+    scope: 'transformed',
+    rowFields: [],
+    columnFields: [],
+    values: []
+  },
   pivot: {
     enabled: false,
     indexColumns: [],
@@ -84,6 +90,7 @@ const mergeTransformationsWithDefaults = (transformations) => {
     ...defaults,
     ...transformations,
     pivot: { ...defaults.pivot, ...(transformations.pivot || {}) },
+    pivotTable: { ...defaults.pivotTable, ...(transformations.pivotTable || {}) },
     unpivot: { ...defaults.unpivot, ...(transformations.unpivot || {}) },
     grouping: mergedGrouping,
     aggregations: { ...defaults.aggregations, ...(transformations.aggregations || {}) }
@@ -5489,6 +5496,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
 
   return {
     fileName,
+    rows,
     columns,
     mapping,
     updateMapping,

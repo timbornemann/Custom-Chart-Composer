@@ -2,13 +2,17 @@ import PropTypes from 'prop-types'
 import FilterEditor from '../csv/FilterEditor'
 import ValueRulesEditor from '../csv/ValueRulesEditor'
 import GroupingCard from './GroupingCard'
+import PivotBuilder from './PivotBuilder'
 import { createUniqueId } from '../csv/utils'
 
 export default function CsvTransformPanelFull({
   columns,
   mapping,
   transformations,
-  onUpdateTransformations
+  rawRows,
+  transformedRows,
+  onUpdateTransformations,
+  registerVersionEvent
 }) {
   const filters = transformations.filters || []
   const valueRules = transformations.valueRules || []
@@ -120,6 +124,15 @@ export default function CsvTransformPanelFull({
         aggregations={aggregations}
         onUpdateTransformations={onUpdateTransformations}
       />
+
+      <PivotBuilder
+        columns={columns}
+        rawRows={rawRows}
+        transformedRows={transformedRows}
+        pivotConfig={transformations.pivotTable}
+        onUpdateTransformations={onUpdateTransformations}
+        registerVersionEvent={registerVersionEvent}
+      />
     </div>
   )
 }
@@ -128,6 +141,9 @@ CsvTransformPanelFull.propTypes = {
   columns: PropTypes.array.isRequired,
   mapping: PropTypes.object.isRequired,
   transformations: PropTypes.object.isRequired,
-  onUpdateTransformations: PropTypes.func.isRequired
+  rawRows: PropTypes.array,
+  transformedRows: PropTypes.array,
+  onUpdateTransformations: PropTypes.func.isRequired,
+  registerVersionEvent: PropTypes.func
 }
 

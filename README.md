@@ -87,7 +87,7 @@ docker run -d --name custom-chart-composer -p 3003:3003 -v %cd%\modules:/app/bac
 
 ## ✨ Features
 
-- 🎨 **40+ Diagrammtypen**: Balken, Horizontal, Linie, Fläche, Kreis, Donut, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Vertikal, Prozent, Heatmap, Treemap, Sankey, Trichter, Violin, Box-Plot, Kalender-Heatmap, Koordinaten, Matrix, Sunburst, Wasserfall und viele mehr
+- 🎨 **21 Diagrammtypen**: Balken, Linie, Fläche, Kreis, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Heatmap, Kalender-Heatmap, Koordinaten, Radiales Balkendiagramm, Range-Balkendiagramm und viele mehr
 - 🎯 **Modulares Plugin-System**: Neue Diagrammtypen einfach hinzufügen
 - 🖌️ **Umfangreiche Anpassungen**: Farben, Beschriftungen, Optionen
 - 📦 **Multiple Export-Formate**: PNG, JPEG, HTML
@@ -106,55 +106,36 @@ docker run -d --name custom-chart-composer -p 3003:3003 -v %cd%\modules:/app/bac
 
 Wählen Sie in der Sidebar den gewünschten Diagrammtyp:
 
-**Balkendiagramme (9 Typen):**
-- **Balkendiagramm**: Klassische Wertevergleiche
-- **Horizontales Balkendiagramm**: Balken von links nach rechts
-- **Gestapeltes Balkendiagramm**: Mehrere Datensätze übereinander
+**Balkendiagramme (5 Typen):**
+- **Balkendiagramm**: Klassische Wertevergleiche (mit Orientierungsoption: horizontal/vertikal)
+- **Gestapeltes Balkendiagramm**: Mehrere Datensätze übereinander (mit Orientierung und Prozentanzeige)
 - **Gruppiertes Balkendiagramm**: Mehrere Datensätze nebeneinander
-- **Prozent-Balkendiagramm**: Prozentuale Verteilung
 - **Radiales Balkendiagramm**: Kreisförmige Anordnung
 - **Range-Balkendiagramm**: Bereichswerte darstellen
-- **Segmentiertes Balkendiagramm**: Aufgeteilte Balken
-- **Wasserfall-Diagramm**: Kumulative Änderungen
 
-**Liniendiagramme (9 Typen):**
-- **Liniendiagramm**: Trends und Zeitreihen
+**Liniendiagramme (6 Typen):**
+- **Liniendiagramm**: Trends und Zeitreihen (mit Orientierungsoption: horizontal/vertikal)
 - **Flächendiagramm**: Gefüllte Linie für Volumen
 - **Multi-Liniendiagramm**: Mehrere Linien vergleichen
 - **Treppenstufen-Liniendiagramm**: Gestufte Verläufe
-- **Vertikales Liniendiagramm**: Spezielle Darstellung
-- **Geglättetes Liniendiagramm**: Weiche Kurven
 - **Gestricheltes Liniendiagramm**: Gestrichelte Linien
-- **Geschwungenes Flächendiagramm**: Weich gefüllte Kurven
-- **Stream-Graph**: Gestapeltes Flächendiagramm
+- **Stream-Graph**: Gestapeltes Flächendiagramm mit zentrierter Basislinie
 
-**Kreisdiagramme (8 Typen):**
-- **Kreisdiagramm**: Anteile und Verhältnisse
-- **Donutdiagramm**: Modern mit Loch in der Mitte
+**Kreisdiagramme (3 Typen):**
+- **Kreisdiagramm**: Anteile und Verhältnisse (mit Optionen für Donut, Halbkreis, Rotation, Zeiger/Tachometer)
 - **Polar-Flächendiagramm**: Kreisförmige Flächendarstellung
-- **Halbkreis-Diagramm**: Halbkreis-Donut
-- **Radiales Balkendiagramm**: Kreisförmige Balken
-- **Sunburst-Diagramm**: Hierarchische konzentrische Ringe
-- **Verschachteltes Donut**: Mehrere Donuts
-- **Chord-Diagramm**: Beziehungen zwischen Entitäten
+- **Verschachteltes Donut**: Mehrere Donuts übereinander
 
-**Punktdiagramme (6 Typen):**
+**Punktdiagramme (5 Typen):**
 - **Streudiagramm**: Korrelationen zwischen zwei Variablen
-- **Blasendiagramm**: 3-dimensionale Daten mit Radius
+- **Blasendiagramm**: 3-dimensionale Daten mit Radius (mit Optionen für feste Größe und Punktform)
 - **Heatmap-Diagramm**: Matrix mit Farbintensitäten
 - **Kalender-Heatmap**: GitHub-Style Jahresübersicht
-- **Koordinatendiagramm**: Geografische Koordinaten
-- **Matrix-Diagramm**: Gewichtete Punkte
+- **Koordinatendiagramm**: Geografische Koordinaten (Longitude/Latitude)
 
-**Spezialdiagramme (8 Typen):**
+**Spezialdiagramme (2 Typen):**
 - **Radar-Chart**: Mehrdimensionale Daten auf polaren Achsen
-- **Box-Plot-Diagramm**: Statistische Verteilungen
 - **Kombiniertes Diagramm**: Verschiedene Charttypen kombiniert
-- **Sankey-Diagramm**: Flussdiagramm für Datenflüsse
-- **Tachometer-Diagramm**: Aktuelle Werte visualisieren
-- **Treemap-Diagramm**: Hierarchische verschachtelte Rechtecke
-- **Trichter-Diagramm**: Prozessphasen darstellen
-- **Violin-Chart**: Erweiterte statistische Verteilungen
 
 ### 2. Daten konfigurieren
 
@@ -366,47 +347,28 @@ Custom-Chart-Composer/
 │   ├── controllers/          # API-Controller
 │   ├── routes/              # API-Routes
 │   ├── services/            # Business Logic
-│   ├── modules/             # Chart-Module (40+ Diagrammtypen)
+│   ├── modules/             # Chart-Module (21 Diagrammtypen)
 │   │   ├── areaChart.js
 │   │   ├── barChart.js
-│   │   ├── boxPlotChart.js
 │   │   ├── bubbleChart.js
 │   │   ├── calendarHeatmap.js
-│   │   ├── candlestickChart.js
-│   │   ├── chordChart.js
 │   │   ├── coordinateChart.js
-│   │   ├── curvedAreaChart.js
 │   │   ├── dashedLineChart.js
-│   │   ├── donutChart.js
-│   │   ├── funnelChart.js
-│   │   ├── gaugeChart.js
 │   │   ├── groupedBarChart.js
 │   │   ├── heatmapChart.js
-│   │   ├── horizontalBarChart.js
 │   │   ├── lineChart.js
-│   │   ├── matrixChart.js
 │   │   ├── mixedChart.js
 │   │   ├── multiLineChart.js
 │   │   ├── nestedDonutChart.js
-│   │   ├── percentageBarChart.js
 │   │   ├── pieChart.js
 │   │   ├── polarAreaChart.js
 │   │   ├── radarChart.js
 │   │   ├── radialBarChart.js
 │   │   ├── rangeBarChart.js
-│   │   ├── sankeyChart.js
 │   │   ├── scatterChart.js
-│   │   ├── segmentedBarChart.js
-│   │   ├── semiCircleChart.js
-│   │   ├── smoothLineChart.js
 │   │   ├── stackedBarChart.js
 │   │   ├── steppedLineChart.js
-│   │   ├── streamGraph.js
-│   │   ├── sunburstChart.js
-│   │   ├── treemapChart.js
-│   │   ├── verticalLineChart.js
-│   │   ├── violinChart.js
-│   │   └── waterfallChart.js
+│   │   └── streamGraph.js
 │   ├── package.json
 │   └── server.js
 │

@@ -43,7 +43,6 @@ function getColorPalette(chartType) {
     groupedBar: 'bar',
     percentageBar: 'bar',
     segmentedBar: 'bar',
-    waterfall: 'bar',
     rangeBar: 'bar',
     radialBar: 'bar',
     
@@ -69,9 +68,6 @@ function getColorPalette(chartType) {
     coordinate: 'scatter',
     
     radar: 'special',
-    boxPlot: 'special',
-    violin: 'special',
-    candlestick: 'gradient',
     calendarHeatmap: 'scatter'
   }
   
@@ -99,7 +95,6 @@ function getChartComponent(type) {
     verticalLine: Line,
     percentageBar: Bar,
     segmentedBar: Bar,
-    waterfall: Bar,
     rangeBar: Bar,
     smoothLine: Line,
     dashedLine: Line,
@@ -108,9 +103,6 @@ function getChartComponent(type) {
     heatmap: Scatter,
     matrix: Bubble,
     coordinate: Scatter,
-    boxPlot: Bar,
-    violin: Bar,
-    candlestick: Bar,
     radialBar: PolarArea,
     calendarHeatmap: Scatter,
     streamGraph: Line
@@ -150,7 +142,6 @@ function prepareIconData(chartType, config) {
   switch (chartType.id) {
     case 'bar':
     case 'horizontalBar':
-    case 'waterfall':
       return {
         labels: (config.labels || []).slice(0, 4),
         datasets: [{
@@ -336,26 +327,6 @@ function prepareIconData(chartType, config) {
         }]
       }
 
-    case 'candlestick':
-      return {
-        labels: (config.labels || []).slice(0, 4),
-        datasets: [{
-          data: [30, 50, 40, 60],
-          backgroundColor: colorPalette.slice(0, 4),
-          borderWidth: 0
-        }]
-      }
-
-    case 'radialBar':
-      return {
-        labels: (config.labels || []).slice(0, 5),
-        datasets: [{
-          data: (config.values || []).slice(0, 5),
-          backgroundColor: colorPalette,
-          borderWidth: 0
-        }]
-      }
-
     case 'radialBar':
       return {
         labels: (config.labels || []).slice(0, 5),
@@ -422,7 +393,7 @@ function prepareIconOptions(chartType, config = null) {
   }
 
   // Bar charts
-  if (['bar', 'horizontalBar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'rangeBar', 'boxPlot', 'violin', 'candlestick'].includes(chartType.id)) {
+  if (['bar', 'horizontalBar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'rangeBar'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         display: false,

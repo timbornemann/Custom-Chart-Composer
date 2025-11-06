@@ -517,9 +517,7 @@ function getChartComponent(type) {
     percentageBar: Bar,
     // Neue Balkendiagramme
     segmentedBar: Bar,
-    waterfall: Bar,
     rangeBar: Bar,
-    candlestick: Bar,
     // Neue Liniendiagramme
     smoothLine: Line,
     dashedLine: Line,
@@ -531,11 +529,7 @@ function getChartComponent(type) {
     // Neue Streudiagramme
     heatmap: Scatter,
     calendarHeatmap: Scatter,
-    coordinate: Scatter,
-    // Neue spezielle Diagramme
-    boxPlot: Bar,
-    violin: Bar,
-    radialBar: PolarArea
+    coordinate: Scatter
   }
   return components[type] || Bar
 }
@@ -839,28 +833,50 @@ function prepareChartData(chartType, config) {
       return { labels: [], datasets: [] }
 
     // Neue Balkendiagramme
-    case 'waterfall':
-      return {
-        labels: config.labels || [],
-        datasets: [{
-          label: config.datasetLabel || 'Wert',
-          data: config.values || [],
-          backgroundColor: config.colors || [],
-          borderColor: config.colors || [],
-          borderWidth: 2,
-          borderRadius: 8
-        }]
-      }
-
     case 'rangeBar':
       if (config.datasets && Array.isArray(config.datasets)) {
+        // Convert range data [min, max] to stacked bar format
         return {
           labels: config.labels || [],
-          datasets: config.datasets.map(ds => ({
-            ...ds,
-            borderWidth: 2,
-            borderRadius: 8
-          }))
+          datasets: config.datasets.map(ds => {
+            // Transform range data to stacked format
+            const stackedData = (ds.data || []).map(range => {
+              if (Array.isArray(range) && range.length === 2) {
+                const [min, max] = range
+                return [min, max - min] // [base, range]
+              }
+              return [0, 0]
+            })
+            
+            return {
+              label: ds.label || 'Bereich',
+              data: stackedData.map(([base]) => base), // Base values (min)
+              backgroundColor: 'transparent',
+              borderWidth: 0,
+              order: 2
+            }
+          }).concat(
+            config.datasets.map(ds => {
+              const stackedData = (ds.data || []).map(range => {
+                if (Array.isArray(range) && range.length === 2) {
+                  const [min, max] = range
+                  return [min, max - min]
+                }
+                return [0, 0]
+              })
+              
+              return {
+                label: ds.label || 'Bereich',
+                data: stackedData.map(([, range]) => range), // Range values (max - min)
+                backgroundColor: ds.backgroundColor || '#3B82F6',
+                borderColor: ds.borderColor || ds.backgroundColor || '#3B82F6',
+                borderWidth: config.options?.borderWidth || 2,
+                borderRadius: config.options?.borderRadius || 8,
+                barThickness: config.options?.barThickness,
+                order: 1
+              }
+            })
+          )
         }
       }
       return { labels: [], datasets: [] }
@@ -917,13 +933,15 @@ function prepareChartData(chartType, config) {
       return { datasets: [] }
 
     case 'radialBar':
+      // Use PolarArea for radial bar chart
       return {
         labels: config.labels || [],
         datasets: [{
           label: config.datasetLabel || 'Datensatz',
           data: config.values || [],
           backgroundColor: config.colors || [],
-          borderWidth: 0
+          borderColor: config.colors || [],
+          borderWidth: config.options?.borderWidth || 2
         }]
       }
 
@@ -1155,7 +1173,7 @@ function buildAnnotationConfig(annotations = [], chartType) {
 
   // Check if chart type supports annotations
   const supportedChartTypes = [
-    'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'boxPlot', 'violin', 'candlestick', 'sankey',
+    'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'funnel', 'treemap', 'sankey',
     'line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea',
     'scatter', 'bubble', 'matrix', 'calendarHeatmap', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
   ]
@@ -1374,7 +1392,7 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
   }
 
   // Bar charts
-  if (['bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'boxPlot', 'violin', 'candlestick'].includes(chartType.id)) {
+  if (['bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar'].includes(chartType.id)) {
     // Handle orientation option
     if (chartType.id === 'bar' && config.options?.orientation === 'horizontal') {
       baseOptions.indexAxis = 'y'
@@ -1385,7 +1403,7 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     baseOptions.scales = {
       y: {
         beginAtZero: config.options?.beginAtZero !== false,
-        stacked: ['stackedBar', 'segmentedBar', 'boxPlot', 'violin', 'candlestick'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked) || (config.options?.stacked),
+        stacked: ['stackedBar', 'segmentedBar'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked) || (config.options?.stacked),
         min: config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
         max: config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
         grid: {
@@ -1411,7 +1429,7 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
         }
       },
       x: {
-        stacked: ['stackedBar', 'segmentedBar', 'boxPlot', 'violin', 'candlestick'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked) || (config.options?.stacked),
+        stacked: ['stackedBar', 'segmentedBar'].includes(chartType.id) || (chartType.id === 'percentageBar' && config.options?.stacked) || (config.options?.stacked),
         grid: {
           display: false
         },
@@ -1447,6 +1465,7 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     baseOptions.scales = {
       x: {
         beginAtZero: config.options?.beginAtZero !== false,
+        stacked: true, // Enable stacking for range bars
         min: isHorizontal && config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
         max: isHorizontal && config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
         grid: {
@@ -1530,6 +1549,7 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
         }
       },
       y: {
+        stacked: true, // Enable stacking for range bars
         grid: {
           display: false
         },
@@ -2096,7 +2116,6 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     groupedBar: 'verticalBar',
     percentageBar: 'verticalBar',
     segmentedBar: 'verticalBar',
-    waterfall: 'verticalBar',
     horizontalBar: 'horizontalBar',
     donut: 'doughnut',
     pie: 'doughnut',

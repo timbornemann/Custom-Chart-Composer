@@ -1096,7 +1096,7 @@ function AnnotationsTab({ chartType, config, onConfigChange }) {
   const schema = chartType.configSchema.options || {}
   const annotationSchema = schema.annotations
   const supportedChartTypes = [
-    'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'boxPlot', 'violin', 'candlestick',
+    'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar',
     'line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea',
     'scatter', 'bubble', 'matrix', 'calendarHeatmap', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
   ]
@@ -2949,31 +2949,6 @@ function AutoAnnotationPanel({ onAddAnnotations, chartType, config }) {
                 datasets.push({
                   label: ds.label || `Dataset ${index + 1}`,
                   data: yValues
-                })
-              }
-            }
-          })
-        }
-        break
-
-      case 'boxPlot':
-      case 'violin':
-        // Box plot format: config.datasets with statistical data
-        if (config.datasets && Array.isArray(config.datasets)) {
-          config.datasets.forEach((ds, index) => {
-            if (ds.data && Array.isArray(ds.data)) {
-              // Extract median values from box plot data
-              const medianValues = ds.data.map(box => {
-                if (typeof box === 'object' && box !== null) {
-                  return box.median || box.q2 || box.middle
-                }
-                return box
-              }).filter(val => typeof val === 'number' && !isNaN(val))
-              
-              if (medianValues.length > 0) {
-                datasets.push({
-                  label: ds.label || `Dataset ${index + 1}`,
-                  data: medianValues
                 })
               }
             }

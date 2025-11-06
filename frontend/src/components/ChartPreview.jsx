@@ -302,16 +302,21 @@ function ChartWrapper({ chartType, data, options, chartRef, onDataPointClick }) 
             // Set animation mode explicitly
             const originalAnimation = chartInstance.options.animation
             if (originalAnimation && originalAnimation !== false) {
-              // Reset chart to initial state
+              // Reset chart to initial state (this will hide it)
               chartInstance.reset()
               // Update with animation mode to trigger animation
               chartInstance.update('active')
+              // Signal that chart is ready and animation has started
+              // This will be handled by the parent component's useEffect
             }
           }
         } catch (e) {
           // Ignore errors
         }
-      }, 200)
+      }, 50)
+    } else if (chartInstance) {
+      // If animation is disabled, signal immediately
+      // This will be handled by the parent component's useEffect
     }
   }, [chartRef, options?.animation])
 
@@ -337,6 +342,7 @@ export default function ChartPreview({
   const [chartData, setChartData] = useState(null)
   const [chartOptions, setChartOptions] = useState(null)
   const [mountKey, setMountKey] = useState(0)
+  const [isChartVisible, setIsChartVisible] = useState(false)
   const localChartRef = useRef(null)
 
   // Helper function to load images
@@ -351,6 +357,24 @@ export default function ChartPreview({
   }
 
   // Sync local ref with parent ref is now handled in ChartWrapper
+  
+  // Show chart after it's created and animation is triggered
+  useEffect(() => {
+    if (chartData && chartOptions) {
+      const animationEnabled = config?.options?.animation !== false
+      if (animationEnabled) {
+        // Wait for chart to be created and animation to be triggered
+        // The ChartWrapper will call reset() and update() which triggers animation
+        const timeoutId = setTimeout(() => {
+          setIsChartVisible(true)
+        }, 150) // Delay to allow reset() and update() to complete
+        return () => clearTimeout(timeoutId)
+      } else {
+        // If animation is disabled, show immediately
+        setIsChartVisible(true)
+      }
+    }
+  }, [chartData, chartOptions, config?.options?.animation, mountKey])
 
   useEffect(() => {
     if (!chartType || !config) return
@@ -388,9 +412,10 @@ export default function ChartPreview({
       // Ignore if instances array doesn't exist
     }
 
-    // Clear current data
+    // Clear current data and hide chart
     setChartData(null)
     setChartOptions(null)
+    setIsChartVisible(false)
 
     // Increment mount key to force complete unmount/remount
     const timeoutId = setTimeout(async () => {
@@ -502,10 +527,12 @@ export default function ChartPreview({
       >
         {chartData && (
           <div
-            className="w-full h-full flex items-center justify-center"
+            className="w-full h-full flex items-center justify-center transition-opacity duration-300"
             style={{
               maxWidth: previewDimensions.maxWidth,
-              maxHeight: previewDimensions.maxHeight
+              maxHeight: previewDimensions.maxHeight,
+              opacity: isChartVisible ? 1 : 0,
+              visibility: isChartVisible ? 'visible' : 'hidden'
             }}
           >
             <ChartErrorBoundary chartType={chartType}>

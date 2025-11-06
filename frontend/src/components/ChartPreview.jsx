@@ -255,6 +255,9 @@ function valueLabelPlugin() {
 
 // Wrapper component to force complete remount
 function ChartWrapper({ chartType, data, options, chartRef, onDataPointClick }) {
+  const [displayData, setDisplayData] = useState(null)
+  const animationTriggered = useRef(false)
+  
   // For vertical line charts, use Scatter instead of Line
   let ChartComponent = getChartComponent(chartType.id)
   if (chartType.id === 'line' && options?.scales?.x?.type === 'linear') {
@@ -291,43 +294,55 @@ function ChartWrapper({ chartType, data, options, chartRef, onDataPointClick }) 
       }
     }
     
-    // Trigger animation if enabled
-    if (chartInstance && options?.animation && options.animation !== false) {
-      // Chart.js animations only run on initial creation
-      // We need to ensure the chart is reset and updated to trigger animation
+    // Trigger animation by starting with empty data and then setting real data
+    if (chartInstance && !animationTriggered.current && options?.animation && options.animation !== false) {
+      animationTriggered.current = true
+      
       // Small delay to ensure chart is fully initialized
       setTimeout(() => {
-        try {
-          if (chartInstance && typeof chartInstance.reset === 'function') {
-            // Set animation mode explicitly
-            const originalAnimation = chartInstance.options.animation
-            if (originalAnimation && originalAnimation !== false) {
-              // Reset chart to initial state (this will hide it)
-              chartInstance.reset()
-              // Update with animation mode to trigger animation
-              chartInstance.update('active')
-              // Signal that chart is ready and animation has started
-              // This will be handled by the parent component's useEffect
-            }
-          }
-        } catch (e) {
-          // Ignore errors
-        }
+        setDisplayData(data)
       }, 50)
-    } else if (chartInstance) {
-      // If animation is disabled, signal immediately
-      // This will be handled by the parent component's useEffect
+    } else if (chartInstance && options?.animation === false) {
+      // If animation is disabled, show data immediately
+      setDisplayData(data)
     }
-  }, [chartRef, options?.animation])
+  }, [chartRef, data, options?.animation])
+
+  // Reset animation trigger when data changes
+  useEffect(() => {
+    animationTriggered.current = false
+    setDisplayData(options?.animation !== false ? createEmptyData(data) : data)
+  }, [data, options?.animation])
 
   return (
     <ChartComponent
       ref={chartRefCallback}
-      data={data}
+      data={displayData || createEmptyData(data)}
       options={options}
       onClick={handleClick}
     />
   )
+}
+
+// Helper function to create empty data structure
+function createEmptyData(data) {
+  if (!data) return { labels: [], datasets: [] }
+  
+  return {
+    ...data,
+    datasets: data.datasets.map(dataset => ({
+      ...dataset,
+      data: Array.isArray(dataset.data) 
+        ? dataset.data.map(item => {
+            if (typeof item === 'object' && item !== null) {
+              // For scatter/bubble charts, keep structure but set values to 0
+              return { ...item, y: 0, r: item.r ? 0 : undefined }
+            }
+            return 0
+          })
+        : []
+    }))
+  }
 }
 
 export default function ChartPreview({
@@ -358,23 +373,13 @@ export default function ChartPreview({
 
   // Sync local ref with parent ref is now handled in ChartWrapper
   
-  // Show chart after it's created and animation is triggered
+  // Show chart after it's created
   useEffect(() => {
     if (chartData && chartOptions) {
-      const animationEnabled = config?.options?.animation !== false
-      if (animationEnabled) {
-        // Wait for chart to be created and animation to be triggered
-        // The ChartWrapper will call reset() and update() which triggers animation
-        const timeoutId = setTimeout(() => {
-          setIsChartVisible(true)
-        }, 150) // Delay to allow reset() and update() to complete
-        return () => clearTimeout(timeoutId)
-      } else {
-        // If animation is disabled, show immediately
-        setIsChartVisible(true)
-      }
+      // Show chart immediately - the animation is handled by Chart.js
+      setIsChartVisible(true)
     }
-  }, [chartData, chartOptions, config?.options?.animation, mountKey])
+  }, [chartData, chartOptions, mountKey])
 
   useEffect(() => {
     if (!chartType || !config) return

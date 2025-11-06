@@ -1950,6 +1950,31 @@ const applyFilters = (rows, filters) => {
   return { rows: filteredRows.map((row) => ({ ...row })), removed }
 }
 
+const resolveActiveFilters = (transformations) => {
+  if (!transformations) {
+    return []
+  }
+
+  const baseFilters = Array.isArray(transformations.filters) ? transformations.filters : []
+  const filterGroups = Array.isArray(transformations.filterGroups) ? transformations.filterGroups : []
+
+  if (filterGroups.length === 0) {
+    return baseFilters
+  }
+
+  const activeGroupId = transformations.activeFilterGroupId
+  if (!activeGroupId) {
+    return baseFilters
+  }
+
+  const activeGroup = filterGroups.find((group) => group && group.id === activeGroupId && group.enabled !== false)
+  if (!activeGroup || !Array.isArray(activeGroup.filters)) {
+    return baseFilters
+  }
+
+  return activeGroup.filters
+}
+
 // Apply rule-based value transformations on a copy of the rows
 const applyValueRules = (rows, rules) => {
   const activeRules = (rules || []).filter((r) => r && r.enabled !== false && r.column)
@@ -2376,12 +2401,13 @@ const applyTransformations = (rows, mapping, transformations) => {
     return { rows: workingRows, warnings, meta }
   }
 
-  const { valueRules, filters, pivot, unpivot, grouping, aggregations } = transformations
+  const { valueRules, pivot, unpivot, grouping, aggregations } = transformations
 
   // 1) Apply value rules first (original rows remain unchanged in state)
   workingRows = applyValueRules(workingRows, valueRules)
 
-  const { rows: filteredRows, removed } = applyFilters(workingRows, filters)
+  const filtersToApply = resolveActiveFilters(transformations)
+  const { rows: filteredRows, removed } = applyFilters(workingRows, filtersToApply)
   workingRows = filteredRows
   meta.filteredOut = removed
   if (removed > 0) {

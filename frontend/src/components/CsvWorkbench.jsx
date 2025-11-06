@@ -15,6 +15,8 @@ import { createSearchConfig, rowMatchesQuery } from '../hooks/useDataImport'
 import { applyReplacementToText, formatCellValue, isCellValueEmpty } from './csv/formatting'
 import { createUniqueId } from './csv/utils'
 import { DEFAULT_ROW_HEIGHT } from './csv/constants'
+import { CsvWorkbenchProvider } from './csv-workbench/CsvWorkbenchContext'
+import FilterBuilder from './csv-workbench/FilterBuilder'
 
 /**
  * CSV Workbench - Redesigned für bessere Übersichtlichkeit
@@ -142,6 +144,7 @@ export default function CsvWorkbench({
   const [savedViews, setSavedViews] = useState(() => [])
   const [activeSavedViewId, setActiveSavedViewId] = useState(null)
   const [savedViewDraftName, setSavedViewDraftName] = useState('')
+  const [isFilterBuilderOpen, setIsFilterBuilderOpen] = useState(false)
 
   const pendingFocusRef = useRef(null)
   const searchMatchSignatureRef = useRef('')
@@ -425,6 +428,14 @@ export default function CsvWorkbench({
     if (result?.redone) schedulePersist()
     return result
   }, [internalRedoLastManualEdit, schedulePersist])
+
+  const openFilterBuilder = useCallback(() => {
+    setIsFilterBuilderOpen(true)
+  }, [])
+
+  const closeFilterBuilder = useCallback(() => {
+    setIsFilterBuilderOpen(false)
+  }, [])
 
   const parseFile = useCallback(
     async (file) => {
@@ -1676,31 +1687,33 @@ export default function CsvWorkbench({
   // RENDER
   // ==========================================================================
   return (
-    <div className="flex flex-col h-[calc(100vh-200px)] bg-dark-bg border border-gray-700 rounded-lg overflow-hidden">
-      <CsvFindReplaceModal
-        isOpen={isFindReplaceOpen}
-        onClose={() => setIsFindReplaceOpen(false)}
-        onConfirm={handleFindReplaceConfirm}
-        searchQuery={searchQuery}
-        searchMode={searchMode}
-        onSearchModeChange={handleSearchModeChange}
-        searchColumns={searchColumns}
-        onToggleColumn={handleSearchColumnToggle}
-        onResetColumns={handleSearchColumnsReset}
-        availableColumns={columns.map((col) => ({ key: col.key, label: col.key }))}
-        searchConfig={activeSearchConfig}
-        rawMatches={findReplaceData.raw.matches}
-        transformedMatches={findReplaceData.transformed.matches}
-        totalRawMatches={findReplaceData.raw.total}
-        totalTransformedMatches={findReplaceData.transformed.total}
-        canReplaceInTransformed={canReplaceInTransformed}
-        transformedScopeDisabledReason={transformedScopeDisabledReason}
-        defaultScope={findReplaceDefaultScope}
-        activeMatch={activeSearchMatch}
-        onPreviewMatchFocus={handleModalMatchFocus}
-      />
+    <CsvWorkbenchProvider transformations={transformations} updateTransformations={updateTransformations}>
+      <>
+        <div className="flex flex-col h-[calc(100vh-200px)] bg-dark-bg border border-gray-700 rounded-lg overflow-hidden">
+          <CsvFindReplaceModal
+            isOpen={isFindReplaceOpen}
+            onClose={() => setIsFindReplaceOpen(false)}
+            onConfirm={handleFindReplaceConfirm}
+            searchQuery={searchQuery}
+            searchMode={searchMode}
+            onSearchModeChange={handleSearchModeChange}
+            searchColumns={searchColumns}
+            onToggleColumn={handleSearchColumnToggle}
+            onResetColumns={handleSearchColumnsReset}
+            availableColumns={columns.map((col) => ({ key: col.key, label: col.key }))}
+            searchConfig={activeSearchConfig}
+            rawMatches={findReplaceData.raw.matches}
+            transformedMatches={findReplaceData.transformed.matches}
+            totalRawMatches={findReplaceData.raw.total}
+            totalTransformedMatches={findReplaceData.transformed.total}
+            canReplaceInTransformed={canReplaceInTransformed}
+            transformedScopeDisabledReason={transformedScopeDisabledReason}
+            defaultScope={findReplaceDefaultScope}
+            activeMatch={activeSearchMatch}
+            onPreviewMatchFocus={handleModalMatchFocus}
+          />
 
-      <CsvToolbar
+          <CsvToolbar
         fileName={fileName}
         totalRows={totalRows}
         filteredRowCount={filteredRowCount}
@@ -1714,6 +1727,7 @@ export default function CsvWorkbench({
         onReset={handleResetWorkbench}
         onSave={handleSaveOriginalCsv}
         onExportTransformed={handleExportTransformedCsv}
+        onOpenFilterBuilder={openFilterBuilder}
         canApply={totalRows > 0}
         manualEditCount={manualEdits?.count || 0}
         canUndo={canUndoManualEdit}
@@ -1929,9 +1943,10 @@ export default function CsvWorkbench({
             </div>
           </>
         )}
-      </div>
-
-    </div>
+        </div>
+        {isFilterBuilderOpen && <FilterBuilder onClose={closeFilterBuilder} />}
+      </>
+    </CsvWorkbenchProvider>
   )
 }
 

@@ -14,6 +14,7 @@ export default function CsvToolbar({
   onReset,
   onSave,
   onExportTransformed,
+  onOpenFilterBuilder,
   canApply,
   manualEditCount,
   canUndo,
@@ -97,6 +98,14 @@ export default function CsvToolbar({
                   title="Aktuelle (gefilterte/ gruppierte) Ansicht als CSV exportieren"
                 >
                   ⭳ Export Ansicht
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenFilterBuilder}
+                  className="rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight transition-colors hover:border-dark-accent1"
+                  title="Filtergruppen speichern oder anwenden"
+                >
+                  🧰 Filtergruppen
                 </button>
               </div>
 
@@ -303,6 +312,7 @@ CsvToolbar.propTypes = {
   onReset: PropTypes.func,
   onSave: PropTypes.func,
   onExportTransformed: PropTypes.func,
+  onOpenFilterBuilder: PropTypes.func,
   canApply: PropTypes.bool,
   manualEditCount: PropTypes.number,
   canUndo: PropTypes.bool,

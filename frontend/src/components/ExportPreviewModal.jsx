@@ -59,7 +59,7 @@ export default function ExportPreviewModal({
       let actualHeight = exportHeight
       
       // Chart types that don't support custom aspect ratio
-      const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+      const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'chord']
       const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
       
       if (supportsAspectRatio && config.options?.aspectRatio && typeof config.options.aspectRatio === 'number') {

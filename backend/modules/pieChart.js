@@ -17,6 +17,11 @@ export default {
       type: "array", 
       default: [300, 50, 100, 80, 120] 
     },
+    currentValue: {
+      type: "number",
+      default: null,
+      description: "Aktueller Wert für Zeiger (nur bei Tachometer)"
+    },
     datasetLabel: {
       type: "string",
       default: "Datensatz"
@@ -46,9 +51,14 @@ export default {
       showPercentage: { type: "boolean", default: true, description: "Prozentangaben anzeigen" },
       showValues: { type: "boolean", default: false, description: "Werte anzeigen" },
       showLabels: { type: "boolean", default: true, description: "Labels anzeigen" },
+      cutout: { type: "number", min: 0, max: 95, step: 5, default: 0, description: "Größe des Lochs im Zentrum (%) - 0 = Pie, >0 = Donut" },
+      innerRadius: { type: "number", min: 0, max: 95, step: 5, default: null, description: "Innerer Radius (in %) - Alternative zu cutout (leer = cutout verwenden)" },
+      rotation: { type: "number", min: -180, max: 180, step: 15, default: 0, description: "Start-Rotation in Grad" },
+      circumference: { type: "number", min: 90, max: 360, step: 15, default: 360, description: "Winkelbereich in Grad (360 = voller Kreis, 180 = Halbkreis)" },
       borderWidth: { type: "number", min: 0, max: 10, step: 1, default: 3, description: "Rahmenbreite der Segmente" },
       hoverOffset: { type: "number", min: 0, max: 50, step: 5, default: 10, description: "Hover-Abstand in Pixeln" },
       startAngle: { type: "number", min: 0, max: 360, step: 15, default: 0, description: "Startwinkel in Grad" },
+      showNeedle: { type: "boolean", default: false, description: "Zeiger anzeigen (für Tachometer-Diagramme)" },
       animation: { type: "boolean", default: true, description: "Animationen aktivieren" },
       animationDuration: { type: "number", min: 0, max: 3000, step: 100, default: 1000, description: "Animationsdauer in Millisekunden" }
     }

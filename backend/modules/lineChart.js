@@ -63,6 +63,10 @@ export default {
       yAxisMin: { type: "number", default: null, description: "Minimalwert der Y-Achse (leer = automatisch)" },
       yAxisMax: { type: "number", default: null, description: "Maximalwert der Y-Achse (leer = automatisch)" },
       yAxisStep: { type: "number", min: 0.1, step: 0.1, default: null, description: "Schrittweite der Y-Achse (leer = automatisch)" },
+      orientation: { type: "select", default: "horizontal", options: [
+        { value: "horizontal", label: "Horizontal (Standard)" },
+        { value: "vertical", label: "Vertikal (X/Y-Achsen vertauscht)" }
+      ], description: "Ausrichtung des Diagramms" },
       animation: { type: "boolean", default: true, description: "Animationen aktivieren" },
       animationDuration: { type: "number", min: 0, max: 3000, step: 100, default: 1000, description: "Animationsdauer in Millisekunden" }
     }

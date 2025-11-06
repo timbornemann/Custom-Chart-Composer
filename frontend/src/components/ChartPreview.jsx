@@ -190,9 +190,25 @@ function valueLabelPlugin() {
           if (!element || typeof element.tooltipPosition !== 'function') return
 
           const rawValue = dataset?.data?.[index]
-
           const formatted = formatValue(rawValue, dataset, index, chart)
-          const text = formatted === null || formatted === undefined ? '' : String(formatted)
+          
+          // Calculate percentage if showPercentages is enabled for bar charts
+          let displayText = formatted
+          const numericValue = typeof rawValue === 'number' ? rawValue : Number(rawValue)
+          const isNumeric = Number.isFinite(numericValue)
+          
+          if (chart.config.type === 'bar' && chart.config.options?.plugins?.customValueLabels?.showPercentages && isNumeric) {
+            const total = dataset.data.reduce((sum, val) => {
+              const num = typeof val === 'number' ? val : Number(val)
+              return sum + (Number.isFinite(num) ? num : 0)
+            }, 0)
+            if (total > 0) {
+              const percentage = (numericValue / total * 100).toFixed(1)
+              displayText = `${formatted} (${percentage}%)`
+            }
+          }
+          
+          const text = displayText === null || displayText === undefined ? '' : String(displayText)
           if (!text || text.trim().length === 0) {
             return
           }
@@ -200,8 +216,6 @@ function valueLabelPlugin() {
           const position = element.tooltipPosition()
           let drawX = position.x
           let drawY = position.y
-          const numericValue = typeof rawValue === 'number' ? rawValue : Number(rawValue)
-          const isNumeric = Number.isFinite(numericValue)
 
           if (layout === 'verticalBar') {
             ctx.textAlign = 'center'
@@ -241,7 +255,12 @@ function valueLabelPlugin() {
 
 // Wrapper component to force complete remount
 function ChartWrapper({ chartType, data, options, chartRef, onDataPointClick }) {
-  const ChartComponent = getChartComponent(chartType.id)
+  // For vertical line charts, use Scatter instead of Line
+  let ChartComponent = getChartComponent(chartType.id)
+  if (chartType.id === 'line' && options?.scales?.x?.type === 'linear') {
+    ChartComponent = Scatter
+  }
+  
   const handleClick = useCallback(
     (event, elements) => {
       if (!onDataPointClick || !elements || elements.length === 0) {
@@ -392,7 +411,7 @@ export default function ChartPreview({
       return { maxWidth: '100%', maxHeight: '220px' }
     }
     // Chart types that don't support custom aspect ratio
-    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'chord']
     const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
 
     const aspectRatio = config.options?.aspectRatio
@@ -507,23 +526,16 @@ function getChartComponent(type) {
     curvedArea: Line,
     streamGraph: Line,
     // Neue Kreisdiagramme
-    semiCircle: Doughnut,
     nestedDonut: Doughnut,
-    sunburst: Doughnut,
-    chord: Doughnut,
     radialBar: PolarArea,
     // Neue Streudiagramme
     heatmap: Scatter,
-    matrix: Bubble,
     calendarHeatmap: Scatter,
     coordinate: Scatter,
     // Neue spezielle Diagramme
-    gauge: Doughnut,
-    funnel: Bar,
-    treemap: Bar,
     boxPlot: Bar,
     violin: Bar,
-    sankey: Bar
+    radialBar: PolarArea
   }
   return components[type] || Bar
 }
@@ -547,6 +559,31 @@ function prepareChartData(chartType, config) {
       }
 
     case 'line':
+      // Handle vertical orientation - convert to scatter-like data structure
+      if (config.options?.orientation === 'vertical') {
+        const values = config.values || []
+        const labels = config.labels || []
+        return {
+          labels: [],
+          datasets: [{
+            label: config.datasetLabel || 'Datensatz',
+            data: values.map((val, idx) => ({ x: val, y: idx })),
+            backgroundColor: config.colors?.[0] || '#3B82F6',
+            borderColor: config.colors?.[0] || '#3B82F6',
+            borderWidth: config.options?.lineWidth || 3,
+            tension: config.options?.smooth ? (config.options?.tension || 0.4) : 0,
+            fill: config.options?.fill || false,
+            pointRadius: config.options?.showPoints !== false ? (config.options?.pointRadius || 5) : 0,
+            pointStyle: config.options?.pointStyle || 'circle',
+            pointBackgroundColor: config.colors?.[0] || '#3B82F6',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            showLine: true // Ensure line is drawn
+          }]
+        }
+      }
+      
+      // Standard horizontal line chart
       return {
         labels: config.labels || [],
         datasets: [{
@@ -647,7 +684,12 @@ function prepareChartData(chartType, config) {
             ...ds,
             backgroundColor: ds.backgroundColor ? ds.backgroundColor + '80' : '#EC489980',
             borderColor: ds.backgroundColor || ds.borderColor || '#EC4899',
-            borderWidth: config.options?.borderWidth || 2
+            borderWidth: config.options?.borderWidth || 2,
+            // Apply pointRadius if set (for fixed size), otherwise use data r values
+            pointRadius: config.options?.pointRadius !== undefined && config.options?.pointRadius !== null 
+              ? config.options.pointRadius 
+              : undefined, // undefined = use r from data
+            pointStyle: config.options?.pointStyle || 'circle'
           }))
         }
       }
@@ -826,7 +868,6 @@ function prepareChartData(chartType, config) {
     // Neue Kreisdiagramme
     case 'semiCircle':
     case 'sunburst':
-    case 'gauge':
       return {
         labels: config.labels || [],
         datasets: [{
@@ -875,43 +916,7 @@ function prepareChartData(chartType, config) {
       }
       return { datasets: [] }
 
-    // Neue spezielle Diagramme
-    case 'funnel':
-    case 'treemap':
-      return {
-        labels: config.labels || [],
-        datasets: [{
-          label: config.datasetLabel || 'Wert',
-          data: config.values || [],
-          backgroundColor: config.colors || [],
-          borderColor: config.colors || [],
-          borderWidth: 2,
-          borderRadius: 8
-        }]
-      }
-
-    // Neue Diagrammtypen
-    case 'boxPlot':
-    case 'violin':
-    case 'candlestick':
-      if (config.datasets && Array.isArray(config.datasets)) {
-        return {
-          labels: config.labels || [],
-          datasets: config.datasets.map(ds => ({
-            label: ds.label || 'Datensatz',
-            data: ds.data || [],
-            backgroundColor: ds.backgroundColor || '#3B82F6',
-            borderColor: ds.borderColor || '#1E3A8A',
-            borderWidth: 2,
-            borderRadius: 4
-          }))
-        }
-      }
-      return { labels: [], datasets: [] }
-
     case 'radialBar':
-    case 'sankey':
-    case 'chord':
       return {
         labels: config.labels || [],
         datasets: [{
@@ -1226,7 +1231,7 @@ function buildAnnotationConfig(annotations = [], chartType) {
 
 function prepareChartOptions(chartType, config, backgroundImageObj = null) {
   // Chart types that should not use custom aspect ratio (they use radial/polar scales)
-  const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+  const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'chord']
   const shouldUseAspectRatio = !noAspectRatioCharts.includes(chartType.id) && 
                                  config.options?.aspectRatio !== null && 
                                  config.options?.aspectRatio !== undefined &&
@@ -1369,7 +1374,14 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
   }
 
   // Bar charts
-  if (['bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'boxPlot', 'violin', 'candlestick', 'sankey'].includes(chartType.id)) {
+  if (['bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'boxPlot', 'violin', 'candlestick'].includes(chartType.id)) {
+    // Handle orientation option
+    if (chartType.id === 'bar' && config.options?.orientation === 'horizontal') {
+      baseOptions.indexAxis = 'y'
+    } else if (chartType.id === 'stackedBar' && config.options?.orientation === 'horizontal') {
+      baseOptions.indexAxis = 'y'
+    }
+    
     baseOptions.scales = {
       y: {
         beginAtZero: config.options?.beginAtZero !== false,
@@ -1547,52 +1559,110 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
 
   // Line charts
   if (['line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea'].includes(chartType.id)) {
-    baseOptions.scales = {
-      y: {
-        beginAtZero: config.options?.beginAtZero !== false,
-        min: config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
-        max: config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
-        grid: {
-          display: config.options?.showGrid !== false,
-          color: config.options?.gridColor || '#334155'
-        },
-        ticks: {
-          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
-          font: { 
-            size: 12,
-            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+    // Handle orientation option for line charts (vertical = swap axes)
+    if (chartType.id === 'line' && config.options?.orientation === 'vertical') {
+      // For vertical line charts, use scatter-like scales (x/y swapped)
+      baseOptions.scales = {
+        x: {
+          type: 'linear',
+          beginAtZero: config.options?.beginAtZero !== false,
+          min: config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
+          max: config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
+          grid: {
+            display: config.options?.showGrid !== false,
+            color: config.options?.gridColor || '#334155'
           },
-          stepSize: config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
+          ticks: {
+            color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+            font: { 
+              size: 12,
+              family: config.options?.fontStyles?.ticks?.family || 'Inter'
+            },
+            stepSize: config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
+          },
+          title: {
+            display: !!config.options?.yAxisLabel,
+            text: config.options?.yAxisLabel || '',
+            color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+            font: { 
+              size: 13, 
+              family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+            }
+          }
         },
-        title: {
-          display: !!config.options?.yAxisLabel,
-          text: config.options?.yAxisLabel || '',
-          color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
-          font: { 
-            size: 13, 
-            family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+        y: {
+          type: 'linear',
+          grid: {
+            display: config.options?.showGrid !== false,
+            color: config.options?.gridColor || '#334155'
+          },
+          ticks: {
+            color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+            font: { 
+              size: 12,
+              family: config.options?.fontStyles?.ticks?.family || 'Inter'
+            }
+          },
+          title: {
+            display: !!config.options?.xAxisLabel,
+            text: config.options?.xAxisLabel || '',
+            color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
+            font: { 
+              size: 13, 
+              family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+            }
           }
         }
-      },
-      x: {
-        grid: {
-          display: config.options?.showGrid !== false,
-          color: config.options?.gridColor || '#334155'
-        },
-        ticks: {
-          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
-          font: { 
-            size: 12,
-            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+      }
+    } else {
+      // Standard horizontal line chart scales
+      baseOptions.scales = {
+        y: {
+          beginAtZero: config.options?.beginAtZero !== false,
+          min: config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
+          max: config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
+          grid: {
+            display: config.options?.showGrid !== false,
+            color: config.options?.gridColor || '#334155'
+          },
+          ticks: {
+            color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+            font: { 
+              size: 12,
+              family: config.options?.fontStyles?.ticks?.family || 'Inter'
+            },
+            stepSize: config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
+          },
+          title: {
+            display: !!config.options?.yAxisLabel,
+            text: config.options?.yAxisLabel || '',
+            color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+            font: { 
+              size: 13, 
+              family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+            }
           }
         },
-        title: {
-          display: !!config.options?.xAxisLabel,
-          text: config.options?.xAxisLabel || '',
-          color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
-          font: { 
-            size: 13, 
-            family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+        x: {
+          grid: {
+            display: config.options?.showGrid !== false,
+            color: config.options?.gridColor || '#334155'
+          },
+          ticks: {
+            color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+            font: { 
+              size: 12,
+              family: config.options?.fontStyles?.ticks?.family || 'Inter'
+            }
+          },
+          title: {
+            display: !!config.options?.xAxisLabel,
+            text: config.options?.xAxisLabel || '',
+            color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
+            font: { 
+              size: 13, 
+              family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+            }
           }
         }
       }
@@ -1914,40 +1984,42 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     }
   }
 
-  // Donut
-  if (chartType.id === 'donut') {
-    baseOptions.cutout = `${config.options?.cutout || 65}%`
-    if (config.options?.startAngle !== undefined) {
+  // Pie Chart (now supports all variants: pie, donut, semiCircle, sunburst, chord, gauge)
+  if (chartType.id === 'pie') {
+    // Handle cutout or innerRadius
+    if (config.options?.innerRadius !== undefined && config.options?.innerRadius !== null) {
+      baseOptions.cutout = `${config.options.innerRadius}%`
+    } else if (config.options?.cutout !== undefined) {
+      const cutoutValue = config.options.cutout
+      baseOptions.cutout = typeof cutoutValue === 'number' ? `${cutoutValue}%` : cutoutValue
+    } else {
+      baseOptions.cutout = '0%' // Default: full pie
+    }
+    
+    // Handle rotation
+    if (config.options?.rotation !== undefined) {
+      baseOptions.rotation = config.options.rotation
+    } else if (config.options?.startAngle !== undefined) {
       baseOptions.rotation = config.options.startAngle
     }
-  }
-
-  // Nested Donut
-  if (chartType.id === 'nestedDonut') {
-    const cutoutValue = config.options?.cutout !== undefined ? config.options.cutout : 50
-    baseOptions.cutout = typeof cutoutValue === 'number' ? `${cutoutValue}%` : cutoutValue
-  }
-
-  // Semi Circle
-  if (chartType.id === 'semiCircle') {
-    baseOptions.rotation = config.options?.rotation || -90
-    baseOptions.circumference = config.options?.circumference || 180
-    baseOptions.cutout = config.options?.cutout || '0%'
-  }
-
-  // Gauge
-  if (chartType.id === 'gauge') {
-    baseOptions.rotation = config.options?.rotation || -90
-    baseOptions.circumference = config.options?.circumference || 180
-    const cutoutValue = config.options?.cutout !== undefined ? config.options.cutout : 75
-    baseOptions.cutout = typeof cutoutValue === 'number' ? `${cutoutValue}%` : cutoutValue
-  }
-
-  // Sunburst
-  if (chartType.id === 'sunburst') {
-    const cutoutValue = config.options?.cutout !== undefined ? config.options.cutout : 30
-    baseOptions.cutout = typeof cutoutValue === 'number' ? `${cutoutValue}%` : cutoutValue
-    baseOptions.rotation = config.options?.rotation || 0
+    
+    // Handle circumference (for semi-circle, etc.)
+    if (config.options?.circumference !== undefined) {
+      baseOptions.circumference = config.options.circumference
+    }
+    
+    // Handle gauge needle (showNeedle and currentValue)
+    if (config.options?.showNeedle && config.currentValue !== null && config.currentValue !== undefined) {
+      // Store gauge config for custom rendering
+      baseOptions.plugins = {
+        ...baseOptions.plugins,
+        gaugeNeedle: {
+          enabled: true,
+          currentValue: config.currentValue,
+          maxValue: config.values ? Math.max(...config.values.filter(v => typeof v === 'number')) : 100
+        }
+      }
+    }
   }
 
   // Radial Bar
@@ -1967,10 +2039,6 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     baseOptions.startAngle = config.options?.startAngle || 0
   }
 
-  // Chord
-  if (chartType.id === 'chord') {
-    baseOptions.cutout = config.options?.innerRadius ? `${config.options.innerRadius}%` : '40%'
-  }
 
   // Calendar Heatmap
   if (chartType.id === 'calendarHeatmap') {
@@ -2029,13 +2097,9 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     percentageBar: 'verticalBar',
     segmentedBar: 'verticalBar',
     waterfall: 'verticalBar',
-    funnel: 'verticalBar',
-    treemap: 'verticalBar',
     horizontalBar: 'horizontalBar',
     donut: 'doughnut',
     pie: 'doughnut',
-    chord: 'doughnut',
-    sankey: 'verticalBar',
     radialBar: 'polar',
     radar: 'radar'
   }
@@ -2053,7 +2117,8 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
         size: 12 
       },
       offsetX: layout === 'horizontalBar' ? 12 : 0,
-      offsetY: layout === 'verticalBar' ? 10 : 0
+      offsetY: layout === 'verticalBar' ? 10 : 0,
+      showPercentages: config.options?.showPercentages || false
     }
 
     baseOptions.plugins = {

@@ -56,6 +56,10 @@ export default {
       beginAtZero: { type: "boolean", default: true, description: "Y-Achse bei 0 beginnen" },
       showValues: { type: "boolean", default: false, description: "Werte auf Balken anzeigen" },
       showPercentage: { type: "boolean", default: false, description: "Prozentangaben anzeigen" },
+      orientation: { type: "select", default: "vertical", options: [
+        { value: "vertical", label: "Vertikal (Standard)" },
+        { value: "horizontal", label: "Horizontal" }
+      ], description: "Ausrichtung der Balken" },
       barThickness: { type: "number", min: 5, max: 100, step: 5, default: 40, description: "Dicke der Balken in Pixeln" },
       borderWidth: { type: "number", min: 0, max: 10, step: 1, default: 2, description: "Rahmenbreite der Balken" },
       borderRadius: { type: "number", min: 0, max: 50, step: 1, default: 8, description: "Abrundung der Balkenecken" },

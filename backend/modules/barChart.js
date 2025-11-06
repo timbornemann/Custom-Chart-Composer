@@ -74,6 +74,11 @@ export default {
         default: false,
         description: "Werte auf Balken anzeigen"
       },
+      showPercentages: {
+        type: "boolean",
+        default: false,
+        description: "Prozentangaben anzeigen (für Trichter-Diagramme)"
+      },
       barThickness: {
         type: "number",
         min: 5,
@@ -133,6 +138,15 @@ export default {
         max: 50,
         default: 0,
         description: "Minimale Balkenlänge für kleine Werte"
+      },
+      orientation: {
+        type: "select",
+        default: "vertical",
+        options: [
+          { value: "vertical", label: "Vertikal (Standard)" },
+          { value: "horizontal", label: "Horizontal" }
+        ],
+        description: "Ausrichtung der Balken"
       },
       animation: {
         type: "boolean",

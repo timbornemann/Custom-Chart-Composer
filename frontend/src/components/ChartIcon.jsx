@@ -46,8 +46,6 @@ function getColorPalette(chartType) {
     waterfall: 'bar',
     rangeBar: 'bar',
     radialBar: 'bar',
-    funnel: 'special',
-    treemap: 'special',
     
     line: 'line',
     area: 'line',
@@ -62,9 +60,7 @@ function getColorPalette(chartType) {
     pie: 'pie',
     donut: 'pie',
     polarArea: 'pie',
-    semiCircle: 'pie',
     nestedDonut: 'pie',
-    sunburst: 'gradient',
     
     scatter: 'scatter',
     bubble: 'scatter',
@@ -73,12 +69,9 @@ function getColorPalette(chartType) {
     coordinate: 'scatter',
     
     radar: 'special',
-    gauge: 'special',
     boxPlot: 'special',
     violin: 'special',
     candlestick: 'gradient',
-    sankey: 'gradient',
-    chord: 'gradient',
     calendarHeatmap: 'scatter'
   }
   
@@ -111,21 +104,14 @@ function getChartComponent(type) {
     smoothLine: Line,
     dashedLine: Line,
     curvedArea: Line,
-    semiCircle: Doughnut,
     nestedDonut: Doughnut,
-    sunburst: Doughnut,
     heatmap: Scatter,
     matrix: Bubble,
     coordinate: Scatter,
-    gauge: Doughnut,
-    funnel: Bar,
-    treemap: Bar,
     boxPlot: Bar,
     violin: Bar,
     candlestick: Bar,
     radialBar: PolarArea,
-    sankey: Bar,
-    chord: Doughnut,
     calendarHeatmap: Scatter,
     streamGraph: Line
   }
@@ -165,8 +151,6 @@ function prepareIconData(chartType, config) {
     case 'bar':
     case 'horizontalBar':
     case 'waterfall':
-    case 'funnel':
-    case 'treemap':
       return {
         labels: (config.labels || []).slice(0, 4),
         datasets: [{
@@ -198,8 +182,6 @@ function prepareIconData(chartType, config) {
     case 'pie':
     case 'donut':
     case 'polarArea':
-    case 'semiCircle':
-    case 'gauge':
       return {
         labels: (config.labels || []).slice(0, 3),
         datasets: [{
@@ -374,12 +356,11 @@ function prepareIconData(chartType, config) {
         }]
       }
 
-    case 'sankey':
-    case 'chord':
+    case 'radialBar':
       return {
-        labels: (config.labels || config.nodes?.map(n => n.label) || []).slice(0, 4),
+        labels: (config.labels || []).slice(0, 5),
         datasets: [{
-          data: [30, 25, 25, 20],
+          data: (config.values || []).slice(0, 5),
           backgroundColor: colorPalette,
           borderWidth: 0
         }]
@@ -426,7 +407,7 @@ function prepareIconData(chartType, config) {
   }
 }
 
-function prepareIconOptions(chartType) {
+function prepareIconOptions(chartType, config = null) {
   const baseOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -441,7 +422,7 @@ function prepareIconOptions(chartType) {
   }
 
   // Bar charts
-  if (['bar', 'horizontalBar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'rangeBar', 'boxPlot', 'violin', 'candlestick', 'sankey'].includes(chartType.id)) {
+  if (['bar', 'horizontalBar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'rangeBar', 'boxPlot', 'violin', 'candlestick'].includes(chartType.id)) {
     baseOptions.scales = {
       y: {
         display: false,
@@ -491,17 +472,17 @@ function prepareIconOptions(chartType) {
 
   // Heatmap (categorical axes)
   if (chartType.id === 'heatmap') {
-    const config = getDefaultConfig(chartType)
+    const defaultConfig = config || getDefaultConfig(chartType)
     baseOptions.scales = {
       y: { 
         type: 'category',
-        labels: config?.yLabels || ['06:00', '12:00', '18:00'],
+        labels: defaultConfig?.yLabels || ['06:00', '12:00', '18:00'],
         display: false,
         offset: true
       },
       x: { 
         type: 'category',
-        labels: config?.labels || ['Mo', 'Di', 'Mi'],
+        labels: defaultConfig?.labels || ['Mo', 'Di', 'Mi'],
         display: false,
         offset: true
       }
@@ -542,19 +523,20 @@ function prepareIconOptions(chartType) {
     baseOptions.cutout = '50%'
   }
 
-  if (chartType.id === 'semiCircle') {
-    baseOptions.rotation = -90
-    baseOptions.circumference = 180
-  }
-
-  if (chartType.id === 'gauge') {
-    baseOptions.rotation = -90
-    baseOptions.circumference = 180
-    baseOptions.cutout = '70%'
-  }
-
-  if (chartType.id === 'sunburst') {
-    baseOptions.cutout = '30%'
+  // Pie Chart (supports all variants via options)
+  if (chartType.id === 'pie' && config) {
+    if (config.options?.innerRadius !== undefined && config.options?.innerRadius !== null) {
+      baseOptions.cutout = `${config.options.innerRadius}%`
+    } else if (config.options?.cutout !== undefined) {
+      const cutoutValue = config.options.cutout
+      baseOptions.cutout = typeof cutoutValue === 'number' ? `${cutoutValue}%` : cutoutValue
+    }
+    if (config.options?.rotation !== undefined) {
+      baseOptions.rotation = config.options.rotation
+    }
+    if (config.options?.circumference !== undefined) {
+      baseOptions.circumference = config.options.circumference
+    }
   }
 
   // Radial Bar
@@ -565,11 +547,6 @@ function prepareIconOptions(chartType) {
         beginAtZero: true
       }
     }
-  }
-
-  // Chord
-  if (chartType.id === 'chord') {
-    baseOptions.cutout = '40%'
   }
 
   // Calendar Heatmap
@@ -634,7 +611,7 @@ export default function ChartIcon({ chartType }) {
   if (!config) return null
 
   const data = prepareIconData(chartType, config)
-  const options = prepareIconOptions(chartType)
+  const options = prepareIconOptions(chartType, config)
   const ChartComponent = getChartComponent(chartType.id)
 
   // Debug für Bubble und Matrix

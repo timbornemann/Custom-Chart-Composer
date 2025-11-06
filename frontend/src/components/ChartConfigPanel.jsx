@@ -1096,7 +1096,7 @@ function AnnotationsTab({ chartType, config, onConfigChange }) {
   const schema = chartType.configSchema.options || {}
   const annotationSchema = schema.annotations
   const supportedChartTypes = [
-    'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'funnel', 'treemap', 'boxPlot', 'violin', 'candlestick', 'sankey',
+    'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'waterfall', 'boxPlot', 'violin', 'candlestick',
     'line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea',
     'scatter', 'bubble', 'matrix', 'calendarHeatmap', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
   ]
@@ -1158,7 +1158,7 @@ function OptionsTab({ chartType, config, onConfigChange }) {
   }
 
   // Chart types that don't support custom aspect ratio
-  const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+  const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'chord']
   const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
   const hasOptionFields = schemaEntries.length > 0
 
@@ -2396,7 +2396,7 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
     let actualHeight = exportHeight
     
     // Chart types that don't support custom aspect ratio
-    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'chord']
     const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
     
     if (supportsAspectRatio && config.options?.aspectRatio && typeof config.options.aspectRatio === 'number') {
@@ -2429,7 +2429,7 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
   const onScaleChange = (value) => {
     const v = Number(value)
     setScalePercent(v)
-    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'chord']
     const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
     const hasAspect = supportsAspectRatio && config.options?.aspectRatio && typeof config.options.aspectRatio === 'number'
     const baseW = Math.max(1, scaleBaseRef.current.width)
@@ -2535,7 +2535,7 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
 
   // Calculate preset resolutions that respect aspect ratio
   const getPresetResolutions = () => {
-    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'gauge', 'chord']
+    const noAspectRatioCharts = ['radar', 'polarArea', 'sunburst', 'radialBar', 'semiCircle', 'chord']
     const supportsAspectRatio = !noAspectRatioCharts.includes(chartType.id)
     
     if (!supportsAspectRatio || !config.options?.aspectRatio || typeof config.options.aspectRatio !== 'number') {
@@ -2892,7 +2892,6 @@ function AutoAnnotationPanel({ onAddAnnotations, chartType, config }) {
       case 'radar':
       case 'polarArea':
       case 'semiCircle':
-      case 'gauge':
       case 'sunburst':
         // Simple format: config.values + config.datasetLabel
         if (config.values && Array.isArray(config.values)) {

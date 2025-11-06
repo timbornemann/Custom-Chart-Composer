@@ -1,7 +1,7 @@
 export default {
   id: "candlestick",
   name: "Candlestick-Chart",
-  category: "bar",
+  category: "special",
   description: "Kerzendiagramm für Finanz- und Börsenanalysen mit OHLC-Daten (Open, High, Low, Close).",
   library: "chartjs",
   configSchema: {

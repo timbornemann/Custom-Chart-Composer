@@ -48,8 +48,13 @@ export default {
       gridColor: { type: "color", default: "#334155", description: "Farbe der Gitterlinien" },
       beginAtZero: { type: "boolean", default: true, description: "Achsen bei 0 beginnen" },
       borderWidth: { type: "number", min: 0, max: 10, step: 1, default: 2, description: "Rahmenbreite der Blasen" },
-      minBubbleRadius: { type: "number", min: 1, max: 20, default: 3, description: "Minimaler Blasenradius" },
-      maxBubbleRadius: { type: "number", min: 10, max: 100, default: 40, description: "Maximaler Blasenradius" },
+      pointRadius: { type: "number", min: 1, max: 50, step: 1, default: null, description: "Feste Größe für alle Punkte (leer = dynamisch aus Daten)" },
+      minBubbleRadius: { type: "number", min: 1, max: 20, default: 3, description: "Minimaler Blasenradius (nur bei dynamischer Größe)" },
+      maxBubbleRadius: { type: "number", min: 10, max: 100, default: 40, description: "Maximaler Blasenradius (nur bei dynamischer Größe)" },
+      pointStyle: { type: "select", default: "circle", options: [
+        { value: "circle", label: "Kreis" }, { value: "rect", label: "Rechteck" },
+        { value: "triangle", label: "Dreieck" }, { value: "rectRot", label: "Raute" }
+      ], description: "Form der Punkte" },
       xAxisLabel: { type: "string", default: "", placeholder: "z.B. X-Werte", description: "Beschriftung der X-Achse" },
       yAxisLabel: { type: "string", default: "", placeholder: "z.B. Y-Werte", description: "Beschriftung der Y-Achse" },
       animation: { type: "boolean", default: true, description: "Animationen aktivieren" },

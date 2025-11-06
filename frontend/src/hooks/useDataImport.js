@@ -123,6 +123,9 @@ const defaultSortConfig = []
 const MAX_COLUMN_SAMPLES = 5
 const TEXT_FREQUENCY_TRACK_LIMIT = 50
 const NUMERIC_OUTLIER_SIGMA = 3
+const NUMERIC_HISTOGRAM_BINS = 15
+const MAX_NUMERIC_TRACKED_VALUES = 5000
+const MAX_UNIQUE_TRACKED_VALUES = 5000
 const MIN_COLUMN_WIDTH = 60
 const MAX_CORRELATION_SAMPLES = 2000
 const MAX_CORRELATION_COLUMNS = 30
@@ -1077,13 +1080,17 @@ const analyzeColumns = (rows) => {
       numericCount: 0,
       textCount: 0,
       samples: [],
+      uniqueValues: new Set(),
+      uniqueOverflow: false,
       numeric: {
         count: 0,
         sum: 0,
         mean: 0,
         m2: 0,
         min: null,
-        max: null
+        max: null,
+        values: [],
+        valuesOverflow: false
       },
       textFrequencies: new Map()
     })
@@ -1132,6 +1139,17 @@ const analyzeColumns = (rows) => {
           }
         }
 
+        if (!stats.uniqueOverflow) {
+          const uniqueToken = `#TXT:${normalizeLabel(value)}`
+          if (stats.uniqueValues.has(uniqueToken)) {
+            // Already tracked
+          } else if (stats.uniqueValues.size < MAX_UNIQUE_TRACKED_VALUES) {
+            stats.uniqueValues.add(uniqueToken)
+          } else {
+            stats.uniqueOverflow = true
+          }
+        }
+
         return
       }
 
@@ -1151,6 +1169,27 @@ const analyzeColumns = (rows) => {
       numeric.mean += delta / numeric.count
       const delta2 = numericValue - numeric.mean
       numeric.m2 += delta * delta2
+
+      if (numeric.values.length < MAX_NUMERIC_TRACKED_VALUES) {
+        numeric.values.push(numericValue)
+      } else {
+        const randomIndex = Math.floor(Math.random() * numeric.count)
+        if (randomIndex < MAX_NUMERIC_TRACKED_VALUES) {
+          numeric.values[randomIndex] = numericValue
+        }
+        numeric.valuesOverflow = true
+      }
+
+      if (!stats.uniqueOverflow) {
+        const uniqueToken = `#NUM:${numericValue}`
+        if (stats.uniqueValues.has(uniqueToken)) {
+          // Already tracked
+        } else if (stats.uniqueValues.size < MAX_UNIQUE_TRACKED_VALUES) {
+          stats.uniqueValues.add(uniqueToken)
+        } else {
+          stats.uniqueOverflow = true
+        }
+      }
     })
   })
 
@@ -1177,10 +1216,75 @@ const analyzeColumns = (rows) => {
       type = stats.numericCount >= stats.textCount ? 'number' : 'string'
     }
 
+    const totalCount = stats.emptyCount + stats.filledCount
+    const nullRatio = totalCount > 0 ? stats.emptyCount / totalCount : null
+
     let numericStatistics = null
     if (stats.numeric.count > 0) {
       const variance = stats.numeric.count > 1 ? stats.numeric.m2 / (stats.numeric.count - 1) : 0
       const stdDev = variance > 0 ? Math.sqrt(variance) : 0
+      const values = stats.numeric.values || []
+      let histogram = null
+
+      if (values.length > 0) {
+        const sortedValues = [...values].filter((value) => Number.isFinite(value))
+        const minValue =
+          stats.numeric.min !== null && Number.isFinite(stats.numeric.min)
+            ? stats.numeric.min
+            : sortedValues.length > 0
+              ? Math.min(...sortedValues)
+              : null
+        const maxValue =
+          stats.numeric.max !== null && Number.isFinite(stats.numeric.max)
+            ? stats.numeric.max
+            : sortedValues.length > 0
+              ? Math.max(...sortedValues)
+              : null
+
+        if (minValue !== null && maxValue !== null) {
+          const range = maxValue - minValue
+          const binCount = range > 0
+            ? Math.max(1, Math.min(NUMERIC_HISTOGRAM_BINS, Math.ceil(Math.sqrt(sortedValues.length))))
+            : 1
+          const binWidth = range > 0 ? range / binCount : 1
+          const bins = Array.from({ length: binCount }, (_value, index) => {
+            const from = range > 0 ? minValue + index * binWidth : minValue
+            const to = range > 0
+              ? index === binCount - 1
+                ? maxValue
+                : minValue + (index + 1) * binWidth
+              : minValue
+            return { from, to, count: 0 }
+          })
+
+          sortedValues.forEach((value) => {
+            if (!Number.isFinite(value)) {
+              return
+            }
+            if (range === 0) {
+              bins[0].count += 1
+              return
+            }
+            const index = Math.min(
+              bins.length - 1,
+              Math.max(0, Math.floor((value - minValue) / binWidth))
+            )
+            bins[index].count += 1
+          })
+
+          const maxCount = bins.reduce((acc, bin) => Math.max(acc, bin.count), 0)
+          histogram = {
+            bins,
+            maxCount,
+            binCount: bins.length,
+            range: { min: minValue, max: maxValue },
+            sampleCount: sortedValues.length,
+            totalCount: stats.numeric.count,
+            isSampled: stats.numeric.valuesOverflow || stats.numeric.count > sortedValues.length
+          }
+        }
+      }
+
       numericStatistics = {
         count: stats.numeric.count,
         sum: stats.numeric.sum,
@@ -1188,7 +1292,11 @@ const analyzeColumns = (rows) => {
         max: stats.numeric.max,
         mean: stats.numeric.mean,
         variance,
-        stdDev
+        stdDev,
+        histogram,
+        sampleCount: stats.numeric.values?.length || 0,
+        isSampled: stats.numeric.valuesOverflow || stats.numeric.count > (stats.numeric.values?.length || 0),
+        outlierCount: 0
       }
     }
 
@@ -1244,6 +1352,14 @@ const analyzeColumns = (rows) => {
       }
     }
 
+    const uniqueCount = stats.uniqueValues.size
+    const cardinality = {
+      uniqueCount,
+      ratio: stats.filledCount > 0 ? uniqueCount / stats.filledCount : null,
+      isLowerBound: stats.uniqueOverflow,
+      tracked: Math.min(uniqueCount, MAX_UNIQUE_TRACKED_VALUES)
+    }
+
     return {
       key,
       type,
@@ -1252,12 +1368,43 @@ const analyzeColumns = (rows) => {
       numericCount: stats.numericCount,
       textCount: stats.textCount,
       samples: stats.samples,
+      nullRatio,
+      cardinality,
       statistics: {
         numeric: numericStatistics,
         text: textStatistics
       },
       warnings
     }
+  })
+
+  columnSummaries.forEach((column) => {
+    const numericStats = column.statistics?.numeric
+    if (!numericStats || !Number.isFinite(numericStats.mean)) {
+      return
+    }
+
+    if (!Number.isFinite(numericStats.stdDev) || numericStats.stdDev <= 0) {
+      numericStats.outlierCount = 0
+      return
+    }
+
+    const highThreshold = numericStats.mean + NUMERIC_OUTLIER_SIGMA * numericStats.stdDev
+    const lowThreshold = numericStats.mean - NUMERIC_OUTLIER_SIGMA * numericStats.stdDev
+
+    let outlierCount = 0
+    rows.forEach((row) => {
+      const numericValue = toNumber(row?.[column.key])
+      if (numericValue === null) {
+        return
+      }
+      if (numericValue > highThreshold || numericValue < lowThreshold) {
+        outlierCount += 1
+      }
+    })
+
+    numericStats.outlierCount = outlierCount
+    numericStats.outlierRatio = numericStats.count > 0 ? outlierCount / numericStats.count : null
   })
 
   return {

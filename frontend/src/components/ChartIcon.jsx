@@ -65,10 +65,8 @@ function getColorPalette(chartType) {
     bubble: 'scatter',
     heatmap: 'scatter',
     matrix: 'scatter',
-    coordinate: 'scatter',
     
-    radar: 'special',
-    calendarHeatmap: 'scatter'
+    radar: 'special'
   }
   
   const paletteKey = typeMapping[chartType.id] || category
@@ -102,9 +100,7 @@ function getChartComponent(type) {
     nestedDonut: Doughnut,
     heatmap: Scatter,
     matrix: Bubble,
-    coordinate: Scatter,
     radialBar: PolarArea,
-    calendarHeatmap: Scatter,
     streamGraph: Line
   }
   return components[type] || Bar
@@ -198,25 +194,6 @@ function prepareIconData(chartType, config) {
       return {
         datasets: [{
           data: (config.values || []).slice(0, 8),
-          backgroundColor: colorPalette[0],
-          borderColor: colorPalette[0],
-          pointRadius: 3.5,
-          pointStyle: 'circle'
-        }]
-      }
-
-    case 'coordinate':
-      return {
-        datasets: [{
-          data: [
-            { x: 10, y: 50 },
-            { x: 30, y: 70 },
-            { x: 50, y: 30 },
-            { x: 70, y: 60 },
-            { x: 40, y: 40 },
-            { x: 60, y: 75 },
-            { x: 25, y: 20 }
-          ],
           backgroundColor: colorPalette[0],
           borderColor: colorPalette[0],
           pointRadius: 3.5,
@@ -337,24 +314,6 @@ function prepareIconData(chartType, config) {
         }]
       }
 
-    case 'calendarHeatmap':
-      return {
-        datasets: [{
-          data: Array.from({ length: 20 }, (_, i) => ({
-            x: i % 5,
-            y: Math.floor(i / 5),
-            v: Math.random() * 100
-          })),
-          pointRadius: 3,
-          pointStyle: 'rect',
-          backgroundColor: function(context) {
-            const value = context.raw?.v || 0;
-            const alpha = Math.max(0.3, value / 100);
-            return `rgba(59, 130, 246, ${alpha})`;
-          }
-        }]
-      }
-
     case 'streamGraph':
       if (config.datasets && Array.isArray(config.datasets)) {
         return {
@@ -420,7 +379,7 @@ function prepareIconOptions(chartType, config = null) {
   }
 
   // Scatter & Bubble & Coordinate
-  if (['scatter', 'bubble', 'matrix', 'coordinate'].includes(chartType.id)) {
+  if (['scatter', 'bubble', 'matrix'].includes(chartType.id)) {
     baseOptions.scales = {
       y: { 
         display: false, 
@@ -516,24 +475,6 @@ function prepareIconOptions(chartType, config = null) {
       r: {
         display: false,
         beginAtZero: true
-      }
-    }
-  }
-
-  // Calendar Heatmap
-  if (chartType.id === 'calendarHeatmap') {
-    baseOptions.scales = {
-      y: { 
-        type: 'linear',
-        display: false,
-        min: 0,
-        max: 4
-      },
-      x: { 
-        type: 'linear',
-        display: false,
-        min: 0,
-        max: 5
       }
     }
   }

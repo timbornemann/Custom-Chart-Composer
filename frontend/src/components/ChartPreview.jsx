@@ -527,9 +527,7 @@ function getChartComponent(type) {
     nestedDonut: Doughnut,
     radialBar: PolarArea,
     // Neue Streudiagramme
-    heatmap: Scatter,
-    calendarHeatmap: Scatter,
-    coordinate: Scatter
+    heatmap: Scatter
   }
   return components[type] || Bar
 }
@@ -658,15 +656,33 @@ function prepareChartData(chartType, config) {
     case 'scatter':
       if (config.datasets && Array.isArray(config.datasets)) {
         return {
-          datasets: config.datasets.map(ds => ({
-            ...ds,
-            backgroundColor: ds.backgroundColor || ds.borderColor || '#8B5CF6',
-            borderColor: ds.backgroundColor || ds.borderColor || '#8B5CF6',
-            pointRadius: config.options?.pointRadius || 8,
-            pointStyle: config.options?.pointStyle || 'circle',
-            borderWidth: config.options?.borderWidth || 2,
-            pointHoverRadius: (config.options?.pointRadius || 8) + 2
-          }))
+          datasets: config.datasets.map(ds => {
+            // Handle coordinate format conversion if needed
+            let processedData = ds.data || []
+            if (config.options?.dataFormat === 'coordinates') {
+              processedData = processedData.map(point => {
+                if (point.longitude !== undefined && point.latitude !== undefined) {
+                  return {
+                    x: point.longitude || 0,
+                    y: point.latitude || 0,
+                    label: point.label || ''
+                  }
+                }
+                return point
+              })
+            }
+            
+            return {
+              ...ds,
+              data: processedData,
+              backgroundColor: ds.backgroundColor || ds.borderColor || '#8B5CF6',
+              borderColor: ds.backgroundColor || ds.borderColor || '#8B5CF6',
+              pointRadius: config.options?.pointRadius || 8,
+              pointStyle: config.options?.pointStyle || 'circle',
+              borderWidth: config.options?.borderWidth || 2,
+              pointHoverRadius: (config.options?.pointRadius || 8) + 2
+            }
+          })
         }
       }
       return { datasets: [] }
@@ -689,27 +705,6 @@ function prepareChartData(chartType, config) {
       }
       return { datasets: [] }
 
-    case 'coordinate':
-      if (config.datasets && Array.isArray(config.datasets)) {
-        return {
-          datasets: config.datasets.map(ds => ({
-            ...ds,
-            data: ds.data ? ds.data.map(point => ({
-              x: point.longitude || 0,
-              y: point.latitude || 0,
-              label: point.label || ''
-            })) : [],
-            backgroundColor: ds.backgroundColor || ds.borderColor || '#3B82F6',
-            borderColor: ds.backgroundColor || ds.borderColor || '#3B82F6',
-            pointRadius: config.options?.pointRadius || 8,
-            pointStyle: config.options?.pointStyle || 'circle',
-            borderWidth: config.options?.borderWidth || 2,
-            pointHoverRadius: (config.options?.pointRadius || 8) + 2
-          }))
-        }
-      }
-      return { datasets: [] }
-    
     case 'pie':
     case 'donut':
     case 'polarArea':
@@ -898,23 +893,47 @@ function prepareChartData(chartType, config) {
     // Neue Streudiagramme
     case 'heatmap':
       if (config.datasets && Array.isArray(config.datasets)) {
+        const isCalendarType = config.options?.heatmapType === 'calendar'
+        
         return {
-          datasets: config.datasets.map(ds => ({
-            ...ds,
-            pointRadius: 20,
-            pointStyle: 'rect',
-            backgroundColor: function(context) {
-              const value = context.raw?.v || 0;
-              const alpha = value / 100;
-              const color = ds.backgroundColor || '#3B82F6';
-              // Extract RGB from hex color
-              const hex = color.replace('#', '');
-              const r = parseInt(hex.substr(0, 2), 16);
-              const g = parseInt(hex.substr(2, 2), 16);
-              const b = parseInt(hex.substr(4, 2), 16);
-              return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+          datasets: config.datasets.map(ds => {
+            // Calendar heatmap uses different color scale
+            if (isCalendarType) {
+              return {
+                ...ds,
+                label: ds.label || 'Aktivität',
+                data: ds.data || [],
+                backgroundColor: function(context) {
+                  const value = context.raw?.v || 0
+                  const colorScale = config.colors || ['#0F172A', '#1E3A5F', '#2563EB', '#3B82F6', '#60A5FA']
+                  const index = Math.min(Math.floor((value / 5) * (colorScale.length - 1)), colorScale.length - 1)
+                  return colorScale[index]
+                },
+                borderWidth: 2,
+                borderColor: '#0F172A',
+                pointRadius: config.options?.cellSize || 12,
+                pointStyle: 'rect'
+              }
             }
-          }))
+            
+            // Standard heatmap
+            return {
+              ...ds,
+              pointRadius: config.options?.cellSize || 20,
+              pointStyle: 'rect',
+              backgroundColor: function(context) {
+                const value = context.raw?.v || 0;
+                const alpha = value / 100;
+                const color = ds.backgroundColor || '#3B82F6';
+                // Extract RGB from hex color
+                const hex = color.replace('#', '');
+                const r = parseInt(hex.substr(0, 2), 16);
+                const g = parseInt(hex.substr(2, 2), 16);
+                const b = parseInt(hex.substr(4, 2), 16);
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+              }
+            }
+          })
         }
       }
       return { datasets: [] }
@@ -945,26 +964,6 @@ function prepareChartData(chartType, config) {
         }]
       }
 
-    case 'calendarHeatmap':
-      if (config.datasets && Array.isArray(config.datasets)) {
-        return {
-          datasets: config.datasets.map(ds => ({
-            label: ds.label || 'Aktivität',
-            data: ds.data || [],
-            backgroundColor: function(context) {
-              const value = context.raw?.v || 0
-              const colorScale = config.colors || ['#0F172A', '#1E3A5F', '#2563EB', '#3B82F6', '#60A5FA']
-              const index = Math.min(Math.floor((value / 5) * (colorScale.length - 1)), colorScale.length - 1)
-              return colorScale[index]
-            },
-            borderWidth: 2,
-            borderColor: '#0F172A',
-            pointRadius: config.options?.cellSize || 12,
-            pointStyle: 'rect'
-          }))
-        }
-      }
-      return { datasets: [] }
 
     case 'streamGraph':
       if (config.datasets && Array.isArray(config.datasets)) {
@@ -1175,7 +1174,7 @@ function buildAnnotationConfig(annotations = [], chartType) {
   const supportedChartTypes = [
     'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar', 'funnel', 'treemap', 'sankey',
     'line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea',
-    'scatter', 'bubble', 'matrix', 'calendarHeatmap', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
+    'scatter', 'bubble', 'matrix', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
   ]
 
   if (!supportedChartTypes.includes(chartType.id)) {
@@ -1689,192 +1688,249 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     }
   }
 
-  // Scatter & Bubble
-  if (['scatter', 'bubble', 'matrix', 'calendarHeatmap'].includes(chartType.id)) {
-    baseOptions.scales = {
-      y: {
-        beginAtZero: config.options?.beginAtZero !== false,
-        min: config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
-        max: config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
-        grid: {
-          display: config.options?.showGrid !== false,
-          color: config.options?.gridColor || '#334155'
-        },
-        ticks: {
-          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
-          font: { 
-            size: 12,
-            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+  // Scatter & Bubble charts
+  if (['scatter', 'bubble', 'matrix'].includes(chartType.id)) {
+    // Handle coordinate format for scatter
+    if (chartType.id === 'scatter' && config.options?.dataFormat === 'coordinates') {
+      const aspectRatio = config.options?.aspectRatio || 'auto'
+      
+      baseOptions.scales = {
+        y: {
+          beginAtZero: false,
+          grid: {
+            display: config.options?.showGrid !== false,
+            color: config.options?.gridColor || '#334155'
           },
-          stepSize: config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
+          ticks: {
+            color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+            font: { 
+              size: 12,
+              family: config.options?.fontStyles?.ticks?.family || 'Inter'
+            },
+            callback: function(value) {
+              return value.toFixed(2) + '°'
+            }
+          },
+          title: {
+            display: !!config.options?.yAxisLabel,
+            text: config.options?.yAxisLabel || 'Latitude (°)',
+            color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+            font: { 
+              size: 13, 
+              family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+            }
+          }
         },
-        title: {
-          display: !!config.options?.yAxisLabel,
-          text: config.options?.yAxisLabel || '',
-          color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
-          font: { 
-            size: 13, 
-            family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+        x: {
+          beginAtZero: false,
+          grid: {
+            display: config.options?.showGrid !== false,
+            color: config.options?.gridColor || '#334155'
+          },
+          ticks: {
+            color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+            font: { 
+              size: 12,
+              family: config.options?.fontStyles?.ticks?.family || 'Inter'
+            },
+            callback: function(value) {
+              return value.toFixed(2) + '°'
+            }
+          },
+          title: {
+            display: !!config.options?.xAxisLabel,
+            text: config.options?.xAxisLabel || 'Longitude (°)',
+            color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
+            font: { 
+              size: 13, 
+              family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+            }
           }
         }
-      },
-      x: {
-        beginAtZero: config.options?.beginAtZero !== false,
-        grid: {
-          display: config.options?.showGrid !== false,
-          color: config.options?.gridColor || '#334155'
-        },
-        ticks: {
-          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+      }
+      
+      // Handle aspect ratio
+      if (aspectRatio === 'equal') {
+        baseOptions.aspectRatio = 1
+      } else if (aspectRatio === 'mercator') {
+        baseOptions.aspectRatio = 1
+      }
+      
+      // Custom tooltip for coordinates
+      baseOptions.plugins.tooltip.callbacks.label = function(context) {
+        const datasetLabel = context.dataset.label || 'Standort'
+        const raw = context.raw
+        
+        if (typeof raw === 'object' && raw !== null) {
+          const parts = []
+          
+          if (raw.label) {
+            parts.push(` ${raw.label}`)
+          } else {
+            parts.push(datasetLabel)
+          }
+          
+          parts.push(`Longitude: ${raw.x?.toFixed(4) || 0}°`)
+          parts.push(`Latitude: ${raw.y?.toFixed(4) || 0}°`)
+          
+          return parts.join('\n')
+        }
+        
+        return `${datasetLabel}: (${context.parsed.x}, ${context.parsed.y})`
+      }
+      
+      // Show coordinate labels if enabled
+      if (config.options?.showCoordinateLabels !== false) {
+        baseOptions.plugins.customValueLabels = {
+          display: true,
+          layout: 'default',
+          offsetY: 10,
+          color: config.options?.fontStyles?.valueLabels?.color || '#F8FAFC',
           font: { 
-            size: 12,
-            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+            size: 10, 
+            weight: '600',
+            family: config.options?.fontStyles?.valueLabels?.family || 'Inter'
+          },
+          position: config.options?.labelPosition || 'top'
+        }
+      }
+    } else {
+      // Standard scatter/bubble scales
+      baseOptions.scales = {
+        y: {
+          beginAtZero: config.options?.beginAtZero !== false,
+          min: config.options?.yAxisMin !== undefined && config.options?.yAxisMin !== null ? config.options.yAxisMin : undefined,
+          max: config.options?.yAxisMax !== undefined && config.options?.yAxisMax !== null ? config.options.yAxisMax : undefined,
+          grid: {
+            display: config.options?.showGrid !== false,
+            color: config.options?.gridColor || '#334155'
+          },
+          ticks: {
+            color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+            font: { 
+              size: 12,
+              family: config.options?.fontStyles?.ticks?.family || 'Inter'
+            },
+            stepSize: config.options?.yAxisStep !== undefined && config.options?.yAxisStep !== null ? config.options.yAxisStep : undefined
+          },
+          title: {
+            display: !!config.options?.yAxisLabel,
+            text: config.options?.yAxisLabel || '',
+            color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+            font: { 
+              size: 13, 
+              family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+            }
           }
         },
-        title: {
-          display: !!config.options?.xAxisLabel,
-          text: config.options?.xAxisLabel || '',
-          color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
-          font: { 
-            size: 13, 
-            family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+        x: {
+          beginAtZero: config.options?.beginAtZero !== false,
+          min: config.options?.xAxisMin !== undefined && config.options?.xAxisMin !== null ? config.options.xAxisMin : undefined,
+          max: config.options?.xAxisMax !== undefined && config.options?.xAxisMax !== null ? config.options.xAxisMax : undefined,
+          grid: {
+            display: config.options?.showGrid !== false,
+            color: config.options?.gridColor || '#334155'
+          },
+          ticks: {
+            color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+            font: { 
+              size: 12,
+              family: config.options?.fontStyles?.ticks?.family || 'Inter'
+            },
+            stepSize: config.options?.xAxisStep !== undefined && config.options?.xAxisStep !== null ? config.options.xAxisStep : undefined
+          },
+          title: {
+            display: !!config.options?.xAxisLabel,
+            text: config.options?.xAxisLabel || '',
+            color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
+            font: { 
+              size: 13, 
+              family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+            }
           }
         }
       }
     }
   }
-
-  // Coordinate Chart (Geographic coordinates)
-  if (chartType.id === 'coordinate') {
-    const aspectRatio = config.options?.aspectRatio || 'auto'
-    
-    baseOptions.scales = {
-      y: {
-        beginAtZero: false,
-        grid: {
-          display: config.options?.showGrid !== false,
-          color: config.options?.gridColor || '#334155'
-        },
-        ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 },
-          callback: function(value) {
-            return value.toFixed(2) + '°'
-          }
-        },
-        title: {
-          display: !!config.options?.yAxisLabel,
-          text: config.options?.yAxisLabel || 'Latitude (°)',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
-        }
-      },
-      x: {
-        beginAtZero: false,
-        grid: {
-          display: config.options?.showGrid !== false,
-          color: config.options?.gridColor || '#334155'
-        },
-        ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 },
-          callback: function(value) {
-            return value.toFixed(2) + '°'
-          }
-        },
-        title: {
-          display: !!config.options?.xAxisLabel,
-          text: config.options?.xAxisLabel || 'Longitude (°)',
-          color: '#F8FAFC',
-          font: { size: 13, family: 'Inter' }
-        }
-      }
-    }
-
-    // Apply aspect ratio setting
-    if (aspectRatio === 'equal') {
-      baseOptions.aspectRatio = 1
-      baseOptions.scales.y.min = baseOptions.scales.x.min
-      baseOptions.scales.y.max = baseOptions.scales.x.max
-    } else if (aspectRatio === 'mercator') {
-      // Simplified Mercator-like projection (not true Mercator, just aspect ratio adjustment)
-      baseOptions.aspectRatio = 1.5
-    }
-
-    // Custom tooltip for coordinates
-    baseOptions.plugins.tooltip.callbacks.label = function(context) {
-      const datasetLabel = context.dataset.label || 'Standort'
-      const raw = context.raw
-      
-      if (typeof raw === 'object' && raw !== null) {
-        const parts = []
-        
-        if (raw.label) {
-          parts.push(` ${raw.label}`)
-        } else {
-          parts.push(` ${datasetLabel}`)
-        }
-        
-        if ('x' in raw && 'y' in raw) {
-          parts.push(`Lon: ${raw.x.toFixed(4)}°`)
-          parts.push(`Lat: ${raw.y.toFixed(4)}°`)
-        }
-        
-        return parts.join(' | ')
-      }
-      
-      return `${datasetLabel}: ${context.formattedValue}`
-    }
-
-    // Show coordinate labels if enabled
-    if (config.options?.showCoordinateLabels !== false) {
-      baseOptions.plugins.customValueLabels = {
-        display: true,
-        layout: 'default',
-        offsetY: 10,
-        color: config.options?.fontStyles?.valueLabels?.color || '#F8FAFC',
-        font: { 
-          size: 10, 
-          weight: '600',
-          family: config.options?.fontStyles?.valueLabels?.family || 'Inter'
-        },
-        formatter: (value) => {
-          if (typeof value === 'object' && value.label) {
-            return value.label
-          }
-          return ''
-        }
-      }
-    }
-  }
-
-  // Heatmap (categorical axes)
+  
+  // Heatmap
   if (chartType.id === 'heatmap') {
-    baseOptions.scales = {
-      y: {
-        type: 'category',
-        labels: config.yLabels || ['06:00', '12:00', '18:00'],
-        offset: true,
-        grid: {
-          display: config.options?.showGrid !== false,
-          color: '#334155'
+    const isCalendarType = config.options?.heatmapType === 'calendar'
+    
+    if (isCalendarType) {
+      baseOptions.scales = {
+        y: { 
+          type: 'linear',
+          display: config.options?.showWeekdayLabels !== false,
+          grid: { display: false },
+          ticks: {
+            color: '#CBD5E1',
+            font: { size: 10 }
+          }
         },
-        ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+        x: { 
+          type: 'linear',
+          display: config.options?.showMonthLabels !== false,
+          grid: { display: false },
+          ticks: {
+            color: '#CBD5E1',
+            font: { size: 10 }
+          }
         }
-      },
-      x: {
-        type: 'category',
-        labels: config.labels || ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'],
-        offset: true,
-        grid: {
-          display: config.options?.showGrid !== false,
-          color: '#334155'
+      }
+    } else {
+      baseOptions.scales = {
+        y: {
+          type: 'category',
+          labels: config.yLabels || [],
+          display: true,
+          offset: true,
+          grid: {
+            display: config.options?.showGrid !== false,
+            color: config.options?.gridColor || '#334155'
+          },
+          ticks: {
+            color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+            font: { 
+              size: 12,
+              family: config.options?.fontStyles?.ticks?.family || 'Inter'
+            }
+          },
+          title: {
+            display: !!config.options?.yAxisLabel,
+            text: config.options?.yAxisLabel || '',
+            color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+            font: { 
+              size: 13, 
+              family: config.options?.fontStyles?.yAxis?.family || 'Inter' 
+            }
+          }
         },
-        ticks: {
-          color: '#CBD5E1',
-          font: { size: 12 }
+        x: {
+          type: 'category',
+          labels: config.labels || [],
+          display: true,
+          offset: true,
+          grid: {
+            display: config.options?.showGrid !== false,
+            color: config.options?.gridColor || '#334155'
+          },
+          ticks: {
+            color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+            font: { 
+              size: 12,
+              family: config.options?.fontStyles?.ticks?.family || 'Inter'
+            }
+          },
+          title: {
+            display: !!config.options?.xAxisLabel,
+            text: config.options?.xAxisLabel || '',
+            color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
+            font: { 
+              size: 13, 
+              family: config.options?.fontStyles?.xAxis?.family || 'Inter' 
+            }
+          }
         }
       }
     }
@@ -2059,30 +2115,6 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
     baseOptions.startAngle = config.options?.startAngle || 0
   }
 
-
-  // Calendar Heatmap
-  if (chartType.id === 'calendarHeatmap') {
-    baseOptions.scales = {
-      y: {
-        type: 'linear',
-        display: config.options?.showWeekdayLabels !== false,
-        grid: { display: false },
-        ticks: {
-          color: '#CBD5E1',
-          font: { size: 10 }
-        }
-      },
-      x: {
-        type: 'linear',
-        display: config.options?.showMonthLabels !== false,
-        grid: { display: false },
-        ticks: {
-          color: '#CBD5E1',
-          font: { size: 10 }
-        }
-      }
-    }
-  }
 
   // Stream Graph
   if (chartType.id === 'streamGraph') {

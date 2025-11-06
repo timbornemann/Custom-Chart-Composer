@@ -2,7 +2,7 @@ export default {
   id: "scatter",
   name: "Streudiagramm",
   category: "scatter",
-  description: "Punkte zur Analyse von Zusammenhängen zweier Variablen.",
+  description: "Punkte zur Analyse von Zusammenhängen zweier Variablen. Unterstützt auch geografische Koordinaten (Longitude/Latitude).",
   library: "chartjs",
   configSchema: {
     title: {
@@ -55,6 +55,20 @@ export default {
         { value: "cross", label: "Kreuz" }, { value: "star", label: "Stern" }
       ], description: "Form der Punkte" },
       borderWidth: { type: "number", min: 0, max: 10, step: 1, default: 2, description: "Rahmenbreite" },
+      dataFormat: { type: "select", default: "xy", options: [
+        { value: "xy", label: "X/Y-Koordinaten (Standard)" },
+        { value: "coordinates", label: "Geografische Koordinaten (Longitude/Latitude)" }
+      ], description: "Datenformat für Eingabe" },
+      aspectRatio: { type: "select", default: "auto", options: [
+        { value: "auto", label: "Automatisch" },
+        { value: "equal", label: "1:1 (Gleich)" },
+        { value: "mercator", label: "Mercator-Projektion" }
+      ], description: "Seitenverhältnis der Achsen (nur bei geografischen Koordinaten)" },
+      showCoordinateLabels: { type: "boolean", default: true, description: "Koordinaten-Beschriftungen anzeigen (nur bei geografischen Koordinaten)" },
+      labelPosition: { type: "select", default: "top", options: [
+        { value: "top", label: "Oben" }, { value: "bottom", label: "Unten" },
+        { value: "left", label: "Links" }, { value: "right", label: "Rechts" }
+      ], description: "Position der Punkt-Labels (nur bei geografischen Koordinaten)" },
       xAxisLabel: { type: "string", default: "", placeholder: "z.B. X-Werte", description: "Beschriftung der X-Achse" },
       yAxisLabel: { type: "string", default: "", placeholder: "z.B. Y-Werte", description: "Beschriftung der Y-Achse" },
       animation: { type: "boolean", default: true, description: "Animationen aktivieren" },

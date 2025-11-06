@@ -87,7 +87,7 @@ docker run -d --name custom-chart-composer -p 3003:3003 -v %cd%\modules:/app/bac
 
 ## ✨ Features
 
-- 🎨 **21 Diagrammtypen**: Balken, Linie, Fläche, Kreis, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Heatmap, Kalender-Heatmap, Koordinaten, Radiales Balkendiagramm, Range-Balkendiagramm und viele mehr
+- 🎨 **19 Diagrammtypen**: Balken, Linie, Fläche, Kreis, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Heatmap, Radiales Balkendiagramm, Range-Balkendiagramm und viele mehr
 - 🎯 **Modulares Plugin-System**: Neue Diagrammtypen einfach hinzufügen
 - 🖌️ **Umfangreiche Anpassungen**: Farben, Beschriftungen, Optionen
 - 📦 **Multiple Export-Formate**: PNG, JPEG, HTML
@@ -126,12 +126,10 @@ Wählen Sie in der Sidebar den gewünschten Diagrammtyp:
 - **Polar-Flächendiagramm**: Kreisförmige Flächendarstellung
 - **Verschachteltes Donut**: Mehrere Donuts übereinander
 
-**Punktdiagramme (5 Typen):**
-- **Streudiagramm**: Korrelationen zwischen zwei Variablen
+**Punktdiagramme (3 Typen):**
+- **Streudiagramm**: Korrelationen zwischen zwei Variablen (unterstützt auch geografische Koordinaten)
 - **Blasendiagramm**: 3-dimensionale Daten mit Radius (mit Optionen für feste Größe und Punktform)
-- **Heatmap-Diagramm**: Matrix mit Farbintensitäten
-- **Kalender-Heatmap**: GitHub-Style Jahresübersicht
-- **Koordinatendiagramm**: Geografische Koordinaten (Longitude/Latitude)
+- **Heatmap-Diagramm**: Matrix mit Farbintensitäten (Standard-Heatmap und Kalender-Heatmap GitHub-Style)
 
 **Spezialdiagramme (2 Typen):**
 - **Radar-Chart**: Mehrdimensionale Daten auf polaren Achsen
@@ -347,12 +345,10 @@ Custom-Chart-Composer/
 │   ├── controllers/          # API-Controller
 │   ├── routes/              # API-Routes
 │   ├── services/            # Business Logic
-│   ├── modules/             # Chart-Module (21 Diagrammtypen)
+│   ├── modules/             # Chart-Module (19 Diagrammtypen)
 │   │   ├── areaChart.js
 │   │   ├── barChart.js
 │   │   ├── bubbleChart.js
-│   │   ├── calendarHeatmap.js
-│   │   ├── coordinateChart.js
 │   │   ├── dashedLineChart.js
 │   │   ├── groupedBarChart.js
 │   │   ├── heatmapChart.js

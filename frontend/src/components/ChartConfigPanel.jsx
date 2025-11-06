@@ -6,10 +6,8 @@ import SimpleDataEditor from './SimpleDataEditor'
 import ColorListEditor from './ColorListEditor'
 import RangeBarEditor from './RangeBarEditor'
 import HeatmapEditor from './HeatmapEditor'
-import CalendarHeatmapEditor from './CalendarHeatmapEditor'
 import BubbleDatasetEditor from './BubbleDatasetEditor'
 import ScatterDatasetEditor from './ScatterDatasetEditor'
-import CoordinateDatasetEditor from './CoordinateDatasetEditor'
 import ConfirmModal from './ConfirmModal'
 import CsvWorkbench from './CsvWorkbench'
 import ColorPaletteSelector from './ColorPaletteSelector'
@@ -298,9 +296,8 @@ const getImportCapabilities = (chartType) => {
   const isCoordinateDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'longitude' in sampleDatasetEntry && 'latitude' in sampleDatasetEntry
   const isRangeDataset = Array.isArray(sampleDatasetEntry)
   const isHeatmapDataset = chartType?.id === 'heatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
-  const isCalendarHeatmapDataset = chartType?.id === 'calendarHeatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
 
-  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isCalendarHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
+  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues && chartType?.id !== 'radar'
   const isRadarChart = chartType?.id === 'radar'
 
@@ -345,12 +342,11 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
   const hasPointValues = Array.isArray(defaultValues) && typeof sampleValue === 'object' && sampleValue !== null
   const isBubbleValues = hasPointValues && !!((config.values?.[0] ?? sampleValue)?.r || (config.values?.[0] ?? sampleValue)?.v)
   const isRangeDataset = Array.isArray(sampleDatasetEntry)
-  const isCalendarHeatmapDataset = chartType?.id === 'calendarHeatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
   const isHeatmapDataset = chartType?.id === 'heatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
   const isBubbleDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'r' in sampleDatasetEntry && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry
   const isScatterDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && !('r' in sampleDatasetEntry) && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry && !('v' in sampleDatasetEntry)
   const isCoordinateDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'longitude' in sampleDatasetEntry && 'latitude' in sampleDatasetEntry
-  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isCalendarHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
+  const usesDatasetEditor = !!datasetsSchema && !isRangeDataset && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues && chartType?.id !== 'radar'
   // Radar charts always use datasets (can have multiple datasets with different colors)
   const isRadarChart = chartType?.id === 'radar'
@@ -376,6 +372,24 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
     }
 
     if (isHeatmapDataset) {
+      // Check if calendar type
+      const isCalendarType = config.options?.heatmapType === 'calendar'
+      
+      if (isCalendarType) {
+        // Use heatmap editor but with calendar-specific handling
+        return (
+          <HeatmapEditor
+            labels={config.labels || []}
+            yLabels={config.yLabels || []}
+            datasets={config.datasets || []}
+            onLabelsChange={(labels) => onConfigChange({ labels })}
+            onYLabelsChange={(yLabels) => onConfigChange({ yLabels })}
+            onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+            isCalendarType={true}
+          />
+        )
+      }
+      
       return (
         <HeatmapEditor
           labels={config.labels || []}
@@ -383,15 +397,6 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
           datasets={config.datasets || []}
           onLabelsChange={(labels) => onConfigChange({ labels })}
           onYLabelsChange={(yLabels) => onConfigChange({ yLabels })}
-          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
-        />
-      )
-    }
-
-    if (isCalendarHeatmapDataset) {
-      return (
-        <CalendarHeatmapEditor
-          datasets={config.datasets || []}
           onDatasetsChange={(datasets) => onConfigChange({ datasets })}
         />
       )
@@ -406,18 +411,23 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
       )
     }
 
-    if (isScatterDataset) {
+    if (isScatterDataset || isCoordinateDataset) {
+      // Check if coordinate format
+      const isCoordinateFormat = config.options?.dataFormat === 'coordinates' || isCoordinateDataset
+      
+      if (isCoordinateFormat) {
+        // Use scatter editor but with coordinate-specific handling
+        return (
+          <ScatterDatasetEditor
+            datasets={config.datasets || []}
+            onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+            isCoordinateFormat={true}
+          />
+        )
+      }
+      
       return (
         <ScatterDatasetEditor
-          datasets={config.datasets || []}
-          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
-        />
-      )
-    }
-
-    if (isCoordinateDataset) {
-      return (
-        <CoordinateDatasetEditor
           datasets={config.datasets || []}
           onDatasetsChange={(datasets) => onConfigChange({ datasets })}
         />
@@ -533,7 +543,7 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
     if (!valuesSchema) return null
 
     // Don't show values if using specialized dataset editors or radar charts (they use DatasetEditor)
-    if (isBubbleDataset || isScatterDataset || isCoordinateDataset || isRangeDataset || isHeatmapDataset || isCalendarHeatmapDataset || isRadarChart) {
+    if (isBubbleDataset || isScatterDataset || isCoordinateDataset || isRangeDataset || isHeatmapDataset || isRadarChart) {
       return null
     }
 
@@ -1098,7 +1108,7 @@ function AnnotationsTab({ chartType, config, onConfigChange }) {
   const supportedChartTypes = [
     'bar', 'stackedBar', 'groupedBar', 'percentageBar', 'segmentedBar',
     'line', 'area', 'multiLine', 'steppedLine', 'verticalLine', 'smoothLine', 'dashedLine', 'curvedArea',
-    'scatter', 'bubble', 'matrix', 'calendarHeatmap', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
+    'scatter', 'bubble', 'matrix', 'heatmap', 'mixed', 'rangeBar', 'horizontalBar', 'streamGraph'
   ]
   const showAnnotations = annotationSchema && supportedChartTypes.includes(chartType.id)
 
@@ -2932,15 +2942,15 @@ function AutoAnnotationPanel({ onAddAnnotations, chartType, config }) {
       case 'bubble':
       case 'heatmap':
       case 'matrix':
-      case 'coordinate':
         // Scatter format: config.datasets with x,y coordinates
+        // Also handles coordinate format (longitude/latitude) and heatmap format (x,y,v)
         if (config.datasets && Array.isArray(config.datasets)) {
           config.datasets.forEach((ds, index) => {
             if (ds.data && Array.isArray(ds.data)) {
               // Extract y-values from scatter data
               const yValues = ds.data.map(point => {
                 if (typeof point === 'object' && point !== null) {
-                  return point.y || point.v || point.value
+                  return point.y || point.latitude || point.v || point.value
                 }
                 return point
               }).filter(val => typeof val === 'number' && !isNaN(val))

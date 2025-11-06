@@ -2,7 +2,7 @@ export default {
   id: "heatmap",
   name: "Heatmap-Diagramm",
   category: "scatter",
-  description: "Matrixdarstellung mit Farbintensitäten für Dichte.",
+  description: "Matrixdarstellung mit Farbintensitäten für Dichte. Unterstützt Standard-Heatmap und Kalender-Heatmap (GitHub-Style).",
   library: "chartjs",
   configSchema: {
     title: {
@@ -57,6 +57,10 @@ export default {
       ], description: "Position der Legende" },
       showGrid: { type: "boolean", default: true, description: "Gitterlinien anzeigen" },
       gridColor: { type: "color", default: "#334155", description: "Farbe der Gitterlinien" },
+      heatmapType: { type: "select", default: "standard", options: [
+        { value: "standard", label: "Standard-Heatmap" },
+        { value: "calendar", label: "Kalender-Heatmap (GitHub-Style)" }
+      ], description: "Typ der Heatmap" },
       cellSize: { type: "number", min: 10, max: 50, step: 5, default: 20, description: "Größe der Zellen" },
       cellSpacing: { type: "number", min: 0, max: 10, step: 1, default: 2, description: "Abstand zwischen Zellen" },
       showValues: { type: "boolean", default: true, description: "Werte in Zellen anzeigen" },

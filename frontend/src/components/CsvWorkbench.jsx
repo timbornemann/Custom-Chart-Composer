@@ -40,6 +40,7 @@ export default function CsvWorkbench({
   // ==========================================================================
   const {
     fileName,
+    rows: originalRows,
     columns: rawColumns,
     mapping,
     transformations,
@@ -1790,7 +1791,10 @@ export default function CsvWorkbench({
                   columns={columns}
                   mapping={mapping}
                   transformations={transformations}
+                  rawRows={originalRows}
+                  transformedRows={transformedRows}
                   onUpdateTransformations={updateTransformations}
+                  registerVersionEvent={registerVersionEvent}
                 />
               )}
 

@@ -34,7 +34,7 @@ Die einfachste Möglichkeit, Custom Chart Composer zu nutzen – keine Docker od
 
 **Downloads:**
 - Alle Releases: [GitHub Releases](https://github.com/timbornemann/Custom-Chart-Composer/releases)
-- Neueste Version: [v1.0.2](https://github.com/timbornemann/Custom-Chart-Composer/releases/tag/v1.0.2)
+- Neueste Version: [v1.0.6](https://github.com/timbornemann/Custom-Chart-Composer/releases/tag/v1.0.6)
 
 **Installation:**
 1. Laden Sie die neueste `Custom Chart Composer Setup <version>.exe` herunter

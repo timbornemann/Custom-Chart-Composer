@@ -10,6 +10,11 @@ export default function CsvMappingPanel({
   onUpdateMapping,
   onToggleValueColumn
 }) {
+  const isFinancial = ['candlestick', 'ohlc'].includes(chartType)
+  const isDistribution = ['boxPlot', 'violinPlot'].includes(chartType)
+  const isChoropleth = chartType === 'choropleth'
+  const isVenn = chartType === 'venn'
+
   if (isCoordinate) {
     return (
       <div className="space-y-4">
@@ -121,6 +126,261 @@ export default function CsvMappingPanel({
               </select>
             </div>
           )}
+        </div>
+      </div>
+    )
+  }
+
+  if (isFinancial) {
+    const numericColumns = columns.filter((col) => col.type === 'number')
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-dark-textLight mb-2">Finanzdaten-Mapping</h3>
+          <p className="text-xs text-dark-textGray mb-4">
+            Ordnen Sie Ihre OHLC-Spalten zu und wählen Sie optional eine Datensatz-Spalte.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Zeit/Kategorie</label>
+            <select
+              value={mapping.label || ''}
+              onChange={(e) => onUpdateMapping({ label: e.target.value })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Spalte wählen...</option>
+              {columns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {[
+            ['openColumn', 'Open (Eröffnung)'],
+            ['highColumn', 'High (Höchststand)'],
+            ['lowColumn', 'Low (Tiefststand)'],
+            ['closeColumn', 'Close (Schlusskurs)']
+          ].map(([key, labelText]) => (
+            <div key={key}>
+              <label className="block text-xs font-semibold text-dark-textGray mb-1">{labelText}</label>
+              <select
+                value={mapping[key] || ''}
+                onChange={(e) => onUpdateMapping({ [key]: e.target.value })}
+                className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+              >
+                <option value="">Spalte wählen...</option>
+                {numericColumns.map((col) => (
+                  <option key={col.key} value={col.key}>
+                    {col.key}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Datensatz-Spalte (optional)</label>
+            <select
+              value={mapping.datasetLabel || ''}
+              onChange={(e) => onUpdateMapping({ datasetLabel: e.target.value })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Nicht verwenden</option>
+              {columns
+                .filter((col) => col.type !== 'number')
+                .map((col) => (
+                  <option key={col.key} value={col.key}>
+                    {col.key}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isDistribution) {
+    const numericColumns = columns.filter((col) => col.type === 'number')
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-dark-textLight mb-2">Verteilungs-Mapping</h3>
+          <p className="text-xs text-dark-textGray mb-4">
+            Wählen Sie Kategorie-, Werte- und optional eine Datensatz-Spalte für Box- oder Violin-Plots.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Kategorie</label>
+            <select
+              value={mapping.label || ''}
+              onChange={(e) => onUpdateMapping({ label: e.target.value })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Spalte wählen...</option>
+              {columns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Werte</label>
+            <select
+              value={mapping.valueColumns?.[0] || ''}
+              onChange={(e) => onUpdateMapping({ valueColumns: e.target.value ? [e.target.value] : [] })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Spalte wählen...</option>
+              {numericColumns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Datensatz-Spalte (optional)</label>
+            <select
+              value={mapping.datasetLabel || ''}
+              onChange={(e) => onUpdateMapping({ datasetLabel: e.target.value })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Nicht verwenden</option>
+              {columns
+                .filter((col) => col.type !== 'number')
+                .map((col) => (
+                  <option key={col.key} value={col.key}>
+                    {col.key}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isChoropleth) {
+    const numericColumns = columns.filter((col) => col.type === 'number')
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-dark-textLight mb-2">Choropleth-Mapping</h3>
+          <p className="text-xs text-dark-textGray mb-4">
+            Ordnen Sie Regions-IDs, Werte und optional lesbare Labels zu.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Regions-ID</label>
+            <select
+              value={mapping.regionColumn || ''}
+              onChange={(e) => onUpdateMapping({ regionColumn: e.target.value })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Spalte wählen...</option>
+              {columns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Werte</label>
+            <select
+              value={mapping.valueColumns?.[0] || ''}
+              onChange={(e) => onUpdateMapping({ valueColumns: e.target.value ? [e.target.value] : [] })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Spalte wählen...</option>
+              {numericColumns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Anzeige-Label (optional)</label>
+            <select
+              value={mapping.regionLabelColumn || ''}
+              onChange={(e) => onUpdateMapping({ regionLabelColumn: e.target.value })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Nicht verwenden</option>
+              {columns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isVenn) {
+    const numericColumns = columns.filter((col) => col.type === 'number')
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-dark-textLight mb-2">Venn-Mapping</h3>
+          <p className="text-xs text-dark-textGray mb-4">
+            Geben Sie an, welche Spalte Mengen-Kombinationen enthält und welche Werte aggregiert werden sollen.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Mengen-Kombination</label>
+            <select
+              value={mapping.vennSetColumn || ''}
+              onChange={(e) => onUpdateMapping({ vennSetColumn: e.target.value })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Spalte wählen...</option>
+              {columns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Werte</label>
+            <select
+              value={mapping.valueColumns?.[0] || ''}
+              onChange={(e) => onUpdateMapping({ valueColumns: e.target.value ? [e.target.value] : [] })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Spalte wählen...</option>
+              {numericColumns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
     )

@@ -81,6 +81,29 @@ export default function ChartConfigPanel({
             payload.datasetLabel = ''
           }
         }
+      } else if (['candlestick', 'ohlc'].includes(chartType?.id)) {
+        payload.financialSeries = Array.isArray(result.financialSeries) ? result.financialSeries : []
+        payload.labels = Array.isArray(result.labels) ? result.labels : []
+        payload.values = []
+        payload.datasets = []
+      } else if (['boxPlot', 'violinPlot'].includes(chartType?.id)) {
+        payload.series = Array.isArray(result.series) ? result.series : []
+        payload.labels = Array.isArray(result.labels) ? result.labels : []
+        payload.values = []
+        payload.datasets = []
+      } else if (chartType?.id === 'choropleth') {
+        payload.regions = Array.isArray(result.regions) ? result.regions : []
+        if (Array.isArray(result.features)) {
+          payload.features = result.features
+        }
+        payload.labels = []
+        payload.values = []
+        payload.datasets = []
+      } else if (chartType?.id === 'venn') {
+        payload.sets = Array.isArray(result.vennSets) ? result.vennSets : []
+        payload.labels = []
+        payload.values = []
+        payload.datasets = []
       } else if (schema.datasetLabel) {
         let datasetLabelValue = ''
         if (importCapabilities.usesSimpleEditor && result.meta?.valueColumns?.[0]) {
@@ -279,6 +302,18 @@ const getImportCapabilities = (chartType) => {
       isCoordinateDataset: false
     }
   }
+
+  if (['candlestick', 'ohlc', 'boxPlot', 'violinPlot', 'choropleth', 'venn'].includes(chartType.id)) {
+    return {
+      supportsDataImport: true,
+      usesDatasetEditor: false,
+      usesSimpleEditor: false,
+      isScatterDataset: false,
+      isBubbleDataset: false,
+      isCoordinateDataset: false
+    }
+  }
+
   const schema = chartType.configSchema || {}
   const labelsSchema = schema.labels
   const valuesSchema = schema.values

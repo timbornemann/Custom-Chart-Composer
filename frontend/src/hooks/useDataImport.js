@@ -2,6 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { evaluateFormulaExpression } from '../utils/csv/formulas'
+import {
+  FILTER_NODE_TYPES,
+  createFilterGroup,
+  normalizeFilterTree,
+  hasActiveFilterConditions,
+  traverseFilterTree
+} from '../utils/csv/filterTree'
+import { createDefaultPipeline, createDefaultStageStates, ensurePipelineIntegrity } from '../utils/csv/transformations'
 
 // Note: Values are checked case-insensitively in toNumber(), so we only need lowercase here
 const PLACEHOLDER_VALUES = new Set(['', '-', 'n/a', 'na', 'null', 'undefined', 'nan', 'unknown'])
@@ -21,7 +29,9 @@ const defaultMapping = {
 const createDefaultTransformations = () => ({
   // Value transformation rules applied before filters/grouping
   valueRules: [],
-  filters: [],
+  filters: createFilterGroup({ id: 'group-root', operator: 'all', children: [] }),
+  pipeline: createDefaultPipeline(),
+  stageStates: createDefaultStageStates(),
   pivotTable: {
     scope: 'transformed',
     rowFields: [],
@@ -86,9 +96,20 @@ const mergeTransformationsWithDefaults = (transformations) => {
     delete mergedGrouping.column
   }
 
+  const normalizedFilters = normalizeFilterTree(transformations.filters || defaults.filters)
+  const mergedPipeline = ensurePipelineIntegrity(transformations.pipeline || defaults.pipeline)
+  const rawStageStates = transformations.stageStates || {}
+  const mergedStageStates = { ...defaults.stageStates }
+  Object.entries(rawStageStates).forEach(([key, value]) => {
+    mergedStageStates[key] = { ...(mergedStageStates[key] || {}), ...(value || {}) }
+  })
+
   return {
     ...defaults,
     ...transformations,
+    filters: normalizedFilters,
+    pipeline: mergedPipeline,
+    stageStates: mergedStageStates,
     pivot: { ...defaults.pivot, ...(transformations.pivot || {}) },
     pivotTable: { ...defaults.pivotTable, ...(transformations.pivotTable || {}) },
     unpivot: { ...defaults.unpivot, ...(transformations.unpivot || {}) },
@@ -1925,34 +1946,46 @@ const evaluateFilterCondition = (row, filter) => {
   return true
 }
 
+const evaluateFilterNode = (row, node) => {
+  if (!node || typeof node !== 'object') {
+    return true
+  }
+  if (node.enabled === false) {
+    return true
+  }
+  if (node.type === FILTER_NODE_TYPES.GROUP) {
+    const children = Array.isArray(node.children) ? node.children : []
+    if (children.length === 0) {
+      return true
+    }
+    const results = children.map((child) => evaluateFilterNode(row, child))
+    const operator = node.operator || 'all'
+    switch (operator) {
+      case 'any':
+        return results.some(Boolean)
+      case 'none':
+        return results.every((value) => !value)
+      case 'exactlyOne':
+        return results.filter(Boolean).length === 1
+      default:
+        return results.every(Boolean)
+    }
+  }
+  return evaluateFilterCondition(row, node)
+}
+
 const applyFilters = (rows, filters) => {
-  const activeFilters = (filters || []).filter((filter) => filter && filter.enabled !== false && filter.column)
-  if (activeFilters.length === 0) {
+  const tree = normalizeFilterTree(filters)
+  if (!hasActiveFilterConditions(tree)) {
     return { rows: rows.map((row) => ({ ...row })), removed: 0 }
   }
   let removed = 0
   const filteredRows = rows.filter((row) => {
-    // Start with the first filter's result
-    let result = evaluateFilterCondition(row, activeFilters[0])
-    
-    // Apply subsequent filters with their logic operators
-    for (let i = 1; i < activeFilters.length; i++) {
-      const filter = activeFilters[i]
-      const filterResult = evaluateFilterCondition(row, filter)
-      const logicOperator = filter.logicOperator || 'and'
-      
-      if (logicOperator === 'or') {
-        result = result || filterResult
-      } else {
-        // 'and' is the default
-        result = result && filterResult
-      }
-    }
-    
-    if (!result) {
+    const keep = evaluateFilterNode(row, tree)
+    if (!keep) {
       removed += 1
     }
-    return result
+    return keep
   })
   return { rows: filteredRows.map((row) => ({ ...row })), removed }
 }
@@ -2383,93 +2416,121 @@ const applyTransformations = (rows, mapping, transformations) => {
     return { rows: workingRows, warnings, meta }
   }
 
-  const { valueRules, filters, pivot, unpivot, grouping, aggregations } = transformations
+  const { valueRules, filters, pivot, unpivot, grouping, aggregations, pipeline, stageStates: stageStateOverrides } =
+    transformations
 
-  // 1) Apply value rules first (original rows remain unchanged in state)
-  workingRows = applyValueRules(workingRows, valueRules)
+  const pipelineOrder = ensurePipelineIntegrity(pipeline || createDefaultPipeline())
+  const stageStates = { ...createDefaultStageStates(), ...(stageStateOverrides || {}) }
 
-  const { rows: filteredRows, removed } = applyFilters(workingRows, filters)
-  workingRows = filteredRows
-  meta.filteredOut = removed
-  if (removed > 0) {
-    warnings.push(`${removed} Zeilen wurden durch Filter ausgeschlossen.`)
-  }
-  if (workingRows.length === 0) {
-    warnings.push('Alle Zeilen wurden durch die Filter ausgeschlossen.')
-    meta.aggregatedFrom = 0
-    meta.aggregatedTo = 0
-    return { rows: [], warnings, meta }
-  }
+  const stageEnabled = (stage) => stageStates[stage]?.enabled !== false
 
-  const pivotResult = applyPivotTransform(workingRows, pivot)
-  workingRows = pivotResult.rows
-  meta.pivot = pivotResult.meta
-  if (pivotResult.warnings.length > 0) {
-    warnings.push(...pivotResult.warnings)
-  }
+  meta.pivot.enabled = stageEnabled('pivot') && !!pivotConfig?.enabled
+  meta.unpivot.enabled = stageEnabled('unpivot') && !!unpivotConfig?.enabled
 
-  if (workingRows.length === 0) {
-    meta.aggregatedFrom = 0
-    meta.aggregatedTo = 0
-    return { rows: [], warnings, meta }
-  }
+  let groupingApplied = false
 
-  const unpivotResult = applyUnpivotTransform(workingRows, unpivot)
-  workingRows = unpivotResult.rows
-  meta.unpivot = unpivotResult.meta
-  if (unpivotResult.warnings.length > 0) {
-    warnings.push(...unpivotResult.warnings)
-  }
+  for (const stage of pipelineOrder) {
+    if (stage === 'valueRules') {
+      if (stageEnabled('valueRules')) {
+        workingRows = applyValueRules(workingRows, valueRules)
+      }
+    } else if (stage === 'filters') {
+      if (stageEnabled('filters')) {
+        const { rows: filteredRows, removed } = applyFilters(workingRows, filters)
+        workingRows = filteredRows
+        meta.filteredOut = removed
+        if (removed > 0) {
+          warnings.push(`${removed} Zeilen wurden durch Filter ausgeschlossen.`)
+        }
+        if (workingRows.length === 0) {
+          warnings.push('Alle Zeilen wurden durch die Filter ausgeschlossen.')
+          meta.aggregatedFrom = 0
+          meta.aggregatedTo = 0
+          return { rows: [], warnings, meta }
+        }
+      }
+    } else if (stage === 'pivot') {
+      if (stageEnabled('pivot') && pivotConfig?.enabled) {
+        const pivotResult = applyPivotTransform(workingRows, pivot)
+        workingRows = pivotResult.rows
+        meta.pivot = pivotResult.meta
+        if (pivotResult.warnings.length > 0) {
+          warnings.push(...pivotResult.warnings)
+        }
+        if (workingRows.length === 0) {
+          meta.aggregatedFrom = 0
+          meta.aggregatedTo = 0
+          return { rows: [], warnings, meta }
+        }
+      } else {
+        meta.pivot.enabled = false
+      }
+    } else if (stage === 'unpivot') {
+      if (stageEnabled('unpivot') && unpivotConfig?.enabled) {
+        const unpivotResult = applyUnpivotTransform(workingRows, unpivot)
+        workingRows = unpivotResult.rows
+        meta.unpivot = unpivotResult.meta
+        if (unpivotResult.warnings.length > 0) {
+          warnings.push(...unpivotResult.warnings)
+        }
+        if (workingRows.length === 0) {
+          meta.aggregatedFrom = 0
+          meta.aggregatedTo = 0
+          return { rows: [], warnings, meta }
+        }
+      } else {
+        meta.unpivot.enabled = false
+      }
+    } else if (stage === 'grouping') {
+      const groupingColumns = Array.isArray(grouping?.columns)
+        ? grouping.columns.filter((col) => typeof col === 'string').map((col) => col.trim()).filter(Boolean)
+        : []
+      const hasGroupingColumns = groupingColumns.length > 0
+      const shouldApplyGrouping = stageEnabled('grouping') && (grouping?.enabled || hasGroupingColumns)
 
-  if (workingRows.length === 0) {
-    meta.aggregatedFrom = 0
-    meta.aggregatedTo = 0
-    return { rows: [], warnings, meta }
-  }
+      if (shouldApplyGrouping) {
+        const groupingConfig = grouping?.enabled ? grouping : { ...grouping, enabled: true, columns: groupingColumns }
+        const { rows: aggregatedRows, info } = aggregateRows(workingRows, mapping, groupingConfig, aggregations)
+        workingRows = aggregatedRows
+        meta.aggregatedFrom = info.aggregatedFrom
+        meta.aggregatedTo = info.aggregatedTo
+        meta.unmatchedCount = info.unmatchedCount
+        meta.emptyCount = info.emptyCount
+        meta.groupingColumns = Array.isArray(info.groupingColumns) ? [...info.groupingColumns] : []
+        groupingApplied = true
 
-  meta.aggregatedFrom = workingRows.length
-
-  // Apply grouping if enabled OR if columns are selected (for live preview)
-  const groupingColumns = Array.isArray(grouping?.columns)
-    ? grouping.columns.filter((col) => typeof col === 'string').map((col) => col.trim()).filter(Boolean)
-    : []
-  const hasGroupingColumns = groupingColumns.length > 0
-  const shouldApplyGrouping = grouping?.enabled || hasGroupingColumns
-
-  if (shouldApplyGrouping) {
-    // For live preview without enabled, temporarily enable grouping
-    const groupingConfig = grouping?.enabled ? grouping : { ...grouping, enabled: true, columns: groupingColumns }
-    const { rows: aggregatedRows, info } = aggregateRows(workingRows, mapping, groupingConfig, aggregations)
-    workingRows = aggregatedRows
-    meta.aggregatedFrom = info.aggregatedFrom
-    meta.aggregatedTo = info.aggregatedTo
-    meta.unmatchedCount = info.unmatchedCount
-    meta.emptyCount = info.emptyCount
-    meta.groupingColumns = Array.isArray(info.groupingColumns) ? [...info.groupingColumns] : []
-
-    if (info.aggregatedTo < info.aggregatedFrom) {
-      warnings.push(
-        `Gruppierung reduziert die Daten auf ${info.aggregatedTo} Gruppen (statt ${info.aggregatedFrom} Zeilen).`
-      )
+        if (info.aggregatedTo < info.aggregatedFrom) {
+          warnings.push(
+            `Gruppierung reduziert die Daten auf ${info.aggregatedTo} Gruppen (statt ${info.aggregatedFrom} Zeilen).`
+          )
+        }
+        if (info.unmatchedCount > 0) {
+          warnings.push(
+            `${info.unmatchedCount} Werte konnten keiner definierten Gruppe zugeordnet werden und wurden als „${
+              grouping.fallbackLabel || 'Andere'
+            }“ gespeichert.`
+          )
+        }
+        if (info.emptyCount > 0) {
+          warnings.push(
+            `${info.emptyCount} Zeilen ohne Gruppenwert wurden der Gruppe „${grouping.fallbackLabel || 'Andere'}“ zugeordnet.`
+          )
+        }
+        if (aggregatedRows.length === 0) {
+          warnings.push('Es konnten keine Gruppen mit numerischen Werten berechnet werden.')
+        }
+      } else {
+        meta.groupingColumns = []
+        meta.aggregatedFrom = workingRows.length
+        meta.aggregatedTo = workingRows.length
+      }
     }
-    if (info.unmatchedCount > 0) {
-      warnings.push(
-        `${info.unmatchedCount} Werte konnten keiner definierten Gruppe zugeordnet werden und wurden als „${
-          grouping.fallbackLabel || 'Andere'
-        }“ gespeichert.`
-      )
-    }
-    if (info.emptyCount > 0) {
-      warnings.push(
-        `${info.emptyCount} Zeilen ohne Gruppenwert wurden der Gruppe „${grouping.fallbackLabel || 'Andere'}“ zugeordnet.`
-      )
-    }
-    if (aggregatedRows.length === 0) {
-      warnings.push('Es konnten keine Gruppen mit numerischen Werten berechnet werden.')
-    }
   }
 
-  meta.aggregatedTo = workingRows.length
+  if (!groupingApplied) {
+    meta.aggregatedFrom = workingRows.length
+    meta.aggregatedTo = workingRows.length
+  }
 
   return { rows: workingRows, warnings, meta }
 }
@@ -5233,8 +5294,14 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       }
     }
 
-    const activeFilters = (transformations.filters || []).filter((filter) => filter.enabled !== false)
-    activeFilters.forEach((filter) => {
+    const activeFilterNodes = []
+    traverseFilterTree(transformations.filters, (node) => {
+      if (node.type === FILTER_NODE_TYPES.CONDITION && node.enabled !== false) {
+        activeFilterNodes.push(node)
+      }
+    })
+
+    activeFilterNodes.forEach((filter) => {
       if (filter.column && !columnKeys.has(filter.column)) {
         errors.push(`Filter bezieht sich auf eine nicht mehr vorhandene Spalte "${filter.column}".`)
       }

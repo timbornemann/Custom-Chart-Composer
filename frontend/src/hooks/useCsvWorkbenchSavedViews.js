@@ -24,11 +24,14 @@ export const useCsvWorkbenchSavedViews = ({
   const [savedViewDraftName, setSavedViewDraftName] = useState('')
 
   const buildCurrentViewState = useCallback(() => {
-    const rawFilters = Array.isArray(transformations?.filters) ? transformations.filters : []
-    const filtersSnapshot = JSON.parse(JSON.stringify(rawFilters))
+    const filtersSnapshot = JSON.parse(JSON.stringify(transformations?.filters || null))
+    const pipelineSnapshot = Array.isArray(transformations?.pipeline) ? [...transformations.pipeline] : []
+    const stageStateSnapshot = JSON.parse(JSON.stringify(transformations?.stageStates || {}))
     const sortSnapshot = Array.isArray(sortConfig) ? sortConfig.map((entry) => ({ ...entry })) : []
     return {
       filters: filtersSnapshot,
+      pipeline: pipelineSnapshot,
+      stageStates: stageStateSnapshot,
       sortConfig: sortSnapshot,
       searchQuery,
       searchMode,
@@ -95,10 +98,12 @@ export const useCsvWorkbenchSavedViews = ({
         return { applied: false, reason: 'Ansicht nicht gefunden.' }
       }
 
-      const filtersSnapshot = JSON.parse(JSON.stringify(Array.isArray(target.filters) ? target.filters : []))
+      const filtersSnapshot = JSON.parse(JSON.stringify(target.filters || null))
       updateTransformations((prev) => ({
         ...prev,
-        filters: filtersSnapshot
+        filters: filtersSnapshot,
+        pipeline: Array.isArray(target.pipeline) ? target.pipeline : prev.pipeline,
+        stageStates: target.stageStates ? { ...prev.stageStates, ...target.stageStates } : prev.stageStates
       }))
       setSortConfig(Array.isArray(target.sortConfig) ? target.sortConfig : [])
       setSearchQuery(target.searchQuery || '')

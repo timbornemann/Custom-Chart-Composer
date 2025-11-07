@@ -4,6 +4,8 @@ import {
   CategoryScale,
   LinearScale,
   RadialLinearScale,
+  TimeScale,
+  TimeSeriesScale,
   BarElement,
   LineElement,
   PointElement,
@@ -17,24 +19,21 @@ import annotationPlugin from 'chartjs-plugin-annotation'
 import PropTypes from 'prop-types'
 import { CandlestickController, CandlestickElement, OhlcController, OhlcElement } from 'chartjs-chart-financial'
 import {
-  BoxAndWhiskers,
-  BoxPlot as BoxPlotController,
-  HorizontalBoxPlot,
-  Violin as ViolinChartController,
-  HorizontalViolin,
-  ArrayLinearScale,
-  ArrayLogarithmicScale
-} from 'chartjs-chart-box-and-violin-plot'
+  BoxAndWiskers,
+  BoxPlotController,
+  ViolinController,
+  Violin
+} from '@sgratzl/chartjs-chart-boxplot'
 import { FunnelController, TrapezoidElement } from 'chartjs-chart-funnel'
 import {
   ChoroplethController,
-  GeoController,
   ProjectionScale,
   ColorScale,
   ColorLogarithmicScale,
   GeoFeature
 } from 'chartjs-chart-geo'
 import { VennDiagramController, ArcSlice } from 'chartjs-chart-venn'
+import 'chartjs-adapter-date-fns'
 
 export default function ExportPreviewModal({ 
   isOpen, 
@@ -73,6 +72,8 @@ export default function ExportPreviewModal({
           CategoryScale,
           LinearScale,
           RadialLinearScale,
+          TimeScale,
+          TimeSeriesScale,
           BarElement,
           LineElement,
           PointElement,
@@ -86,16 +87,12 @@ export default function ExportPreviewModal({
           OhlcController,
           OhlcElement,
           BoxPlotController,
-          HorizontalBoxPlot,
-          ViolinChartController,
-          HorizontalViolin,
-          BoxAndWhiskers,
-          ArrayLinearScale,
-          ArrayLogarithmicScale,
+          ViolinController,
+          BoxAndWiskers,
+          Violin,
           FunnelController,
           TrapezoidElement,
           ChoroplethController,
-          GeoController,
           ProjectionScale,
           ColorScale,
           ColorLogarithmicScale,

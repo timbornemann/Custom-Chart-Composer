@@ -7,6 +7,11 @@ import ColorListEditor from './ColorListEditor'
 import HeatmapEditor from './HeatmapEditor'
 import BubbleDatasetEditor from './BubbleDatasetEditor'
 import ScatterDatasetEditor from './ScatterDatasetEditor'
+import VennDiagramEditor from './VennDiagramEditor'
+import BoxPlotEditor from './BoxPlotEditor'
+import ViolinPlotEditor from './ViolinPlotEditor'
+import ChoroplethEditor from './ChoroplethEditor'
+import MixedChartEditor from './MixedChartEditor'
 import ConfirmModal from './ConfirmModal'
 import CsvWorkbench from './CsvWorkbench'
 import ColorPaletteSelector from './ColorPaletteSelector'
@@ -303,7 +308,7 @@ const getImportCapabilities = (chartType) => {
     }
   }
 
-  if (['candlestick', 'ohlc', 'boxPlot', 'violinPlot', 'choropleth', 'venn'].includes(chartType.id)) {
+  if (['candlestick', 'ohlc', 'boxPlot', 'violinPlot', 'choropleth', 'venn', 'mixed'].includes(chartType.id)) {
     return {
       supportsDataImport: true,
       usesDatasetEditor: false,
@@ -377,11 +382,19 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
   const isScatterDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && !('r' in sampleDatasetEntry) && 'x' in sampleDatasetEntry && 'y' in sampleDatasetEntry && !('v' in sampleDatasetEntry)
   const isCoordinateDataset = sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'longitude' in sampleDatasetEntry && 'latitude' in sampleDatasetEntry
   const isHeatmapDataset = chartType?.id === 'heatmap' && sampleDatasetEntry && typeof sampleDatasetEntry === 'object' && 'v' in sampleDatasetEntry
-  const usesDatasetEditor = !!datasetsSchema && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset
+  
+  // Special chart types with custom editors
+  const isVennChart = chartType?.id === 'venn'
+  const isBoxPlot = chartType?.id === 'boxPlot'
+  const isViolinPlot = chartType?.id === 'violinPlot'
+  const isChoropleth = chartType?.id === 'choropleth'
+  const isMixedChart = chartType?.id === 'mixed'
+  
+  const usesDatasetEditor = !!datasetsSchema && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset && !isVennChart && !isBoxPlot && !isViolinPlot && !isChoropleth && !isMixedChart
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues && chartType?.id !== 'radar'
   // Radar charts always use datasets (can have multiple datasets with different colors)
   const isRadarChart = chartType?.id === 'radar'
-  const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height']
+  const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height', 'sets', 'series', 'regions', 'features']
   const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
 
   const handleFieldChange = (key, value) => {
@@ -389,6 +402,58 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
   }
 
   const renderDatasetEditor = () => {
+    // Special chart types with custom editors
+    if (isVennChart) {
+      return (
+        <VennDiagramEditor
+          sets={config.sets || []}
+          onSetsChange={(sets) => onConfigChange({ sets })}
+        />
+      )
+    }
+
+    if (isBoxPlot) {
+      return (
+        <BoxPlotEditor
+          labels={config.labels || []}
+          series={config.series || []}
+          onLabelsChange={(labels) => onConfigChange({ labels })}
+          onSeriesChange={(series) => onConfigChange({ series })}
+        />
+      )
+    }
+
+    if (isViolinPlot) {
+      return (
+        <ViolinPlotEditor
+          labels={config.labels || []}
+          series={config.series || []}
+          onLabelsChange={(labels) => onConfigChange({ labels })}
+          onSeriesChange={(series) => onConfigChange({ series })}
+        />
+      )
+    }
+
+    if (isChoropleth) {
+      return (
+        <ChoroplethEditor
+          regions={config.regions || []}
+          onRegionsChange={(regions) => onConfigChange({ regions })}
+        />
+      )
+    }
+
+    if (isMixedChart) {
+      return (
+        <MixedChartEditor
+          labels={config.labels || []}
+          datasets={config.datasets || []}
+          onLabelsChange={(labels) => onConfigChange({ labels })}
+          onDatasetsChange={(datasets) => onConfigChange({ datasets })}
+        />
+      )
+    }
+
     if (!datasetsSchema) return null
 
     if (isHeatmapDataset) {

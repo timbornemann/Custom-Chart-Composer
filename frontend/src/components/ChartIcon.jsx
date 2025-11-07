@@ -5,6 +5,8 @@ import {
   CategoryScale,
   LinearScale,
   RadialLinearScale,
+  TimeScale,
+  TimeSeriesScale,
   BarElement,
   LineElement,
   PointElement,
@@ -13,57 +15,81 @@ import {
 import { Chart as ReactChart, Bar, Line, Pie, Doughnut, Radar, PolarArea, Scatter, Bubble } from 'react-chartjs-2'
 import { CandlestickController, CandlestickElement, OhlcController, OhlcElement } from 'chartjs-chart-financial'
 import {
-  BoxAndWhiskers,
-  BoxPlot as BoxPlotController,
-  HorizontalBoxPlot,
-  Violin as ViolinChartController,
-  HorizontalViolin,
-  ArrayLinearScale,
-  ArrayLogarithmicScale
-} from 'chartjs-chart-box-and-violin-plot'
+  BoxAndWiskers,
+  BoxPlotController,
+  ViolinController,
+  Violin
+} from '@sgratzl/chartjs-chart-boxplot'
 import { FunnelController, TrapezoidElement } from 'chartjs-chart-funnel'
 import {
   ChoroplethController,
-  GeoController,
   ProjectionScale,
   ColorScale,
   ColorLogarithmicScale,
   GeoFeature
 } from 'chartjs-chart-geo'
 import { VennDiagramController, ArcSlice } from 'chartjs-chart-venn'
+import 'chartjs-adapter-date-fns'
 
+// Register base components
 ChartJS.register(
   CategoryScale,
   LinearScale,
   RadialLinearScale,
+  TimeScale,
+  TimeSeriesScale,
   BarElement,
   LineElement,
   PointElement,
   ArcElement
 )
-ChartJS.register(
-  CandlestickController,
-  CandlestickElement,
-  OhlcController,
-  OhlcElement,
-  BoxPlotController,
-  HorizontalBoxPlot,
-  ViolinChartController,
-  HorizontalViolin,
-  BoxAndWhiskers,
-  ArrayLinearScale,
-  ArrayLogarithmicScale,
-  FunnelController,
-  TrapezoidElement,
-  ChoroplethController,
-  GeoController,
-  ProjectionScale,
-  ColorScale,
-  ColorLogarithmicScale,
-  GeoFeature,
-  VennDiagramController,
-  ArcSlice
-)
+
+// Track if plugins are registered to avoid re-registration
+const registeredPlugins = new Set()
+
+function registerPluginIfNeeded(chartType) {
+  if (registeredPlugins.has(chartType)) return
+  
+  try {
+    switch (chartType) {
+      case 'candlestick':
+      case 'ohlc':
+        if (!registeredPlugins.has('financial')) {
+          ChartJS.register(CandlestickController, CandlestickElement, OhlcController, OhlcElement)
+          registeredPlugins.add('financial')
+        }
+        break
+      case 'boxPlot':
+      case 'violinPlot':
+        if (!registeredPlugins.has('boxplot')) {
+          ChartJS.register(BoxPlotController, ViolinController, BoxAndWiskers, Violin)
+          registeredPlugins.add('boxplot')
+        }
+        break
+      case 'funnel':
+        if (!registeredPlugins.has('funnel')) {
+          ChartJS.register(FunnelController, TrapezoidElement)
+          registeredPlugins.add('funnel')
+        }
+        break
+      case 'choropleth':
+        if (!registeredPlugins.has('geo')) {
+          ChartJS.register(ChoroplethController, ProjectionScale, ColorScale, ColorLogarithmicScale, GeoFeature)
+          registeredPlugins.add('geo')
+        }
+        break
+      case 'venn':
+        if (!registeredPlugins.has('venn')) {
+          ChartJS.register(VennDiagramController, ArcSlice)
+          registeredPlugins.add('venn')
+        }
+        break
+    }
+    registeredPlugins.add(chartType)
+  } catch (error) {
+    console.warn(`Failed to register plugin for ${chartType}:`, error)
+  }
+}
 
 const createTypedChart = (chartType) => {
   return forwardRef(function TypedIconChart(props, ref) {
@@ -385,13 +411,32 @@ function prepareIconData(chartType, config) {
     }
 
     case 'venn': {
-      const sets = Array.isArray(config.sets) ? config.sets.slice(0, 5) : []
+      // For icon, only show simple non-overlapping sets to avoid layout errors
+      const sets = Array.isArray(config.sets) ? config.sets : []
+      // Filter to only single sets (no intersections) for the icon preview
+      const simpleSets = sets.filter(entry => Array.isArray(entry?.sets) && entry.sets.length === 1).slice(0, 3)
+      
+      // Fallback if no valid sets
+      if (simpleSets.length === 0) {
+        return {
+          labels: ['A', 'B', 'C'],
+          datasets: [{
+            data: [
+              { sets: ['A'], value: 12 },
+              { sets: ['B'], value: 8 },
+              { sets: ['C'], value: 10 }
+            ],
+            backgroundColor: config.options?.colorScheme || colorPalette
+          }]
+        }
+      }
+      
       return {
-        labels: sets.map(entry => (Array.isArray(entry?.sets) ? entry.sets.join(' ∩ ') : '')),
+        labels: simpleSets.map(entry => entry.sets[0]),
         datasets: [
           {
-            data: sets.map(entry => ({
-              sets: Array.isArray(entry?.sets) ? entry.sets : [],
+            data: simpleSets.map(entry => ({
+              sets: entry.sets,
               value: entry?.value ?? 0
             })),
             backgroundColor: config.options?.colorScheme || colorPalette
@@ -716,6 +761,11 @@ export default function ChartIcon({ chartType }) {
   const [iconKey, setIconKey] = useState(0)
 
   useEffect(() => {
+    // Register plugins for this chart type if needed
+    if (chartType?.id) {
+      registerPluginIfNeeded(chartType.id)
+    }
+    
     // Cleanup any existing chart
     if (chartRef.current) {
       try {

@@ -5,6 +5,8 @@ import {
   CategoryScale,
   LinearScale,
   RadialLinearScale,
+  TimeScale,
+  TimeSeriesScale,
   BarElement,
   LineElement,
   PointElement,
@@ -18,30 +20,29 @@ import annotationPlugin from 'chartjs-plugin-annotation'
 import { Chart as ReactChart, Bar, Line, Pie, Doughnut, Radar, PolarArea, Scatter, Bubble } from 'react-chartjs-2'
 import { CandlestickController, CandlestickElement, OhlcController, OhlcElement } from 'chartjs-chart-financial'
 import {
-  BoxAndWhiskers,
-  BoxPlot as BoxPlotController,
-  HorizontalBoxPlot,
-  Violin as ViolinChartController,
-  HorizontalViolin,
-  ArrayLinearScale,
-  ArrayLogarithmicScale
-} from 'chartjs-chart-box-and-violin-plot'
+  BoxAndWiskers,
+  BoxPlotController,
+  ViolinController,
+  Violin
+} from '@sgratzl/chartjs-chart-boxplot'
 import { FunnelController, TrapezoidElement } from 'chartjs-chart-funnel'
 import {
   ChoroplethController,
-  GeoController,
   ProjectionScale,
   ColorScale,
   ColorLogarithmicScale,
   GeoFeature
 } from 'chartjs-chart-geo'
 import { VennDiagramController, ArcSlice } from 'chartjs-chart-venn'
+import 'chartjs-adapter-date-fns'
 import ChartErrorBoundary from './ChartErrorBoundary'
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
   RadialLinearScale,
+  TimeScale,
+  TimeSeriesScale,
   BarElement,
   LineElement,
   PointElement,
@@ -55,16 +56,12 @@ ChartJS.register(
   OhlcController,
   OhlcElement,
   BoxPlotController,
-  HorizontalBoxPlot,
-  ViolinChartController,
-  HorizontalViolin,
-  BoxAndWhiskers,
-  ArrayLinearScale,
-  ArrayLogarithmicScale,
+  ViolinController,
+  BoxAndWiskers,
+  Violin,
   FunnelController,
   TrapezoidElement,
   ChoroplethController,
-  GeoController,
   ProjectionScale,
   ColorScale,
   ColorLogarithmicScale,

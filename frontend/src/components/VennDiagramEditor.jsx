@@ -169,7 +169,7 @@ export default function VennDiagramEditor({ sets = [], onSetsChange }) {
             type="number"
             value={entry.value ?? 0}
             onChange={(event) => handleValueChange(index, event.target.value)}
-            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
           />
         </div>
       </div>
@@ -252,7 +252,7 @@ export default function VennDiagramEditor({ sets = [], onSetsChange }) {
                   type="text"
                   defaultValue={name}
                   onBlur={(event) => handleRenameBaseSet(name, event.target.value)}
-                  className="w-full px-3 py-2 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                  className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                 />
                 <button
                   type="button"

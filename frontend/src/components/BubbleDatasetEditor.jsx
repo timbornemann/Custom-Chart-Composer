@@ -157,7 +157,7 @@ export default function BubbleDatasetEditor({ datasets, onDatasetsChange }) {
                                   value={point.label || `Punkt ${pointIdx + 1}`}
                                   onChange={(e) => updateBubblePoint(dsIdx, pointIdx, 'label', e.target.value)}
                                   placeholder={`Punkt ${pointIdx + 1}`}
-                                  className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-medium"
+                                  className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-medium"
                                 />
                               </div>
                               <div className="grid grid-cols-3 gap-2">
@@ -167,7 +167,7 @@ export default function BubbleDatasetEditor({ datasets, onDatasetsChange }) {
                                     type="number"
                                     value={point.x || 0}
                                     onChange={(e) => updateBubblePoint(dsIdx, pointIdx, 'x', e.target.value)}
-                                    className="w-full px-2 py-1 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
+                                    className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
                                   />
                                 </div>
                                 <div>
@@ -176,7 +176,7 @@ export default function BubbleDatasetEditor({ datasets, onDatasetsChange }) {
                                     type="number"
                                     value={point.y || 0}
                                     onChange={(e) => updateBubblePoint(dsIdx, pointIdx, 'y', e.target.value)}
-                                    className="w-full px-2 py-1 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
+                                    className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
                                   />
                                 </div>
                                 <div>
@@ -185,7 +185,7 @@ export default function BubbleDatasetEditor({ datasets, onDatasetsChange }) {
                                     type="number"
                                     value={point.r || 10}
                                     onChange={(e) => updateBubblePoint(dsIdx, pointIdx, 'r', e.target.value)}
-                                    className="w-full px-2 py-1 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
+                                    className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
                                   />
                                 </div>
                               </div>

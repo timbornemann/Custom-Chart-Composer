@@ -356,7 +356,7 @@ export default function DatasetEditor({ datasets, labels, onDatasetsChange, onLa
                             type="number"
                             value={value}
                             onChange={(e) => updateDataPoint(dsIdx, pointIdx, e.target.value)}
-                            className="w-full px-2 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-semibold"
+                            className="w-full px-2 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-semibold"
                           />
                         </div>
                       ))}

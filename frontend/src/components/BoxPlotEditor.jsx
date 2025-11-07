@@ -164,7 +164,7 @@ export default function BoxPlotEditor({ labels = [], series = [], onLabelsChange
                   type="text"
                   value={label}
                   onChange={(e) => handleLabelChange(index, e.target.value)}
-                  className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                  className="flex-1 px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                   placeholder="Kategorie"
                 />
                 <button
@@ -216,7 +216,7 @@ export default function BoxPlotEditor({ labels = [], series = [], onLabelsChange
                   type="text"
                   value={serie.name}
                   onChange={(e) => handleSeriesPropertyChange(seriesIndex, 'name', e.target.value)}
-                  className="px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                  className="px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                   placeholder="Serie Name"
                 />
                 <div className="flex items-center gap-2">
@@ -279,7 +279,7 @@ export default function BoxPlotEditor({ labels = [], series = [], onLabelsChange
                           type="number"
                           value={values.min}
                           onChange={(e) => handleQuartileChange(seriesIndex, labelIndex, 'min', e.target.value)}
-                          className="w-full px-2 py-1 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                          className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                         />
                       </div>
                       <div>
@@ -288,7 +288,7 @@ export default function BoxPlotEditor({ labels = [], series = [], onLabelsChange
                           type="number"
                           value={values.q1}
                           onChange={(e) => handleQuartileChange(seriesIndex, labelIndex, 'q1', e.target.value)}
-                          className="w-full px-2 py-1 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                          className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                         />
                       </div>
                       <div>
@@ -297,7 +297,7 @@ export default function BoxPlotEditor({ labels = [], series = [], onLabelsChange
                           type="number"
                           value={values.median}
                           onChange={(e) => handleQuartileChange(seriesIndex, labelIndex, 'median', e.target.value)}
-                          className="w-full px-2 py-1 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                          className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                         />
                       </div>
                       <div>
@@ -306,7 +306,7 @@ export default function BoxPlotEditor({ labels = [], series = [], onLabelsChange
                           type="number"
                           value={values.q3}
                           onChange={(e) => handleQuartileChange(seriesIndex, labelIndex, 'q3', e.target.value)}
-                          className="w-full px-2 py-1 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                          className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                         />
                       </div>
                       <div>
@@ -315,7 +315,7 @@ export default function BoxPlotEditor({ labels = [], series = [], onLabelsChange
                           type="number"
                           value={values.max}
                           onChange={(e) => handleQuartileChange(seriesIndex, labelIndex, 'max', e.target.value)}
-                          className="w-full px-2 py-1 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                          className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                         />
                       </div>
                     </div>

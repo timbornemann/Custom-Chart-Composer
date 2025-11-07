@@ -384,7 +384,7 @@ export default function ChoroplethEditor({
                       type="text"
                       value={feature?.id || ''}
                       onChange={(event) => handleFeatureIdChange(index, event.target.value)}
-                      className="w-full px-2 py-1 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                      className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                     />
                   </div>
                   <div className="col-span-4">
@@ -393,7 +393,7 @@ export default function ChoroplethEditor({
                       type="text"
                       value={feature?.properties?.name || ''}
                       onChange={(event) => handleFeatureNameChange(index, event.target.value)}
-                      className="w-full px-2 py-1 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                      className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                     />
                   </div>
                   <div className="col-span-4 flex items-end text-[11px] text-dark-textGray">

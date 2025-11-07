@@ -158,7 +158,7 @@ export default function CalendarHeatmapEditor({ datasets, onDatasetsChange }) {
                                   value={point.label || `Tag ${pointIdx + 1}`}
                                   onChange={(e) => updatePoint(dsIdx, pointIdx, 'label', e.target.value)}
                                   placeholder={`Tag ${pointIdx + 1}`}
-                                  className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-medium"
+                                  className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-medium"
                                 />
                               </div>
                               <div className="grid grid-cols-3 gap-2">
@@ -168,7 +168,7 @@ export default function CalendarHeatmapEditor({ datasets, onDatasetsChange }) {
                                     type="number"
                                     value={point.x || 0}
                                     onChange={(e) => updatePoint(dsIdx, pointIdx, 'x', e.target.value)}
-                                    className="w-full px-2 py-1 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
+                                    className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
                                   />
                                 </div>
                                 <div>
@@ -177,7 +177,7 @@ export default function CalendarHeatmapEditor({ datasets, onDatasetsChange }) {
                                     type="number"
                                     value={point.y || 0}
                                     onChange={(e) => updatePoint(dsIdx, pointIdx, 'y', e.target.value)}
-                                    className="w-full px-2 py-1 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
+                                    className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm"
                                   />
                                 </div>
                                 <div>
@@ -188,7 +188,7 @@ export default function CalendarHeatmapEditor({ datasets, onDatasetsChange }) {
                                     onChange={(e) => updatePoint(dsIdx, pointIdx, 'v', e.target.value)}
                                     min="0"
                                     max="100"
-                                    className="w-full px-2 py-1 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-semibold"
+                                    className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-semibold"
                                   />
                                 </div>
                               </div>

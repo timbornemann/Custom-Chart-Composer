@@ -4,6 +4,7 @@ import EnhancedColorPicker from './EnhancedColorPicker'
 
 export default function ViolinPlotEditor({ labels = [], series = [], onLabelsChange, onSeriesChange }) {
   const [showHelper, setShowHelper] = useState(false)
+  const [textareaValues, setTextareaValues] = useState({})
 
   // Füge neue Kategorie hinzu
   const handleAddLabel = () => {
@@ -64,16 +65,44 @@ export default function ViolinPlotEditor({ labels = [], series = [], onLabelsCha
     onSeriesChange(newSeries)
   }
 
-  // Aktualisiere Werte-Array (komma-getrennte Eingabe)
-  const handleValuesChange = (seriesIndex, labelIndex, value) => {
-    const newSeries = [...series]
+  // Initialisiere lokalen State beim Fokussieren
+  const handleTextareaFocus = (seriesIndex, labelIndex) => {
+    const key = `${seriesIndex}-${labelIndex}`
+    // Initialisiere nur, wenn noch kein Wert vorhanden ist
+    if (textareaValues[key] === undefined) {
+      const values = series[seriesIndex]?.values[labelIndex] || []
+      setTextareaValues(prev => ({
+        ...prev,
+        [key]: values.join(', ')
+      }))
+    }
+  }
+
+  // Aktualisiere lokalen Textarea-State (während der Eingabe)
+  const handleTextareaChange = (seriesIndex, labelIndex, value) => {
+    const key = `${seriesIndex}-${labelIndex}`
+    setTextareaValues(prev => ({
+      ...prev,
+      [key]: value
+    }))
+  }
+
+  // Parse und speichere Werte (beim Verlassen des Feldes)
+  const handleTextareaBlur = (seriesIndex, labelIndex) => {
+    const key = `${seriesIndex}-${labelIndex}`
+    // Verwende den lokalen State, falls vorhanden, sonst den aktuellen Wert aus der Serie
+    const currentValues = series[seriesIndex]?.values[labelIndex] || []
+    const rawValue = textareaValues[key] !== undefined 
+      ? textareaValues[key] 
+      : currentValues.join(', ')
     
     // Parse comma-separated values
-    const values = value
+    const values = rawValue
       .split(',')
       .map(v => parseFloat(v.trim()))
       .filter(v => !isNaN(v))
     
+    const newSeries = [...series]
     newSeries[seriesIndex] = {
       ...newSeries[seriesIndex],
       values: newSeries[seriesIndex].values.map((v, i) => 
@@ -81,6 +110,12 @@ export default function ViolinPlotEditor({ labels = [], series = [], onLabelsCha
       )
     }
     onSeriesChange(newSeries)
+    
+    // Aktualisiere den lokalen State mit den geparsten Werten (auch wenn leer)
+    setTextareaValues(prev => ({
+      ...prev,
+      [key]: values.length > 0 ? values.join(', ') : ''
+    }))
   }
 
   // Generiere Beispieldaten
@@ -100,6 +135,13 @@ export default function ViolinPlotEditor({ labels = [], series = [], onLabelsCha
     const newSeries = [...series]
     newSeries[seriesIndex].values[labelIndex] = values
     onSeriesChange(newSeries)
+    
+    // Aktualisiere auch den lokalen Textarea-State
+    const key = `${seriesIndex}-${labelIndex}`
+    setTextareaValues(prev => ({
+      ...prev,
+      [key]: values.join(', ')
+    }))
   }
 
   // Berechne Statistiken für Werte
@@ -169,7 +211,7 @@ export default function ViolinPlotEditor({ labels = [], series = [], onLabelsCha
                   type="text"
                   value={label}
                   onChange={(e) => handleLabelChange(index, e.target.value)}
-                  className="flex-1 px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                  className="flex-1 px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                   placeholder="Kategorie"
                 />
                 <button
@@ -221,7 +263,7 @@ export default function ViolinPlotEditor({ labels = [], series = [], onLabelsCha
                   type="text"
                   value={serie.name}
                   onChange={(e) => handleSeriesPropertyChange(seriesIndex, 'name', e.target.value)}
-                  className="px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                  className="px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                   placeholder="Serie Name"
                 />
                 <EnhancedColorPicker
@@ -251,6 +293,11 @@ export default function ViolinPlotEditor({ labels = [], series = [], onLabelsCha
               {labels.map((label, labelIndex) => {
                 const values = serie.values[labelIndex] || []
                 const stats = getStats(values)
+                const textareaKey = `${seriesIndex}-${labelIndex}`
+                // Verwende lokalen State, falls vorhanden, sonst die geparsten Werte
+                const textareaValue = textareaValues[textareaKey] !== undefined 
+                  ? textareaValues[textareaKey] 
+                  : values.join(', ')
 
                 return (
                   <div
@@ -268,11 +315,13 @@ export default function ViolinPlotEditor({ labels = [], series = [], onLabelsCha
                     </div>
                     
                     <textarea
-                      value={values.join(', ')}
-                      onChange={(e) => handleValuesChange(seriesIndex, labelIndex, e.target.value)}
+                      value={textareaValue}
+                      onFocus={() => handleTextareaFocus(seriesIndex, labelIndex)}
+                      onChange={(e) => handleTextareaChange(seriesIndex, labelIndex, e.target.value)}
+                      onBlur={() => handleTextareaBlur(seriesIndex, labelIndex)}
                       placeholder="Werte komma-getrennt eingeben, z.B. 10, 15, 20, 25, 30"
                       rows={2}
-                      className="w-full px-3 py-2 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono resize-none"
+                      className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono resize-none"
                     />
 
                     {stats && (

@@ -100,7 +100,7 @@ export default function HeatmapEditor({ labels, yLabels, datasets, onLabelsChang
                       type="text"
                       value={label}
                       onChange={(e) => updateXLabel(idx, e.target.value)}
-                      className="w-16 px-2 py-1 bg-dark-bg text-dark-textLight rounded border-0 focus:outline-none text-xs"
+                      className="w-16 px-2 py-1 bg-dark-secondary text-dark-textLight rounded border-0 focus:outline-none text-xs"
                     />
                     <button
                       onClick={() => removeXLabel(idx)}
@@ -133,7 +133,7 @@ export default function HeatmapEditor({ labels, yLabels, datasets, onLabelsChang
                       type="text"
                       value={label}
                       onChange={(e) => updateYLabel(idx, e.target.value)}
-                      className="w-16 px-2 py-1 bg-dark-bg text-dark-textLight rounded border-0 focus:outline-none text-xs"
+                      className="w-16 px-2 py-1 bg-dark-secondary text-dark-textLight rounded border-0 focus:outline-none text-xs"
                     />
                     <button
                       onClick={() => removeYLabel(idx)}

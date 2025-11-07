@@ -172,7 +172,7 @@ export default function CoordinateDatasetEditor({ datasets, onDatasetsChange }) 
                                     value={point.label || `Punkt ${pointIdx + 1}`}
                                     onChange={(e) => updateCoordinatePoint(dsIdx, pointIdx, 'label', e.target.value)}
                                     placeholder={`Punkt ${pointIdx + 1}`}
-                                    className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-medium"
+                                    className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-medium"
                                   />
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
@@ -186,7 +186,7 @@ export default function CoordinateDatasetEditor({ datasets, onDatasetsChange }) 
                                       step="0.0001"
                                       value={point.longitude || 0}
                                       onChange={(e) => updateCoordinatePoint(dsIdx, pointIdx, 'longitude', e.target.value)}
-                                      className={`w-full px-2 py-1 bg-dark-bg text-dark-textLight rounded border ${
+                                      className={`w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border ${
                                         point.longitude < -180 || point.longitude > 180
                                           ? 'border-red-500 focus:border-red-500'
                                           : 'border-gray-700 focus:border-blue-500'
@@ -203,7 +203,7 @@ export default function CoordinateDatasetEditor({ datasets, onDatasetsChange }) 
                                       step="0.0001"
                                       value={point.latitude || 0}
                                       onChange={(e) => updateCoordinatePoint(dsIdx, pointIdx, 'latitude', e.target.value)}
-                                      className={`w-full px-2 py-1 bg-dark-bg text-dark-textLight rounded border ${
+                                      className={`w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border ${
                                         point.latitude < -90 || point.latitude > 90
                                           ? 'border-red-500 focus:border-red-500'
                                           : 'border-gray-700 focus:border-blue-500'

@@ -261,7 +261,7 @@ export default function FinancialSeriesEditor({
                   type="text"
                   value={label}
                   onChange={(event) => handleLabelChange(index, event.target.value)}
-                  className="flex-1 min-w-[160px] px-3 py-2 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                  className="flex-1 min-w-[160px] px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                 />
                 <div className="flex items-center gap-2 text-xs">
                   <button
@@ -310,7 +310,7 @@ export default function FinancialSeriesEditor({
                   type="text"
                   value={serie.name}
                   onChange={(event) => handleSeriePropertyChange(seriesIndex, 'name', event.target.value)}
-                  className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                  className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                   placeholder="Serienname"
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -378,7 +378,7 @@ export default function FinancialSeriesEditor({
                               type="number"
                               value={current[key] ?? 0}
                               onChange={(event) => handleValueChange(seriesIndex, labelIndex, key, event.target.value)}
-                              className="w-full px-2 py-1 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none"
+                              className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none"
                             />
                           </td>
                         ))}

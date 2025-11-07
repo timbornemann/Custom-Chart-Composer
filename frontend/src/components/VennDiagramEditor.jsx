@@ -1,157 +1,175 @@
-import { useState } from 'react'
-import { FiPlus, FiTrash2, FiAlertCircle } from 'react-icons/fi'
+import { useMemo, useState } from 'react'
+import PropTypes from 'prop-types'
+import { FiPlus, FiTrash2, FiAlertCircle, FiRefreshCw } from 'react-icons/fi'
+
+const SAMPLE_SETS = [
+  { sets: ['Newsletter'], value: 120 },
+  { sets: ['Webinar'], value: 80 },
+  { sets: ['Event'], value: 60 },
+  { sets: ['Newsletter', 'Webinar'], value: 42 },
+  { sets: ['Newsletter', 'Event'], value: 25 },
+  { sets: ['Webinar', 'Event'], value: 18 },
+  { sets: ['Newsletter', 'Webinar', 'Event'], value: 10 }
+]
+
+const generateSetName = (usedNames) => {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  for (let i = 0; i < alphabet.length; i += 1) {
+    const candidate = `Menge ${alphabet[i]}`
+    if (!usedNames.includes(candidate)) {
+      return candidate
+    }
+  }
+  return `Menge ${usedNames.length + 1}`
+}
+
+const combinations = (items, size) => {
+  if (size === 1) return items.map(item => [item])
+  const result = []
+  items.forEach((item, index) => {
+    const tail = items.slice(index + 1)
+    const tailCombos = combinations(tail, size - 1)
+    tailCombos.forEach(combo => {
+      result.push([item, ...combo])
+    })
+  })
+  return result
+}
+
+const normalizeKey = (entry) => {
+  if (!entry || !Array.isArray(entry.sets)) return ''
+  return [...entry.sets].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).join('|')
+}
 
 export default function VennDiagramEditor({ sets = [], onSetsChange }) {
   const [showHelper, setShowHelper] = useState(false)
 
-  // Extrahiere alle eindeutigen Mengennamen
-  const getAllSetNames = () => {
+  const baseSets = useMemo(() => {
     const names = new Set()
     sets.forEach(entry => {
       if (Array.isArray(entry.sets)) {
-        entry.sets.forEach(name => names.add(name))
+        entry.sets.forEach(name => {
+          if (name && name.trim()) {
+            names.add(name.trim())
+          }
+        })
       }
     })
-    return Array.from(names).sort()
+    return Array.from(names)
+  }, [sets])
+
+  const handleAddBaseSet = () => {
+    const newName = generateSetName(baseSets)
+    onSetsChange([
+      ...sets,
+      { sets: [newName], value: 0 }
+    ])
   }
 
-  const allSetNames = getAllSetNames()
+  const handleRemoveBaseSet = (name) => {
+    const updated = sets.filter(entry => !(Array.isArray(entry.sets) && entry.sets.includes(name)))
+    onSetsChange(updated)
+  }
 
-  // Füge einen neuen Eintrag hinzu
-  const handleAddEntry = () => {
-    const newEntry = {
-      sets: allSetNames.length > 0 ? [allSetNames[0]] : ['Menge A'],
-      value: 0
+  const handleRenameBaseSet = (oldName, newName) => {
+    const trimmed = newName.trim()
+    if (!trimmed || trimmed === oldName || baseSets.includes(trimmed)) {
+      return
     }
-    onSetsChange([...sets, newEntry])
+    const updated = sets.map(entry => {
+      if (!Array.isArray(entry.sets)) return entry
+      const nextSets = entry.sets.map(setName => (setName === oldName ? trimmed : setName))
+      return { ...entry, sets: nextSets }
+    })
+    onSetsChange(updated)
   }
 
-  // Entferne einen Eintrag
-  const handleRemoveEntry = (index) => {
-    const newSets = sets.filter((_, i) => i !== index)
-    onSetsChange(newSets)
+  const handleToggleSetInEntry = (index, setName) => {
+    const entry = sets[index]
+    if (!entry) return
+    const current = Array.isArray(entry.sets) ? [...entry.sets] : []
+    const has = current.includes(setName)
+    let nextSets
+    if (has) {
+      nextSets = current.filter(name => name !== setName)
+      if (nextSets.length === 0) {
+        // Removing the last set deletes the entry
+        onSetsChange(sets.filter((_, idx) => idx !== index))
+        return
+      }
+    } else {
+      nextSets = [...current, setName]
+    }
+    const updated = sets.map((item, idx) => (idx === index ? { ...item, sets: nextSets } : item))
+    onSetsChange(updated)
   }
 
-  // Aktualisiere den Wert eines Eintrags
   const handleValueChange = (index, value) => {
-    const newSets = [...sets]
-    newSets[index] = {
-      ...newSets[index],
-      value: parseFloat(value) || 0
-    }
-    onSetsChange(newSets)
+    const updated = sets.map((entry, idx) => (idx === index ? { ...entry, value: Number(value) || 0 } : entry))
+    onSetsChange(updated)
   }
 
-  // Aktualisiere die Mengenzuordnung
-  const handleSetsChange = (index, setNames) => {
-    const newSets = [...sets]
-    newSets[index] = {
-      ...newSets[index],
-      sets: setNames
-    }
-    onSetsChange(newSets)
+  const handleRemoveEntry = (index) => {
+    onSetsChange(sets.filter((_, idx) => idx !== index))
   }
 
-  // Füge eine neue Menge hinzu
-  const handleAddSet = (index) => {
-    const currentSets = sets[index]?.sets || []
-    const availableSets = allSetNames.filter(name => !currentSets.includes(name))
-    
-    if (availableSets.length > 0) {
-      handleSetsChange(index, [...currentSets, availableSets[0]])
-    }
+  const handleAddIntersection = (size) => {
+    if (baseSets.length < size) return
+    const combos = combinations(baseSets, size)
+    const existing = new Set(sets.map(entry => normalizeKey(entry)))
+    const nextCombo = combos.find(combo => !existing.has(normalizeKey({ sets: combo })))
+    if (!nextCombo) return
+    onSetsChange([...sets, { sets: nextCombo, value: 0 }])
   }
 
-  // Entferne eine Menge aus einem Eintrag
-  const handleRemoveSet = (entryIndex, setIndex) => {
-    const currentSets = sets[entryIndex]?.sets || []
-    const newSetsList = currentSets.filter((_, i) => i !== setIndex)
-    handleSetsChange(entryIndex, newSetsList)
-  }
-
-  // Ändere den Namen einer Menge
-  const handleSetNameChange = (entryIndex, setIndex, newName) => {
-    const currentSets = [...(sets[entryIndex]?.sets || [])]
-    currentSets[setIndex] = newName.trim()
-    handleSetsChange(entryIndex, currentSets)
-  }
-
-  // Gruppiere Einträge nach Anzahl der Mengen
-  const groupedSets = {
-    single: sets.filter(s => s.sets?.length === 1),
-    double: sets.filter(s => s.sets?.length === 2),
-    triple: sets.filter(s => s.sets?.length >= 3)
-  }
+  const handleClearAll = () => onSetsChange([])
+  const handleResetValues = () => onSetsChange(sets.map(entry => ({ ...entry, value: 0 })))
+  const handleLoadSample = () => onSetsChange(SAMPLE_SETS)
 
   const renderEntry = (entry, index) => {
-    const setCount = entry.sets?.length || 0
-    const originalIndex = sets.indexOf(entry)
-
+    const key = normalizeKey(entry) || `entry-${index}`
+    const sortedBase = [...baseSets]
     return (
       <div
-        key={originalIndex}
-        className="bg-dark-sidebar p-4 rounded-lg border border-gray-700 hover:border-dark-accent1 transition-colors"
+        key={key}
+        className="bg-dark-sidebar p-4 rounded-lg border border-gray-700 hover:border-dark-accent1 transition-colors space-y-3"
       >
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex-1 space-y-2">
-            <label className="block text-sm font-medium text-dark-textLight">
-              {setCount === 1 ? 'Einzelne Menge' : `Überlappung (${setCount} Mengen)`}
-            </label>
-            
-            <div className="flex flex-wrap gap-2">
-              {(entry.sets || []).map((setName, setIndex) => (
-                <div key={setIndex} className="flex items-center gap-1">
-                  <input
-                    type="text"
-                    value={setName}
-                    onChange={(e) => handleSetNameChange(originalIndex, setIndex, e.target.value)}
-                    placeholder="Mengenname"
-                    className="px-2 py-1 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm w-32"
-                  />
-                  {entry.sets.length > 1 && (
-                    <button
-                      onClick={() => handleRemoveSet(originalIndex, setIndex)}
-                      className="p-1 text-dark-textGray hover:text-red-400 transition-colors"
-                      title="Menge entfernen"
-                    >
-                      <FiTrash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              ))}
-              
-              {setCount < 3 && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {sortedBase.map(name => {
+              const isActive = entry.sets?.includes(name)
+              return (
                 <button
-                  onClick={() => handleAddSet(originalIndex)}
-                  className="px-2 py-1 bg-dark-accent1 hover:bg-dark-accent2 text-white rounded text-sm flex items-center gap-1 transition-colors"
-                  title="Weitere Menge hinzufügen"
+                  key={name}
+                  type="button"
+                  onClick={() => handleToggleSetInEntry(index, name)}
+                  className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                    isActive
+                      ? 'bg-dark-accent1/20 border-dark-accent1 text-dark-accent1'
+                      : 'border-gray-700 text-dark-textGray hover:border-dark-accent1 hover:text-dark-textLight'
+                  }`}
                 >
-                  <FiPlus size={14} />
-                  Menge
+                  {name}
                 </button>
-              )}
-            </div>
+              )
+            })}
           </div>
-
           <button
-            onClick={() => handleRemoveEntry(originalIndex)}
-            className="ml-3 p-2 text-dark-textGray hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
+            type="button"
+            onClick={() => handleRemoveEntry(index)}
+            className="p-2 text-dark-textGray hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
             title="Eintrag löschen"
           >
             <FiTrash2 size={16} />
           </button>
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-dark-textLight mb-2">
-            Wert
-          </label>
+          <label className="block text-xs font-medium text-dark-textLight mb-1">Wert</label>
           <input
             type="number"
-            value={entry.value}
-            onChange={(e) => handleValueChange(originalIndex, e.target.value)}
-            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none"
-            placeholder="0"
+            value={entry.value ?? 0}
+            onChange={(event) => handleValueChange(index, event.target.value)}
+            className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
           />
         </div>
       </div>
@@ -159,13 +177,11 @@ export default function VennDiagramEditor({ sets = [], onSetsChange }) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header mit Hilfe-Button */}
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-dark-textLight">
-          Venn-Diagramm Daten
-        </label>
+        <label className="block text-sm font-medium text-dark-textLight">Venn-Diagramm Daten</label>
         <button
+          type="button"
           onClick={() => setShowHelper(!showHelper)}
           className="text-dark-accent1 hover:text-dark-accent2 text-sm flex items-center gap-1"
         >
@@ -174,89 +190,128 @@ export default function VennDiagramEditor({ sets = [], onSetsChange }) {
         </button>
       </div>
 
-      {/* Hilfetext */}
       {showHelper && (
-        <div className="bg-dark-accent1/10 border border-dark-accent1/30 rounded-lg p-4 text-sm text-dark-textLight">
-          <p className="font-medium mb-2">So funktioniert das Venn-Diagramm:</p>
-          <ul className="space-y-1 list-disc list-inside text-dark-textGray">
-            <li><strong>Einzelne Mengen:</strong> Zeigen die Größe jeder Menge ohne Überlappung</li>
-            <li><strong>Überlappungen (2 Mengen):</strong> Zeigen gemeinsame Elemente zwischen zwei Mengen</li>
-            <li><strong>Überlappungen (3 Mengen):</strong> Zeigen gemeinsame Elemente zwischen drei Mengen</li>
-            <li>Die Werte sollten logisch aufeinander abgestimmt sein</li>
+        <div className="bg-dark-accent1/10 border border-dark-accent1/30 rounded-lg p-4 text-sm text-dark-textLight space-y-2">
+          <p className="font-medium">Tipps für Venn-Diagramme:</p>
+          <ul className="list-disc list-inside text-dark-textGray space-y-1">
+            <li>Lege zuerst die Grundmengen fest. Jeder weitere Eintrag kombiniert diese Mengen.</li>
+            <li>Doppelklick auf die Mengenamen, um sie umzubenennen.</li>
+            <li>Nutze die Schalter in den Einträgen, um Mengen zuzuordnen oder zu entfernen.</li>
+            <li>Werte sollten logisch konsistent sein (Überschneidungen dürfen nicht größer sein als Einzelmengen).</li>
           </ul>
         </div>
       )}
 
-      {/* Einzelne Mengen */}
-      {groupedSets.single.length > 0 && (
-        <div className="space-y-3">
-          <h4 className="text-sm font-medium text-dark-textLight border-b border-gray-700 pb-2">
-            Einzelne Mengen ({groupedSets.single.length})
-          </h4>
-          <div className="space-y-3">
-            {groupedSets.single.map((entry, idx) => renderEntry(entry, idx))}
+      <div className="bg-dark-sidebar border border-gray-700 rounded-lg p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-dark-textLight">Grundmengen ({baseSets.length})</h3>
+            <p className="text-xs text-dark-textGray">Basis-Mengen definieren die Elemente deines Venn-Diagramms.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleAddBaseSet}
+              className="px-3 py-2 text-xs rounded bg-dark-accent1 hover:bg-dark-accent2 text-white flex items-center gap-1"
+            >
+              <FiPlus size={14} /> Menge
+            </button>
+            <button
+              type="button"
+              onClick={handleLoadSample}
+              className="px-3 py-2 text-xs rounded border border-gray-700 text-dark-textLight hover:border-dark-accent1"
+            >
+              Beispieldaten
+            </button>
+            <button
+              type="button"
+              onClick={handleResetValues}
+              className="px-3 py-2 text-xs rounded border border-gray-700 text-dark-textLight hover:border-dark-accent1 flex items-center gap-1"
+            >
+              <FiRefreshCw size={14} /> Werte nullen
+            </button>
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="px-3 py-2 text-xs rounded border border-red-900/60 text-red-200 hover:bg-red-900/40 flex items-center gap-1"
+            >
+              <FiTrash2 size={14} /> Alles löschen
+            </button>
           </div>
         </div>
-      )}
 
-      {/* 2-fach Überlappungen */}
-      {groupedSets.double.length > 0 && (
-        <div className="space-y-3">
-          <h4 className="text-sm font-medium text-dark-textLight border-b border-gray-700 pb-2">
-            Überlappungen (2 Mengen) ({groupedSets.double.length})
-          </h4>
-          <div className="space-y-3">
-            {groupedSets.double.map((entry, idx) => renderEntry(entry, idx))}
+        {baseSets.length === 0 ? (
+          <div className="text-sm text-dark-textGray bg-dark-bg rounded-lg p-4 text-center">
+            Noch keine Mengen vorhanden. Füge zuerst eine Grundmenge hinzu.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {baseSets.map((name, index) => (
+              <div key={name} className="bg-dark-bg border border-gray-700 rounded-lg p-3 space-y-2">
+                <input
+                  type="text"
+                  defaultValue={name}
+                  onBlur={(event) => handleRenameBaseSet(name, event.target.value)}
+                  className="w-full px-3 py-2 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveBaseSet(name)}
+                  className="w-full px-2 py-1 text-xs rounded border border-gray-700 text-dark-textGray hover:border-red-500 hover:text-red-400"
+                  title="Menge und zugehörige Einträge entfernen"
+                >
+                  Entfernen
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-dark-sidebar border border-gray-700 rounded-lg p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-dark-textLight">Überlappungen</h3>
+            <p className="text-xs text-dark-textGray">Füge neue Schnittmengen hinzu oder bearbeite bestehende Einträge.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => handleAddIntersection(2)}
+              disabled={baseSets.length < 2}
+              className="px-3 py-2 text-xs rounded border border-gray-700 text-dark-textLight hover:border-dark-accent1 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              2er-Überlappung
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAddIntersection(3)}
+              disabled={baseSets.length < 3}
+              className="px-3 py-2 text-xs rounded border border-gray-700 text-dark-textLight hover:border-dark-accent1 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              3er-Überlappung
+            </button>
           </div>
         </div>
-      )}
 
-      {/* 3-fach Überlappungen */}
-      {groupedSets.triple.length > 0 && (
-        <div className="space-y-3">
-          <h4 className="text-sm font-medium text-dark-textLight border-b border-gray-700 pb-2">
-            Überlappungen (3+ Mengen) ({groupedSets.triple.length})
-          </h4>
-          <div className="space-y-3">
-            {groupedSets.triple.map((entry, idx) => renderEntry(entry, idx))}
+        {sets.length === 0 ? (
+          <div className="text-sm text-dark-textGray bg-dark-bg rounded-lg p-4 text-center">
+            Noch keine Daten vorhanden. Füge Grundmengen und Überlappungen hinzu.
           </div>
-        </div>
-      )}
-
-      {/* Leerer Zustand */}
-      {sets.length === 0 && (
-        <div className="text-center py-8 bg-dark-sidebar rounded-lg border border-gray-700">
-          <FiAlertCircle className="mx-auto mb-2 text-dark-textGray" size={32} />
-          <p className="text-dark-textGray mb-4">Noch keine Mengen vorhanden</p>
-          <button
-            onClick={handleAddEntry}
-            className="px-4 py-2 bg-dark-accent1 hover:bg-dark-accent2 text-white rounded flex items-center gap-2 mx-auto transition-colors"
-          >
-            <FiPlus size={16} />
-            Erste Menge hinzufügen
-          </button>
-        </div>
-      )}
-
-      {/* Button zum Hinzufügen */}
-      {sets.length > 0 && (
-        <button
-          onClick={handleAddEntry}
-          className="w-full px-4 py-3 bg-dark-accent1 hover:bg-dark-accent2 text-white rounded-lg flex items-center justify-center gap-2 transition-colors"
-        >
-          <FiPlus size={18} />
-          Neuer Eintrag
-        </button>
-      )}
-
-      {/* Statistik */}
-      {sets.length > 0 && (
-        <div className="text-xs text-dark-textGray bg-dark-bg rounded p-3 border border-gray-700">
-          <strong>Zusammenfassung:</strong> {allSetNames.length} Mengen insgesamt, {sets.length} Einträge 
-          ({groupedSets.single.length} einzeln, {groupedSets.double.length} 2-fach, {groupedSets.triple.length} 3-fach Überlappungen)
-        </div>
-      )}
+        ) : (
+          <div className="space-y-3">
+            {sets.map((entry, index) => renderEntry(entry, index))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
+VennDiagramEditor.propTypes = {
+  sets: PropTypes.arrayOf(PropTypes.shape({
+    sets: PropTypes.arrayOf(PropTypes.string),
+    value: PropTypes.number
+  })),
+  onSetsChange: PropTypes.func.isRequired
+}

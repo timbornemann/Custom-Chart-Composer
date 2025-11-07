@@ -20,6 +20,7 @@ import BackgroundImageEditor from './BackgroundImageEditor'
 import EnhancedColorPicker from './EnhancedColorPicker'
 import { useExport } from '../hooks/useExport'
 import ExportPreviewModal from './ExportPreviewModal'
+import FinancialSeriesEditor from './FinancialSeriesEditor'
 
 export default function ChartConfigPanel({
   chartType,
@@ -389,12 +390,13 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
   const isViolinPlot = chartType?.id === 'violinPlot'
   const isChoropleth = chartType?.id === 'choropleth'
   const isMixedChart = chartType?.id === 'mixed'
+  const isFinancialChart = ['candlestick', 'ohlc'].includes(chartType?.id)
   
   const usesDatasetEditor = !!datasetsSchema && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset && !isVennChart && !isBoxPlot && !isViolinPlot && !isChoropleth && !isMixedChart
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues && chartType?.id !== 'radar'
   // Radar charts always use datasets (can have multiple datasets with different colors)
   const isRadarChart = chartType?.id === 'radar'
-  const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height', 'sets', 'series', 'regions', 'features']
+  const excludedKeys = ['title', 'labels', 'yLabels', 'values', 'datasets', 'datasetLabel', 'options', 'colors', 'backgroundColor', 'width', 'height', 'sets', 'series', 'regions', 'features', 'financialSeries']
   const additionalFields = Object.entries(schema).filter(([key]) => !excludedKeys.includes(key))
 
   const handleFieldChange = (key, value) => {
@@ -439,6 +441,19 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
         <ChoroplethEditor
           regions={config.regions || []}
           onRegionsChange={(regions) => onConfigChange({ regions })}
+          features={config.features || []}
+          onFeaturesChange={(features) => onConfigChange({ features })}
+        />
+      )
+    }
+
+    if (isFinancialChart) {
+      return (
+        <FinancialSeriesEditor
+          labels={config.labels || []}
+          series={config.financialSeries || []}
+          onLabelsChange={(labels) => onConfigChange({ labels })}
+          onSeriesChange={(financialSeries) => onConfigChange({ financialSeries })}
         />
       )
     }
@@ -1233,6 +1248,9 @@ function OptionsTab({ chartType, config, onConfigChange }) {
 
   const schema = chartType.configSchema.options || {}
   const schemaEntries = Object.entries(schema).filter(([key]) => key !== 'annotations')
+  const isFinancialChart = ['candlestick', 'ohlc'].includes(chartType.id)
+  const isChoropleth = chartType.id === 'choropleth'
+  const isVenn = chartType.id === 'venn'
 
   // Aspect Ratio Presets
   const aspectRatioPresets = [
@@ -1447,6 +1465,33 @@ function OptionsTab({ chartType, config, onConfigChange }) {
           )
         }
 
+        // Array Input (e.g., Farbpaletten)
+        if (field.type === 'array') {
+          const currentValue = Array.isArray(config.options?.[key]) ? config.options[key] : field.default || []
+          const isColorArray = Array.isArray(currentValue) && currentValue.every(entry => typeof entry === 'string' && /^#|rgb|hsl/i.test(entry))
+
+          if (isColorArray) {
+            return (
+              <ColorListEditor
+                key={key}
+                label={formatLabel(key)}
+                values={currentValue}
+                onChange={(values) => handleOptionChange(key, values)}
+                maxColors={12}
+              />
+            )
+          }
+
+          return (
+            <ArrayFieldEditor
+              key={key}
+              label={formatLabel(key)}
+              values={currentValue}
+              onChange={(values) => handleOptionChange(key, values)}
+            />
+          )
+        }
+
         // Text Input
         if (field.type === 'string') {
           return (
@@ -1487,7 +1532,110 @@ function OptionsTab({ chartType, config, onConfigChange }) {
 
         return null
       })}
-      
+
+      {isFinancialChart && (
+        <div className="bg-dark-sidebar border border-gray-700 rounded-lg p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-dark-textLight">Erweiterte Finanzoptionen</h3>
+          <p className="text-xs text-dark-textGray">Passe Gitter und Achsentexte deiner Finanzdiagramme an.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex items-center justify-between p-3 bg-dark-bg rounded border border-gray-700">
+              <div>
+                <div className="text-sm text-dark-textLight">Gitter anzeigen</div>
+                <div className="text-xs text-dark-textGray">Ein-/ausschalten der Hintergrundlinien</div>
+              </div>
+              <label className="inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.options?.showGrid !== false}
+                  onChange={(event) => handleOptionChange('showGrid', event.target.checked)}
+                  className="sr-only"
+                />
+                <span className="w-10 h-5 flex items-center bg-gray-700 rounded-full p-1 duration-300 ease-in-out">
+                  <span
+                    className={`bg-white w-4 h-4 rounded-full shadow-md transform duration-300 ease-in-out ${config.options?.showGrid !== false ? 'translate-x-5' : ''}`}
+                  />
+                </span>
+              </label>
+            </div>
+            <EnhancedColorPicker
+              value={config.options?.gridColor || '#334155'}
+              onChange={(value) => handleOptionChange('gridColor', value)}
+              label="Gitternetzfarbe"
+              size="md"
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-dark-textLight mb-1">X-Achsen-Label</label>
+              <input
+                type="text"
+                value={config.options?.xAxisLabel || ''}
+                onChange={(event) => handleOptionChange('xAxisLabel', event.target.value)}
+                className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-dark-textLight mb-1">Y-Achsen-Label</label>
+              <input
+                type="text"
+                value={config.options?.yAxisLabel || ''}
+                onChange={(event) => handleOptionChange('yAxisLabel', event.target.value)}
+                className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isChoropleth && (
+        <div className="bg-dark-sidebar border border-gray-700 rounded-lg p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-dark-textLight">Choropleth-Darstellung</h3>
+          <p className="text-xs text-dark-textGray">Passe Farbverlauf und Legenden deiner Karte an.</p>
+          <ColorListEditor
+            label="Farbpalette"
+            values={Array.isArray(config.options?.colorPalette) ? config.options.colorPalette : []}
+            onChange={(values) => handleOptionChange('colorPalette', values)}
+            maxColors={9}
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-dark-textLight mb-1">Legendentitel</label>
+              <input
+                type="text"
+                value={config.options?.legendTitle || ''}
+                onChange={(event) => handleOptionChange('legendTitle', event.target.value)}
+                className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-dark-textLight mb-1">Outline-Breite</label>
+              <input
+                type="number"
+                min="0"
+                max="5"
+                step="0.1"
+                value={config.options?.outlineWidth ?? 0.5}
+                onChange={(event) => handleOptionChange('outlineWidth', Number(event.target.value))}
+                className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isVenn && (
+        <div className="bg-dark-sidebar border border-gray-700 rounded-lg p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-dark-textLight">Venn-Farben</h3>
+          <p className="text-xs text-dark-textGray">Definiere die Farbflächen der Mengen.</p>
+          <ColorListEditor
+            label="Farben"
+            values={Array.isArray(config.options?.colorScheme) ? config.options.colorScheme : []}
+            onChange={(values) => handleOptionChange('colorScheme', values)}
+            maxColors={6}
+          />
+        </div>
+      )}
+
       {/* Radar Chart: Value Labels Font (when showValues is enabled) */}
       {chartType.id === 'radar' && config.options?.showValues && (
         <div className="bg-dark-bg rounded-lg p-4 border border-gray-700">

@@ -34,6 +34,7 @@ import {
   GeoFeature
 } from 'chartjs-chart-geo'
 import { VennDiagramController, ArcSlice } from 'chartjs-chart-venn'
+import { createPlaceholderFeature, normalizeRegionKey } from '../utils/choroplethUtils'
 import 'chartjs-adapter-date-fns'
 import ChartErrorBoundary from './ChartErrorBoundary'
 
@@ -837,32 +838,47 @@ function prepareChartData(chartType, config) {
     }
 
     case 'choropleth': {
-      const features = Array.isArray(config.features) ? config.features : []
-      const featureMap = new Map(
-        features.map(feature => [String(feature?.id ?? feature?.properties?.id ?? feature?.properties?.name ?? ''), feature])
-      )
+      const rawFeatures = Array.isArray(config.features) ? config.features : []
+      const featureMap = new Map()
+      rawFeatures.forEach((feature, index) => {
+        const key = normalizeRegionKey(feature?.id ?? feature?.properties?.id ?? feature?.properties?.name ?? `feature-${index}`)
+        if (!featureMap.has(key)) {
+          featureMap.set(key, feature)
+        }
+      })
+
       const regions = Array.isArray(config.regions) ? config.regions : []
-      const data = regions
-        .map(region => {
-          const key = String(region?.id ?? region?.label ?? '')
-          const feature = featureMap.get(key)
-          if (!feature) {
-            return null
-          }
-          return {
-            feature,
-            value: toNumeric(region?.value, 0),
-            label: region?.label || region?.id || ''
-          }
-        })
-        .filter(Boolean)
+      const resolvedFeatures = [...featureMap.values()]
+      const data = regions.map((region, index) => {
+        const regionKey = normalizeRegionKey(region?.id ?? region?.label ?? `region-${index}`)
+        let feature = featureMap.get(regionKey)
+        if (!feature) {
+          feature = createPlaceholderFeature(
+            regionKey || `region-${index}`,
+            region?.label || region?.id || `Region ${index + 1}`,
+            index,
+            Math.max(regions.length, featureMap.size || 1)
+          )
+          featureMap.set(regionKey, feature)
+          resolvedFeatures.push(feature)
+        }
+
+        return {
+          feature,
+          value: toNumeric(region?.value, 0),
+          label: region?.label || region?.id || `Region ${index + 1}`
+        }
+      })
 
       return {
         labels: regions.map(region => region?.label || region?.id || ''),
         datasets: [
           {
             label: config.title || 'Regionen',
-            data
+            data,
+            outline: resolvedFeatures,
+            outlineBorderWidth: toNumeric(config.options?.outlineWidth, 0.5),
+            outlineBorderColor: config.options?.outlineColor || '#0F172A'
           }
         ]
       }
@@ -1856,13 +1872,21 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
         legend: {
           position: 'bottom-right',
           align: 'center',
+          display: config.options?.showLegend !== false,
           title: {
             display: true,
             text: config.options?.legendTitle || 'Wert'
+          },
+          labels: {
+            color: config.options?.fontStyles?.legend?.color || '#F8FAFC'
           }
         },
         interpolate: paletteInterpolator
       }
+    }
+
+    if (config.options?.showLegend === false && baseOptions.plugins?.legend) {
+      baseOptions.plugins.legend.display = false
     }
 
     baseOptions.plugins.tooltip.callbacks.label = function(context) {

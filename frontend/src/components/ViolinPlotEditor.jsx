@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { FiPlus, FiTrash2, FiAlertCircle } from 'react-icons/fi'
+import EnhancedColorPicker from './EnhancedColorPicker'
 
 export default function ViolinPlotEditor({ labels = [], series = [], onLabelsChange, onSeriesChange }) {
   const [showHelper, setShowHelper] = useState(false)
@@ -214,8 +215,8 @@ export default function ViolinPlotEditor({ labels = [], series = [], onLabelsCha
             className="bg-dark-sidebar p-4 rounded-lg border border-gray-700 space-y-3"
           >
             {/* Serie Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex-1 grid grid-cols-3 gap-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2">
                 <input
                   type="text"
                   value={serie.name}
@@ -223,28 +224,22 @@ export default function ViolinPlotEditor({ labels = [], series = [], onLabelsCha
                   className="px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                   placeholder="Serie Name"
                 />
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-dark-textGray">Farbe:</label>
-                  <input
-                    type="color"
-                    value={serie.color}
-                    onChange={(e) => handleSeriesPropertyChange(seriesIndex, 'color', e.target.value)}
-                    className="w-full h-9 bg-dark-bg rounded border border-gray-700 cursor-pointer"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-dark-textGray">Rahmen:</label>
-                  <input
-                    type="color"
-                    value={serie.borderColor}
-                    onChange={(e) => handleSeriesPropertyChange(seriesIndex, 'borderColor', e.target.value)}
-                    className="w-full h-9 bg-dark-bg rounded border border-gray-700 cursor-pointer"
-                  />
-                </div>
+                <EnhancedColorPicker
+                  value={serie.color}
+                  onChange={(newColor) => handleSeriesPropertyChange(seriesIndex, 'color', newColor)}
+                  label="Füllfarbe"
+                  size="sm"
+                />
+                <EnhancedColorPicker
+                  value={serie.borderColor}
+                  onChange={(newColor) => handleSeriesPropertyChange(seriesIndex, 'borderColor', newColor)}
+                  label="Randfarbe"
+                  size="sm"
+                />
               </div>
               <button
                 onClick={() => handleRemoveSeries(seriesIndex)}
-                className="ml-3 p-2 text-dark-textGray hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
+                className="p-2 text-dark-textGray hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
                 title="Serie löschen"
               >
                 <FiTrash2 size={16} />

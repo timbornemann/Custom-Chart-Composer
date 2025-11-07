@@ -23,7 +23,14 @@ const defaultMapping = {
   rColumn: '',
   pointLabelColumn: '',
   longitudeColumn: '',
-  latitudeColumn: ''
+  latitudeColumn: '',
+  openColumn: '',
+  highColumn: '',
+  lowColumn: '',
+  closeColumn: '',
+  regionColumn: '',
+  regionLabelColumn: '',
+  vennSetColumn: ''
 }
 
 const createDefaultTransformations = () => ({
@@ -2976,6 +2983,276 @@ const buildScatterBubbleResult = (sourceRows, xColumn, yColumn, rColumn, dataset
   return { datasets: Array.from(datasets.values()), rowWarnings }
 }
 
+const buildFinancialSeriesResult = (sourceRows, labelColumn, openColumn, highColumn, lowColumn, closeColumn, datasetLabelColumn) => {
+  const labelOrder = []
+  const labelSet = new Set()
+  const datasetMap = new Map()
+  let skippedMissingLabel = 0
+  let skippedIncompleteRow = 0
+
+  sourceRows.forEach((row) => {
+    const labelValue = labelColumn ? normalizeLabel(row[labelColumn]) : null
+    if (!labelValue) {
+      skippedMissingLabel += 1
+      return
+    }
+
+    const openValue = toNumber(row[openColumn])
+    const highValue = toNumber(row[highColumn])
+    const lowValue = toNumber(row[lowColumn])
+    const closeValue = toNumber(row[closeColumn])
+
+    if ([openValue, highValue, lowValue, closeValue].some(value => value === null)) {
+      skippedIncompleteRow += 1
+      return
+    }
+
+    if (!labelSet.has(labelValue)) {
+      labelSet.add(labelValue)
+      labelOrder.push(labelValue)
+    }
+
+    const datasetKey = datasetLabelColumn ? (normalizeLabel(row[datasetLabelColumn]) || 'Serie 1') : 'Serie 1'
+    if (!datasetMap.has(datasetKey)) {
+      datasetMap.set(datasetKey, new Map())
+    }
+    datasetMap.get(datasetKey).set(labelValue, {
+      label: labelValue,
+      open: openValue,
+      high: highValue,
+      low: lowValue,
+      close: closeValue
+    })
+  })
+
+  const palette = ['#38BDF8', '#F472B6', '#34D399', '#FBBF24', '#A855F7']
+  let paletteIndex = 0
+  const financialSeries = Array.from(datasetMap.entries()).map(([name, valueMap]) => {
+    const color = palette[paletteIndex % palette.length]
+    paletteIndex += 1
+    return {
+      name,
+      color,
+      borderColor: color,
+      values: labelOrder.map(label => {
+        const entry = valueMap.get(label) || {}
+        return {
+          label,
+          open: entry.open ?? 0,
+          high: entry.high ?? entry.open ?? 0,
+          low: entry.low ?? entry.open ?? 0,
+          close: entry.close ?? entry.open ?? 0
+        }
+      })
+    }
+  })
+
+  const rowWarnings = []
+  if (skippedMissingLabel > 0) {
+    rowWarnings.push(`${skippedMissingLabel} Zeilen ohne gültige Zeit-/Kategorieangabe wurden übersprungen.`)
+  }
+  if (skippedIncompleteRow > 0) {
+    rowWarnings.push(`${skippedIncompleteRow} Zeilen mit unvollständigen OHLC-Werten wurden ignoriert.`)
+  }
+
+  return { labels: labelOrder, financialSeries, rowWarnings }
+}
+
+const computeQuantile = (sortedValues, quantile) => {
+  if (!sortedValues.length) return 0
+  const position = (sortedValues.length - 1) * quantile
+  const lowerIndex = Math.floor(position)
+  const upperIndex = Math.ceil(position)
+  if (lowerIndex === upperIndex) {
+    return sortedValues[lowerIndex]
+  }
+  const weight = position - lowerIndex
+  return sortedValues[lowerIndex] * (1 - weight) + sortedValues[upperIndex] * weight
+}
+
+const calculateBoxStats = (values) => {
+  if (!values.length) {
+    return { min: 0, q1: 0, median: 0, q3: 0, max: 0 }
+  }
+  const sorted = values.slice().sort((a, b) => a - b)
+  return {
+    min: sorted[0],
+    q1: computeQuantile(sorted, 0.25),
+    median: computeQuantile(sorted, 0.5),
+    q3: computeQuantile(sorted, 0.75),
+    max: sorted[sorted.length - 1]
+  }
+}
+
+const buildDistributionSeriesResult = (sourceRows, labelColumn, valueColumn, datasetLabelColumn) => {
+  const labelOrder = []
+  const labelSet = new Set()
+  const datasetMap = new Map()
+  let skippedMissingLabel = 0
+  let skippedMissingValue = 0
+
+  sourceRows.forEach((row) => {
+    const labelValue = labelColumn ? normalizeLabel(row[labelColumn]) : null
+    if (!labelValue) {
+      skippedMissingLabel += 1
+      return
+    }
+
+    const numericValue = toNumber(row[valueColumn])
+    if (numericValue === null) {
+      skippedMissingValue += 1
+      return
+    }
+
+    if (!labelSet.has(labelValue)) {
+      labelSet.add(labelValue)
+      labelOrder.push(labelValue)
+    }
+
+    const datasetKey = datasetLabelColumn ? (normalizeLabel(row[datasetLabelColumn]) || 'Serie 1') : 'Serie 1'
+    if (!datasetMap.has(datasetKey)) {
+      datasetMap.set(datasetKey, new Map())
+    }
+
+    const labelMap = datasetMap.get(datasetKey)
+    if (!labelMap.has(labelValue)) {
+      labelMap.set(labelValue, [])
+    }
+    labelMap.get(labelValue).push(numericValue)
+  })
+
+  const palette = ['#60A5FA', '#34D399', '#FBBF24', '#F472B6', '#A855F7']
+  let paletteIndex = 0
+
+  const violinSeries = []
+  const boxSeries = []
+
+  datasetMap.forEach((labelMap, datasetKey) => {
+    const color = palette[paletteIndex % palette.length]
+    paletteIndex += 1
+
+    violinSeries.push({
+      name: datasetKey,
+      color,
+      borderColor: color,
+      values: labelOrder.map(label => {
+        const samples = labelMap.get(label)
+        return samples ? [...samples] : []
+      })
+    })
+
+    boxSeries.push({
+      name: datasetKey,
+      color,
+      borderColor: color,
+      values: labelOrder.map(label => {
+        const samples = labelMap.get(label) || []
+        return { label, ...calculateBoxStats(samples) }
+      })
+    })
+  })
+
+  const rowWarnings = []
+  if (skippedMissingLabel > 0) {
+    rowWarnings.push(`${skippedMissingLabel} Zeilen ohne Kategorie wurden übersprungen.`)
+  }
+  if (skippedMissingValue > 0) {
+    rowWarnings.push(`${skippedMissingValue} Zeilen ohne numerischen Wert wurden ignoriert.`)
+  }
+
+  return { labels: labelOrder, violinSeries, boxSeries, rowWarnings }
+}
+
+const buildChoroplethResult = (sourceRows, regionColumn, valueColumn, labelColumn) => {
+  const regionMap = new Map()
+  let skippedMissingRegion = 0
+  let skippedMissingValue = 0
+
+  sourceRows.forEach((row) => {
+    const regionIdRaw = row[regionColumn]
+    const regionId = typeof regionIdRaw === 'string' ? regionIdRaw.trim() : String(regionIdRaw ?? '')
+    if (!regionId || regionId === 'undefined' || regionId === 'null') {
+      skippedMissingRegion += 1
+      return
+    }
+
+    const numericValue = toNumber(row[valueColumn])
+    if (numericValue === null) {
+      skippedMissingValue += 1
+      return
+    }
+
+    const labelValue = labelColumn ? row[labelColumn] : null
+    const displayLabel = labelValue ? String(labelValue).trim() : regionId
+
+    if (!regionMap.has(regionId)) {
+      regionMap.set(regionId, { id: regionId, label: displayLabel, value: 0 })
+    }
+
+    regionMap.get(regionId).value += numericValue
+  })
+
+  const regions = Array.from(regionMap.values())
+
+  const rowWarnings = []
+  if (skippedMissingRegion > 0) {
+    rowWarnings.push(`${skippedMissingRegion} Zeilen ohne gültige Regions-ID wurden übersprungen.`)
+  }
+  if (skippedMissingValue > 0) {
+    rowWarnings.push(`${skippedMissingValue} Zeilen ohne numerischen Wert wurden ignoriert.`)
+  }
+
+  return { regions, rowWarnings }
+}
+
+const buildVennResult = (sourceRows, setColumn, valueColumn) => {
+  const combinationMap = new Map()
+  let skippedMissingSets = 0
+  let skippedMissingValue = 0
+
+  sourceRows.forEach((row) => {
+    const rawSets = row[setColumn]
+    if (rawSets === undefined || rawSets === null || rawSets === '') {
+      skippedMissingSets += 1
+      return
+    }
+
+    const value = toNumber(row[valueColumn])
+    if (value === null) {
+      skippedMissingValue += 1
+      return
+    }
+
+    const parts = String(rawSets)
+      .split(/[;,|]/)
+      .map(part => normalizeLabel(part))
+      .filter(Boolean)
+
+    if (parts.length === 0) {
+      skippedMissingSets += 1
+      return
+    }
+
+    const key = parts.slice().sort().join('||')
+    if (!combinationMap.has(key)) {
+      combinationMap.set(key, { sets: parts, value: 0 })
+    }
+    combinationMap.get(key).value += value
+  })
+
+  const vennSets = Array.from(combinationMap.values())
+
+  const rowWarnings = []
+  if (skippedMissingSets > 0) {
+    rowWarnings.push(`${skippedMissingSets} Zeilen ohne gültige Mengen-Kombination wurden übersprungen.`)
+  }
+  if (skippedMissingValue > 0) {
+    rowWarnings.push(`${skippedMissingValue} Zeilen ohne numerischen Wert wurden ignoriert.`)
+  }
+
+  return { vennSets, rowWarnings }
+}
+
 // Build result for radar charts: one dataset with multiple attributes
 // Each row becomes a radar chart, with value columns as attributes (labels)
 const buildRadarResult = (sourceRows, labelKey, valueKeys, datasetLabelKey = null) => {
@@ -5389,9 +5666,28 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
     }
 
     const activeMapping = overrideMapping ? { ...mapping, ...overrideMapping } : mapping
-    const { label, valueColumns, datasetLabel, xColumn, yColumn, rColumn } = activeMapping
+    const {
+      label,
+      valueColumns,
+      datasetLabel,
+      xColumn,
+      yColumn,
+      rColumn,
+      openColumn,
+      highColumn,
+      lowColumn,
+      closeColumn,
+      regionColumn,
+      regionLabelColumn,
+      vennSetColumn
+    } = activeMapping
     const columnKeys = new Set(columns.map((column) => column.key))
     const errors = []
+
+    const isFinancialChart = ['candlestick', 'ohlc'].includes(chartType)
+    const isDistributionChart = ['boxPlot', 'violinPlot'].includes(chartType)
+    const isChoroplethChart = chartType === 'choropleth'
+    const isVennChart = chartType === 'venn'
 
     // Coordinate validation
     if (isCoordinate) {
@@ -5424,6 +5720,95 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       }
       if (rColumn && !columnKeys.has(rColumn)) {
         errors.push(`Die ausgewählte Größen-Spalte "${rColumn}" ist nicht mehr verfügbar.`)
+      }
+    } else if (isFinancialChart) {
+      if (!label) {
+        errors.push('Bitte wählen Sie eine Spalte für Zeit/Kategorien aus.')
+      }
+      if (!openColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die Eröffnungswerte (Open) aus.')
+      }
+      if (!highColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die Höchstwerte (High) aus.')
+      }
+      if (!lowColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die Tiefstwerte (Low) aus.')
+      }
+      if (!closeColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die Schlusswerte (Close) aus.')
+      }
+
+      if (label && !columnKeys.has(label)) {
+        errors.push(`Die ausgewählte Beschriftungs-Spalte "${label}" ist nicht mehr verfügbar.`)
+      }
+      const financialColumns = [
+        ['Open', openColumn],
+        ['High', highColumn],
+        ['Low', lowColumn],
+        ['Close', closeColumn]
+      ]
+      financialColumns.forEach(([display, key]) => {
+        if (key && !columnKeys.has(key)) {
+          errors.push(`Die ausgewählte Spalte für ${display}-Werte "${key}" ist nicht mehr verfügbar.`)
+        }
+      })
+
+      if (datasetLabel && !columnKeys.has(datasetLabel)) {
+        errors.push(`Die ausgewählte Datensatz-Spalte "${datasetLabel}" ist nicht mehr verfügbar.`)
+      }
+    } else if (isDistributionChart) {
+      if (!label) {
+        errors.push('Bitte wählen Sie eine Kategorie-Spalte aus.')
+      }
+      if (!valueColumns || valueColumns.length === 0) {
+        errors.push('Bitte wählen Sie eine Werte-Spalte aus.')
+      } else if (valueColumns.length > 1) {
+        errors.push('Für Box- und Violin-Plots kann nur eine Werte-Spalte verwendet werden.')
+      }
+
+      if (label && !columnKeys.has(label)) {
+        errors.push(`Die ausgewählte Kategorie-Spalte "${label}" ist nicht mehr verfügbar.`)
+      }
+      if (valueColumns && valueColumns[0] && !columnKeys.has(valueColumns[0])) {
+        errors.push(`Die ausgewählte Werte-Spalte "${valueColumns[0]}" ist nicht mehr verfügbar.`)
+      }
+      if (datasetLabel && !columnKeys.has(datasetLabel)) {
+        errors.push(`Die ausgewählte Datensatz-Spalte "${datasetLabel}" ist nicht mehr verfügbar.`)
+      }
+    } else if (isChoroplethChart) {
+      if (!regionColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die Regions-IDs aus.')
+      }
+      if (!valueColumns || valueColumns.length === 0) {
+        errors.push('Bitte wählen Sie eine Werte-Spalte aus.')
+      } else if (valueColumns.length > 1) {
+        errors.push('Für Choropleth-Diagramme kann nur eine Werte-Spalte verwendet werden.')
+      }
+
+      if (regionColumn && !columnKeys.has(regionColumn)) {
+        errors.push(`Die ausgewählte Regions-Spalte "${regionColumn}" ist nicht mehr verfügbar.`)
+      }
+      if (valueColumns && valueColumns[0] && !columnKeys.has(valueColumns[0])) {
+        errors.push(`Die ausgewählte Werte-Spalte "${valueColumns[0]}" ist nicht mehr verfügbar.`)
+      }
+      if (regionLabelColumn && !columnKeys.has(regionLabelColumn)) {
+        errors.push(`Die ausgewählte Label-Spalte "${regionLabelColumn}" ist nicht mehr verfügbar.`)
+      }
+    } else if (isVennChart) {
+      if (!vennSetColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die Mengen-Kombinationen aus.')
+      }
+      if (!valueColumns || valueColumns.length === 0) {
+        errors.push('Bitte wählen Sie eine Werte-Spalte aus.')
+      } else if (valueColumns.length > 1) {
+        errors.push('Für Venn-Diagramme kann nur eine Werte-Spalte verwendet werden.')
+      }
+
+      if (vennSetColumn && !columnKeys.has(vennSetColumn)) {
+        errors.push(`Die ausgewählte Mengen-Spalte "${vennSetColumn}" ist nicht mehr verfügbar.`)
+      }
+      if (valueColumns && valueColumns[0] && !columnKeys.has(valueColumns[0])) {
+        errors.push(`Die ausgewählte Werte-Spalte "${valueColumns[0]}" ist nicht mehr verfügbar.`)
       }
     } else {
       // For radar charts, label is optional (dataset name), but for other charts it's required
@@ -5605,6 +5990,64 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         setValidationErrors(['Es konnten keine gültigen Datenpunkte importiert werden. Bitte prüfen Sie die Spaltenauswahl.'])
         return null
       }
+    } else if (isFinancialChart) {
+      const financialResult = buildFinancialSeriesResult(
+        transformed,
+        label,
+        openColumn,
+        highColumn,
+        lowColumn,
+        closeColumn,
+        datasetLabel
+      )
+      warningsFromRows = financialResult.rowWarnings
+      result = {
+        labels: financialResult.labels,
+        values: [],
+        datasets: [],
+        financialSeries: financialResult.financialSeries
+      }
+    } else if (isDistributionChart) {
+      const valueColumn = valueColumns[0]
+      const distributionResult = buildDistributionSeriesResult(
+        transformed,
+        label,
+        valueColumn,
+        datasetLabel
+      )
+      warningsFromRows = distributionResult.rowWarnings
+      const series = chartType === 'boxPlot' ? distributionResult.boxSeries : distributionResult.violinSeries
+      result = {
+        labels: distributionResult.labels,
+        values: [],
+        datasets: [],
+        series
+      }
+    } else if (isChoroplethChart) {
+      const valueColumn = valueColumns[0]
+      const choroplethResult = buildChoroplethResult(
+        transformed,
+        regionColumn,
+        valueColumn,
+        regionLabelColumn
+      )
+      warningsFromRows = choroplethResult.rowWarnings
+      result = {
+        labels: [],
+        values: [],
+        datasets: [],
+        regions: choroplethResult.regions
+      }
+    } else if (isVennChart) {
+      const valueColumn = valueColumns[0]
+      const vennResult = buildVennResult(transformed, vennSetColumn, valueColumn)
+      warningsFromRows = vennResult.rowWarnings
+      result = {
+        labels: [],
+        values: [],
+        datasets: [],
+        vennSets: vennResult.vennSets
+      }
     } else if (chartType === 'radar') {
       // Radar charts: one row per dataset, multiple value columns as attributes
       // Labels are the attribute names (value column names)
@@ -5639,6 +6082,18 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         setValidationErrors(['Es konnten keine gültigen Koordinaten/Datenpunkte importiert werden.'])
         return null
       }
+    } else if (isChoroplethChart) {
+      if (!Array.isArray(result.regions) || result.regions.length === 0) {
+        setValidationErrors(['Es konnten keine gültigen Regionen importiert werden. Bitte prüfen Sie die Spaltenauswahl.'])
+        return null
+      }
+    } else if (isVennChart) {
+      if (!Array.isArray(result.vennSets) || result.vennSets.length === 0) {
+        setValidationErrors([
+          'Es konnten keine gültigen Mengen-Kombinationen importiert werden. Bitte prüfen Sie die Spaltenauswahl und Werte.'
+        ])
+        return null
+      }
     } else if (!result.labels || result.labels.length === 0) {
       setValidationErrors(['Es konnten keine gültigen Datenzeilen importiert werden. Bitte prüfen Sie die Auswahl.'])
       return null
@@ -5646,7 +6101,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
 
     const combinedWarnings = [...transformationPreview, ...warningsFromRows]
     setResultWarnings(combinedWarnings)
-    return {
+    const importResult = {
       labels: result.labels,
       values: result.values,
       datasets: result.datasets,
@@ -5664,6 +6119,21 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
           : createDefaultProfilingMeta()
       }
     }
+
+    if (result.financialSeries) {
+      importResult.financialSeries = result.financialSeries
+    }
+    if (result.series) {
+      importResult.series = result.series
+    }
+    if (result.regions) {
+      importResult.regions = result.regions
+    }
+    if (result.vennSets) {
+      importResult.vennSets = result.vennSets
+    }
+
+    return importResult
   }, [rows, mapping, transformations, requireDatasets, columns, profilingMeta, manualOperationMeta])
 
   const getImportState = useCallback(() => {

@@ -1,7 +1,40 @@
 import { useState, useEffect, useRef } from 'react'
-import { Chart as ChartJS, CategoryScale, LinearScale, RadialLinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  RadialLinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js'
 import annotationPlugin from 'chartjs-plugin-annotation'
 import PropTypes from 'prop-types'
+import { CandlestickController, CandlestickElement, OhlcController, OhlcElement } from 'chartjs-chart-financial'
+import {
+  BoxAndWhiskers,
+  BoxPlot as BoxPlotController,
+  HorizontalBoxPlot,
+  Violin as ViolinChartController,
+  HorizontalViolin,
+  ArrayLinearScale,
+  ArrayLogarithmicScale
+} from 'chartjs-chart-box-and-violin-plot'
+import { FunnelController, TrapezoidElement } from 'chartjs-chart-funnel'
+import {
+  ChoroplethController,
+  GeoController,
+  ProjectionScale,
+  ColorScale,
+  ColorLogarithmicScale,
+  GeoFeature
+} from 'chartjs-chart-geo'
+import { VennDiagramController, ArcSlice } from 'chartjs-chart-venn'
 
 export default function ExportPreviewModal({ 
   isOpen, 
@@ -48,6 +81,27 @@ export default function ExportPreviewModal({
           Tooltip,
           Legend,
           Filler,
+          CandlestickController,
+          CandlestickElement,
+          OhlcController,
+          OhlcElement,
+          BoxPlotController,
+          HorizontalBoxPlot,
+          ViolinChartController,
+          HorizontalViolin,
+          BoxAndWhiskers,
+          ArrayLinearScale,
+          ArrayLogarithmicScale,
+          FunnelController,
+          TrapezoidElement,
+          ChoroplethController,
+          GeoController,
+          ProjectionScale,
+          ColorScale,
+          ColorLogarithmicScale,
+          GeoFeature,
+          VennDiagramController,
+          ArcSlice,
           annotationPlugin
         )
       } catch (_) {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, forwardRef } from 'react'
 import PropTypes from 'prop-types'
 import {
   Chart as ChartJS,
@@ -10,7 +10,27 @@ import {
   PointElement,
   ArcElement
 } from 'chart.js'
-import { Bar, Line, Pie, Doughnut, Radar, PolarArea, Scatter, Bubble } from 'react-chartjs-2'
+import { Chart as ReactChart, Bar, Line, Pie, Doughnut, Radar, PolarArea, Scatter, Bubble } from 'react-chartjs-2'
+import { CandlestickController, CandlestickElement, OhlcController, OhlcElement } from 'chartjs-chart-financial'
+import {
+  BoxAndWhiskers,
+  BoxPlot as BoxPlotController,
+  HorizontalBoxPlot,
+  Violin as ViolinChartController,
+  HorizontalViolin,
+  ArrayLinearScale,
+  ArrayLogarithmicScale
+} from 'chartjs-chart-box-and-violin-plot'
+import { FunnelController, TrapezoidElement } from 'chartjs-chart-funnel'
+import {
+  ChoroplethController,
+  GeoController,
+  ProjectionScale,
+  ColorScale,
+  ColorLogarithmicScale,
+  GeoFeature
+} from 'chartjs-chart-geo'
+import { VennDiagramController, ArcSlice } from 'chartjs-chart-venn'
 
 ChartJS.register(
   CategoryScale,
@@ -21,6 +41,43 @@ ChartJS.register(
   PointElement,
   ArcElement
 )
+ChartJS.register(
+  CandlestickController,
+  CandlestickElement,
+  OhlcController,
+  OhlcElement,
+  BoxPlotController,
+  HorizontalBoxPlot,
+  ViolinChartController,
+  HorizontalViolin,
+  BoxAndWhiskers,
+  ArrayLinearScale,
+  ArrayLogarithmicScale,
+  FunnelController,
+  TrapezoidElement,
+  ChoroplethController,
+  GeoController,
+  ProjectionScale,
+  ColorScale,
+  ColorLogarithmicScale,
+  GeoFeature,
+  VennDiagramController,
+  ArcSlice
+)
+
+const createTypedChart = (chartType) => {
+  return forwardRef(function TypedIconChart(props, ref) {
+    return <ReactChart {...props} ref={ref} type={chartType} />
+  })
+}
+
+const CandlestickChart = createTypedChart('candlestick')
+const OhlcChart = createTypedChart('ohlc')
+const BoxPlotChart = createTypedChart('boxplot')
+const ViolinChart = createTypedChart('violin')
+const FunnelChart = createTypedChart('funnel')
+const ChoroplethChart = createTypedChart('choropleth')
+const VennChart = createTypedChart('venn')
 
 // Icon color palettes matching the design system
 const ICON_COLOR_PALETTES = {
@@ -64,8 +121,15 @@ function getColorPalette(chartType) {
     bubble: 'scatter',
     heatmap: 'scatter',
     matrix: 'scatter',
-    
-    radar: 'special'
+
+    radar: 'special',
+    candlestick: 'special',
+    ohlc: 'special',
+    boxPlot: 'special',
+    violinPlot: 'special',
+    funnel: 'special',
+    choropleth: 'special',
+    venn: 'special'
   }
   
   const paletteKey = typeMapping[chartType.id] || category
@@ -99,7 +163,14 @@ function getChartComponent(type) {
     heatmap: Scatter,
     matrix: Bubble,
     radialBar: PolarArea,
-    streamGraph: Line
+    streamGraph: Line,
+    candlestick: CandlestickChart,
+    ohlc: OhlcChart,
+    boxPlot: BoxPlotChart,
+    violinPlot: ViolinChart,
+    funnel: FunnelChart,
+    choropleth: ChoroplethChart,
+    venn: VennChart
   }
   return components[type] || Bar
 }
@@ -198,6 +269,136 @@ function prepareIconData(chartType, config) {
           pointStyle: 'circle'
         }]
       }
+
+    case 'candlestick':
+    case 'ohlc': {
+      const series = Array.isArray(config.financialSeries) ? config.financialSeries[0] : null
+      const values = Array.isArray(series?.values) ? series.values.slice(0, 4) : []
+      return {
+        labels: values.map(entry => entry?.label || ''),
+        datasets: [
+          {
+            label: series?.name || 'Serie',
+            data: values.map(entry => ({
+              x: entry?.label || '',
+              o: entry?.open ?? entry?.o ?? 0,
+              h: entry?.high ?? entry?.h ?? 0,
+              l: entry?.low ?? entry?.l ?? 0,
+              c: entry?.close ?? entry?.c ?? 0
+            })),
+            type: chartType.id,
+            borderColor: series?.borderColor || series?.color || colorPalette[0],
+            backgroundColor: series?.color || series?.borderColor || colorPalette[0]
+          }
+        ]
+      }
+    }
+
+    case 'boxPlot': {
+      const labels = Array.isArray(config.labels) ? config.labels.slice(0, 4) : []
+      const series = Array.isArray(config.series) ? config.series[0] : null
+      const values = Array.isArray(series?.values) ? series.values : []
+      return {
+        labels,
+        datasets: [
+          {
+            label: series?.name || 'Serie',
+            data: labels.map((_, index) => {
+              const stats = values[index] || {}
+              return {
+                min: stats?.min ?? 0,
+                q1: stats?.q1 ?? 0,
+                median: stats?.median ?? 0,
+                q3: stats?.q3 ?? 0,
+                max: stats?.max ?? 0
+              }
+            }),
+            backgroundColor: series?.color || colorPalette[0],
+            borderColor: series?.borderColor || series?.color || colorPalette[0]
+          }
+        ]
+      }
+    }
+
+    case 'violinPlot': {
+      const labels = Array.isArray(config.labels) ? config.labels.slice(0, 4) : []
+      const series = Array.isArray(config.series) ? config.series[0] : null
+      const values = Array.isArray(series?.values) ? series.values : []
+      return {
+        labels,
+        datasets: [
+          {
+            label: series?.name || 'Serie',
+            data: labels.map((_, index) => {
+              const entry = values[index]
+              if (Array.isArray(entry)) {
+                return entry
+              }
+              if (typeof entry === 'number') {
+                return [entry]
+              }
+              return []
+            }),
+            backgroundColor: series?.color || colorPalette[0],
+            borderColor: series?.borderColor || series?.color || colorPalette[0]
+          }
+        ]
+      }
+    }
+
+    case 'funnel':
+      return {
+        labels: (config.labels || []).slice(0, 4),
+        datasets: [
+          {
+            data: (config.values || []).slice(0, 4),
+            backgroundColor: (config.colors || colorPalette).slice(0, 4),
+            borderWidth: 1,
+            align: config.options?.align || 'center'
+          }
+        ]
+      }
+
+    case 'choropleth': {
+      const regions = Array.isArray(config.regions) ? config.regions.slice(0, 3) : []
+      const features = Array.isArray(config.features) ? config.features : []
+      const featureMap = new Map(features.map(feature => [String(feature?.id ?? feature?.properties?.name ?? ''), feature]))
+      return {
+        labels: regions.map(region => region?.label || region?.id || ''),
+        datasets: [
+          {
+            label: 'Regionen',
+            data: regions
+              .map(region => {
+                const feature = featureMap.get(String(region?.id ?? region?.label ?? ''))
+                if (!feature) return null
+                return {
+                  feature,
+                  value: region?.value ?? 0,
+                  label: region?.label || region?.id || ''
+                }
+              })
+              .filter(Boolean)
+          }
+        ]
+      }
+    }
+
+    case 'venn': {
+      const sets = Array.isArray(config.sets) ? config.sets.slice(0, 5) : []
+      return {
+        labels: sets.map(entry => (Array.isArray(entry?.sets) ? entry.sets.join(' ∩ ') : '')),
+        datasets: [
+          {
+            data: sets.map(entry => ({
+              sets: Array.isArray(entry?.sets) ? entry.sets : [],
+              value: entry?.value ?? 0
+            })),
+            backgroundColor: config.options?.colorScheme || colorPalette
+          }
+        ]
+      }
+    }
 
     case 'bubble':
       return {

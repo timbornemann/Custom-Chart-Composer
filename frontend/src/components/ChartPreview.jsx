@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, forwardRef } from 'react'
 import PropTypes from 'prop-types'
 import {
   Chart as ChartJS,
@@ -15,7 +15,27 @@ import {
   Filler
 } from 'chart.js'
 import annotationPlugin from 'chartjs-plugin-annotation'
-import { Bar, Line, Pie, Doughnut, Radar, PolarArea, Scatter, Bubble } from 'react-chartjs-2'
+import { Chart as ReactChart, Bar, Line, Pie, Doughnut, Radar, PolarArea, Scatter, Bubble } from 'react-chartjs-2'
+import { CandlestickController, CandlestickElement, OhlcController, OhlcElement } from 'chartjs-chart-financial'
+import {
+  BoxAndWhiskers,
+  BoxPlot as BoxPlotController,
+  HorizontalBoxPlot,
+  Violin as ViolinChartController,
+  HorizontalViolin,
+  ArrayLinearScale,
+  ArrayLogarithmicScale
+} from 'chartjs-chart-box-and-violin-plot'
+import { FunnelController, TrapezoidElement } from 'chartjs-chart-funnel'
+import {
+  ChoroplethController,
+  GeoController,
+  ProjectionScale,
+  ColorScale,
+  ColorLogarithmicScale,
+  GeoFeature
+} from 'chartjs-chart-geo'
+import { VennDiagramController, ArcSlice } from 'chartjs-chart-venn'
 import ChartErrorBoundary from './ChartErrorBoundary'
 
 ChartJS.register(
@@ -30,10 +50,61 @@ ChartJS.register(
   Tooltip,
   Legend,
   Filler,
+  CandlestickController,
+  CandlestickElement,
+  OhlcController,
+  OhlcElement,
+  BoxPlotController,
+  HorizontalBoxPlot,
+  ViolinChartController,
+  HorizontalViolin,
+  BoxAndWhiskers,
+  ArrayLinearScale,
+  ArrayLogarithmicScale,
+  FunnelController,
+  TrapezoidElement,
+  ChoroplethController,
+  GeoController,
+  ProjectionScale,
+  ColorScale,
+  ColorLogarithmicScale,
+  GeoFeature,
+  VennDiagramController,
+  ArcSlice,
   annotationPlugin,
   valueLabelPlugin(),
   backgroundImagePlugin()
 )
+
+const createTypedChart = (chartType) => {
+  return forwardRef(function TypedChart(props, ref) {
+    return <ReactChart {...props} ref={ref} type={chartType} />
+  })
+}
+
+const CandlestickChart = createTypedChart('candlestick')
+const OhlcChart = createTypedChart('ohlc')
+const BoxPlotChart = createTypedChart('boxplot')
+const ViolinChart = createTypedChart('violin')
+const FunnelChart = createTypedChart('funnel')
+const ChoroplethChart = createTypedChart('choropleth')
+const VennChart = createTypedChart('venn')
+
+const toNumeric = (value, fallback = 0) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
+const formatNumber = (value, options = {}) => {
+  if (value === null || value === undefined) {
+    return ''
+  }
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return String(value)
+  }
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2, ...options }).format(numeric)
+}
 
 function backgroundImagePlugin() {
   return {
@@ -332,9 +403,52 @@ function createEmptyData(data) {
     ...data,
     datasets: data.datasets.map(dataset => ({
       ...dataset,
-      data: Array.isArray(dataset.data) 
+      data: Array.isArray(dataset.data)
         ? dataset.data.map(item => {
+            if (Array.isArray(item)) {
+              return item.map(() => 0)
+            }
+
             if (typeof item === 'object' && item !== null) {
+              if ('o' in item || 'open' in item || dataset.type === 'candlestick' || dataset.type === 'ohlc') {
+                return {
+                  ...item,
+                  o: 0,
+                  open: 0,
+                  h: 0,
+                  high: 0,
+                  l: 0,
+                  low: 0,
+                  c: 0,
+                  close: 0
+                }
+              }
+
+              if ('min' in item || 'q1' in item || 'median' in item) {
+                return {
+                  ...item,
+                  min: 0,
+                  q1: 0,
+                  median: 0,
+                  q3: 0,
+                  max: 0
+                }
+              }
+
+              if ('value' in item && 'feature' in item) {
+                return {
+                  ...item,
+                  value: 0
+                }
+              }
+
+              if (Array.isArray(item.sets) && 'value' in item) {
+                return {
+                  ...item,
+                  value: 0
+                }
+              }
+
               // For scatter/bubble charts, keep structure but set values to 0
               return { ...item, y: 0, r: item.r ? 0 : undefined }
             }
@@ -587,13 +701,193 @@ function getChartComponent(type) {
     nestedDonut: Doughnut,
     radialBar: PolarArea,
     // Neue Streudiagramme
-    heatmap: Scatter
+    heatmap: Scatter,
+    // Neue Spezialdiagramme
+    candlestick: CandlestickChart,
+    ohlc: OhlcChart,
+    boxPlot: BoxPlotChart,
+    violinPlot: ViolinChart,
+    funnel: FunnelChart,
+    choropleth: ChoroplethChart,
+    venn: VennChart
   }
   return components[type] || Bar
 }
 
 function prepareChartData(chartType, config) {
   switch (chartType.id) {
+    case 'candlestick':
+    case 'ohlc': {
+      const series = Array.isArray(config.financialSeries) ? config.financialSeries : []
+      const labelsFromConfig = Array.isArray(config.labels) ? config.labels : []
+      const allLabels = labelsFromConfig.length
+        ? labelsFromConfig
+        : Array.from(
+            new Set(
+              series.flatMap(serie => (Array.isArray(serie?.values) ? serie.values : []).map(entry => entry?.label).filter(Boolean))
+            )
+          )
+
+      const datasets = series.map((serie, index) => {
+        const values = Array.isArray(serie?.values) ? serie.values : []
+        const baseColor = serie.color || serie.borderColor || (chartType.id === 'candlestick' ? '#38BDF8' : '#F472B6')
+        const datasetType = chartType.id
+        return {
+          label: serie.name || `Serie ${index + 1}`,
+          data: values.map((entry, valueIndex) => {
+            const fallback = values[valueIndex - 1] || values[0] || {}
+            const label = entry?.label || allLabels[valueIndex] || `${valueIndex + 1}`
+            return {
+              x: label,
+              o: toNumeric(entry?.open ?? entry?.o ?? fallback?.open ?? fallback?.o, 0),
+              h: toNumeric(entry?.high ?? entry?.h ?? fallback?.high ?? fallback?.h, 0),
+              l: toNumeric(entry?.low ?? entry?.l ?? fallback?.low ?? fallback?.l, 0),
+              c: toNumeric(entry?.close ?? entry?.c ?? fallback?.close ?? fallback?.c, 0)
+            }
+          }),
+          type: datasetType,
+          borderColor: serie.borderColor || baseColor,
+          backgroundColor: baseColor,
+          risingColor: config.options?.risingColor,
+          fallingColor: config.options?.fallingColor,
+          upColor: config.options?.upColor,
+          downColor: config.options?.downColor
+        }
+      })
+
+      return {
+        labels: allLabels,
+        datasets
+      }
+    }
+
+    case 'boxPlot': {
+      const labels = Array.isArray(config.labels) ? config.labels : []
+      const series = Array.isArray(config.series) ? config.series : []
+      const datasets = series.map((serie, index) => {
+        const values = Array.isArray(serie?.values) ? serie.values : []
+        return {
+          label: serie.name || `Serie ${index + 1}`,
+          data: labels.map((_, labelIndex) => {
+            const stats = values[labelIndex] || {}
+            const fallback = toNumeric(stats?.median, 0)
+            return {
+              min: toNumeric(stats?.min, fallback),
+              q1: toNumeric(stats?.q1, fallback),
+              median: toNumeric(stats?.median, fallback),
+              q3: toNumeric(stats?.q3, fallback),
+              max: toNumeric(stats?.max, fallback),
+              items: Array.isArray(stats?.items) ? stats.items.map(item => toNumeric(item, fallback)) : undefined,
+              outliers: Array.isArray(stats?.outliers) ? stats.outliers.map(item => toNumeric(item, fallback)) : undefined
+            }
+          }),
+          backgroundColor: serie.color || '#60A5FA',
+          borderColor: serie.borderColor || serie.color || '#1D4ED8'
+        }
+      })
+
+      return {
+        labels,
+        datasets
+      }
+    }
+
+    case 'violinPlot': {
+      const labels = Array.isArray(config.labels) ? config.labels : []
+      const series = Array.isArray(config.series) ? config.series : []
+      const datasets = series.map((serie, index) => {
+        const values = Array.isArray(serie?.values) ? serie.values : []
+        return {
+          label: serie.name || `Serie ${index + 1}`,
+          data: labels.map((_, labelIndex) => {
+            const entry = values[labelIndex]
+            if (Array.isArray(entry)) {
+              return entry.map(item => toNumeric(item, 0))
+            }
+            if (typeof entry === 'object' && entry !== null) {
+              return entry
+            }
+            if (entry !== undefined) {
+              return [toNumeric(entry, 0)]
+            }
+            return []
+          }),
+          backgroundColor: serie.color || '#A855F7',
+          borderColor: serie.borderColor || serie.color || '#7C3AED'
+        }
+      })
+
+      return {
+        labels,
+        datasets
+      }
+    }
+
+    case 'funnel': {
+      return {
+        labels: Array.isArray(config.labels) ? config.labels : [],
+        datasets: [
+          {
+            label: config.title || 'Trichter',
+            data: Array.isArray(config.values) ? config.values.map(value => toNumeric(value, 0)) : [],
+            backgroundColor: Array.isArray(config.colors) ? config.colors : undefined,
+            borderColor: Array.isArray(config.colors) ? config.colors : undefined,
+            borderWidth: 1,
+            align: config.options?.align || 'center'
+          }
+        ]
+      }
+    }
+
+    case 'choropleth': {
+      const features = Array.isArray(config.features) ? config.features : []
+      const featureMap = new Map(
+        features.map(feature => [String(feature?.id ?? feature?.properties?.id ?? feature?.properties?.name ?? ''), feature])
+      )
+      const regions = Array.isArray(config.regions) ? config.regions : []
+      const data = regions
+        .map(region => {
+          const key = String(region?.id ?? region?.label ?? '')
+          const feature = featureMap.get(key)
+          if (!feature) {
+            return null
+          }
+          return {
+            feature,
+            value: toNumeric(region?.value, 0),
+            label: region?.label || region?.id || ''
+          }
+        })
+        .filter(Boolean)
+
+      return {
+        labels: regions.map(region => region?.label || region?.id || ''),
+        datasets: [
+          {
+            label: config.title || 'Regionen',
+            data
+          }
+        ]
+      }
+    }
+
+    case 'venn': {
+      const sets = Array.isArray(config.sets) ? config.sets : []
+      const colors = Array.isArray(config.options?.colorScheme) ? config.options.colorScheme : undefined
+      return {
+        labels: sets.map(entry => (Array.isArray(entry?.sets) ? entry.sets.join(' ∩ ') : '')),
+        datasets: [
+          {
+            label: config.title || 'Mengen',
+            data: sets.map(entry => ({
+              sets: Array.isArray(entry?.sets) ? entry.sets : [],
+              value: toNumeric(entry?.value, 0)
+            })),
+            backgroundColor: colors
+          }
+        ]
+      }
+    }
     case 'bar':
     case 'horizontalBar':
       return {
@@ -1374,7 +1668,7 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
   if (annotationConfig && annotationConfig._legendEntries) {
     const legendEntries = annotationConfig._legendEntries
     delete annotationConfig._legendEntries // Remove from annotation config
-    
+
     // Extend the legend with annotation entries
     if (!baseOptions.plugins.legend) {
       baseOptions.plugins.legend = {}
@@ -1403,6 +1697,189 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
         
         return labels
       }
+    }
+  }
+
+  if (['candlestick', 'ohlc'].includes(chartType.id)) {
+    baseOptions.plugins.customValueLabels = { display: false }
+    baseOptions.scales = {
+      x: {
+        type: 'category',
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: config.options?.gridColor || '#334155'
+        },
+        ticks: {
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: {
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
+        },
+        title: {
+          display: !!config.options?.xAxisLabel,
+          text: config.options?.xAxisLabel || '',
+          color: config.options?.fontStyles?.xAxis?.color || '#F8FAFC',
+          font: {
+            size: 13,
+            family: config.options?.fontStyles?.xAxis?.family || 'Inter'
+          }
+        }
+      },
+      y: {
+        type: 'linear',
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: config.options?.gridColor || '#334155'
+        },
+        ticks: {
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: {
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
+        },
+        title: {
+          display: !!config.options?.yAxisLabel,
+          text: config.options?.yAxisLabel || 'Preis',
+          color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+          font: {
+            size: 13,
+            family: config.options?.fontStyles?.yAxis?.family || 'Inter'
+          }
+        }
+      }
+    }
+
+    if (!baseOptions.plugins.tooltip) {
+      baseOptions.plugins.tooltip = { callbacks: {} }
+    }
+    baseOptions.plugins.tooltip.callbacks = {
+      ...baseOptions.plugins.tooltip.callbacks,
+      label(context) {
+        const raw = context.raw || {}
+        const lines = []
+        if (context.dataset?.label) {
+          lines.push(context.dataset.label)
+        }
+        ;[
+          ['Open', raw.o],
+          ['High', raw.h],
+          ['Low', raw.l],
+          ['Close', raw.c]
+        ].forEach(([label, value]) => {
+          if (value !== undefined) {
+            lines.push(`${label}: ${formatNumber(value)}`)
+          }
+        })
+        return lines
+      }
+    }
+  }
+
+  if (chartType.id === 'boxPlot' || chartType.id === 'violinPlot') {
+    baseOptions.scales = {
+      x: {
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: config.options?.gridColor || '#334155'
+        },
+        ticks: {
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: {
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
+        }
+      },
+      y: {
+        beginAtZero: config.options?.beginAtZero !== false,
+        grid: {
+          display: config.options?.showGrid !== false,
+          color: config.options?.gridColor || '#334155'
+        },
+        ticks: {
+          color: config.options?.fontStyles?.ticks?.color || '#CBD5E1',
+          font: {
+            size: 12,
+            family: config.options?.fontStyles?.ticks?.family || 'Inter'
+          }
+        },
+        title: {
+          display: !!config.options?.yAxisLabel,
+          text: config.options?.yAxisLabel || 'Werte',
+          color: config.options?.fontStyles?.yAxis?.color || '#F8FAFC',
+          font: {
+            size: 13,
+            family: config.options?.fontStyles?.yAxis?.family || 'Inter'
+          }
+        }
+      }
+    }
+  }
+
+  if (chartType.id === 'funnel') {
+    baseOptions.plugins.customValueLabels = {
+      display: config.options?.showValues !== false,
+      formatter: (value) => formatNumber(value),
+      layout: 'center',
+      color: '#F8FAFC'
+    }
+    baseOptions.scales = {
+      x: { display: false },
+      y: { display: false }
+    }
+  }
+
+  if (chartType.id === 'choropleth') {
+    baseOptions.plugins.customValueLabels = { display: false }
+    const palette = Array.isArray(config.options?.colorPalette)
+      ? config.options.colorPalette
+      : ['#1E3A8A', '#2563EB', '#3B82F6', '#60A5FA', '#BFDBFE']
+    const paletteInterpolator = (value) => {
+      if (!palette.length) {
+        return '#3B82F6'
+      }
+      const clamped = Math.max(0, Math.min(1, value))
+      const index = Math.min(
+        palette.length - 1,
+        Math.round(clamped * (palette.length - 1))
+      )
+      return palette[index]
+    }
+
+    baseOptions.scales = {
+      projection: {
+        axis: 'x',
+        projection: config.options?.projection || 'geoEqualEarth'
+      },
+      color: {
+        axis: 'color',
+        quantize: palette.length,
+        legend: {
+          position: 'bottom-right',
+          align: 'center',
+          title: {
+            display: true,
+            text: config.options?.legendTitle || 'Wert'
+          }
+        },
+        interpolate: paletteInterpolator
+      }
+    }
+
+    baseOptions.plugins.tooltip.callbacks.label = function(context) {
+      const raw = context.raw || {}
+      const label = raw.label || context.label || ''
+      return `${label}: ${formatNumber(raw.value)}`
+    }
+  }
+
+  if (chartType.id === 'venn') {
+    baseOptions.plugins.customValueLabels = { display: false }
+    baseOptions.scales = {
+      x: { display: false },
+      y: { display: false }
     }
   }
 

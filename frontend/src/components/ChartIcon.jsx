@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, forwardRef } from 'react'
+import { useEffect, useMemo, useRef, useState, forwardRef } from 'react'
 import PropTypes from 'prop-types'
 import {
   Chart as ChartJS,
@@ -30,6 +30,7 @@ import {
 } from 'chartjs-chart-geo'
 import { VennDiagramController, ArcSlice } from 'chartjs-chart-venn'
 import 'chartjs-adapter-date-fns'
+import { createPlaceholderFeature, normalizeRegionKey } from '../utils/choroplethUtils'
 
 // Register base components
 ChartJS.register(
@@ -388,7 +389,13 @@ function prepareIconData(chartType, config) {
     case 'choropleth': {
       const regions = Array.isArray(config.regions) ? config.regions.slice(0, 3) : []
       const features = Array.isArray(config.features) ? config.features : []
-      const featureMap = new Map(features.map(feature => [String(feature?.id ?? feature?.properties?.name ?? ''), feature]))
+      const featureMap = new Map()
+      features.forEach((feature, index) => {
+        const key = normalizeRegionKey(feature?.id ?? feature?.properties?.id ?? feature?.properties?.name ?? `feature-${index}`)
+        if (!featureMap.has(key)) {
+          featureMap.set(key, feature)
+        }
+      })
       return {
         labels: regions.map(region => region?.label || region?.id || ''),
         datasets: [
@@ -396,7 +403,13 @@ function prepareIconData(chartType, config) {
             label: 'Regionen',
             data: regions
               .map(region => {
-                const feature = featureMap.get(String(region?.id ?? region?.label ?? ''))
+                const key = normalizeRegionKey(region?.id ?? region?.label ?? '')
+                let feature = featureMap.get(key)
+                if (!feature) {
+                  const index = featureMap.size
+                  feature = createPlaceholderFeature(key || `region-${index}`, region?.label || region?.id || `Region ${index + 1}`, index, regions.length || 1)
+                  featureMap.set(key, feature)
+                }
                 if (!feature) return null
                 return {
                   feature,
@@ -547,18 +560,6 @@ function prepareIconData(chartType, config) {
           data: (config.values || []).slice(0, 4),
           backgroundColor: colorPalette.slice(0, 4),
           borderWidth: 0
-        }]
-      }
-
-    case 'boxPlot':
-    case 'violin':
-      return {
-        labels: (config.labels || []).slice(0, 3),
-        datasets: [{
-          data: (config.labels || []).slice(0, 3).map(() => [20, 40, 60, 80]),
-          backgroundColor: colorPalette[0],
-          borderWidth: 0,
-          borderRadius: 2
         }]
       }
 
@@ -760,6 +761,12 @@ export default function ChartIcon({ chartType }) {
   const chartRef = useRef(null)
   const [iconKey, setIconKey] = useState(0)
 
+  const safeChartType = useMemo(() => chartType, [chartType])
+
+  if (safeChartType?.id) {
+    registerPluginIfNeeded(safeChartType.id)
+  }
+
   useEffect(() => {
     // Register plugins for this chart type if needed
     if (chartType?.id) {
@@ -780,14 +787,14 @@ export default function ChartIcon({ chartType }) {
     setIconKey(prev => prev + 1)
   }, [chartType])
 
-  if (!chartType) return null
+  if (!safeChartType) return null
 
-  const config = getDefaultConfig(chartType)
+  const config = getDefaultConfig(safeChartType)
   if (!config) return null
 
-  const data = prepareIconData(chartType, config)
-  const options = prepareIconOptions(chartType, config)
-  const ChartComponent = getChartComponent(chartType.id)
+  const data = prepareIconData(safeChartType, config)
+  const options = prepareIconOptions(safeChartType, config)
+  const ChartComponent = getChartComponent(safeChartType.id)
 
   // Debug für Bubble und Matrix
   if (chartType.id === 'bubble' || chartType.id === 'matrix') {
@@ -809,7 +816,7 @@ export default function ChartIcon({ chartType }) {
     >
       <div style={{ width: '100%', height: '100%', position: 'relative' }}>
         <ChartComponent
-          key={`${chartType.id}-${iconKey}`}
+          key={`${safeChartType.id}-${iconKey}`}
           ref={chartRef}
           data={data}
           options={options}

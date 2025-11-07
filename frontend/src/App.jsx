@@ -105,7 +105,12 @@ function App() {
       labels: [],
       values: [],
       datasets: [],
-      datasetLabel: ''
+      datasetLabel: '',
+      financialSeries: [],
+      series: [],
+      sets: [],
+      regions: [],
+      features: []
     })
   }
 

@@ -218,6 +218,10 @@ function getDefaultConfig(chartType) {
       config[key] = JSON.parse(JSON.stringify(schema[key].default || []))
     } else if (key === 'values' && Array.isArray(schema[key].default)) {
       config[key] = JSON.parse(JSON.stringify(schema[key].default))
+    } else if (key === 'financialSeries' && Array.isArray(schema[key].default)) {
+      config[key] = JSON.parse(JSON.stringify(schema[key].default))
+    } else if (key === 'series' && Array.isArray(schema[key].default)) {
+      config[key] = JSON.parse(JSON.stringify(schema[key].default))
     } else {
       config[key] = Array.isArray(schema[key].default) 
         ? [...schema[key].default] 

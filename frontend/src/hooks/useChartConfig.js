@@ -148,6 +148,10 @@ export const useChartConfig = () => {
         defaultConfig[key] = JSON.parse(JSON.stringify(schema[key].default || []))
       } else if (key === 'values' && Array.isArray(schema[key].default)) {
         defaultConfig[key] = JSON.parse(JSON.stringify(schema[key].default))
+      } else if (key === 'financialSeries' && Array.isArray(schema[key].default)) {
+        defaultConfig[key] = JSON.parse(JSON.stringify(schema[key].default))
+      } else if (key === 'series' && Array.isArray(schema[key].default)) {
+        defaultConfig[key] = JSON.parse(JSON.stringify(schema[key].default))
       } else {
         defaultConfig[key] = Array.isArray(schema[key].default)
           ? [...schema[key].default]

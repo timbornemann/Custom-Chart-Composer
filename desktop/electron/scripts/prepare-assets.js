@@ -62,6 +62,20 @@ const copyFrontend = () => {
   const frontendDest = path.join(outputDir, 'frontend', 'dist');
   fs.mkdirSync(path.dirname(frontendDest), { recursive: true });
   fs.cpSync(frontendSrc, frontendDest, { recursive: true });
+  
+  // Also copy GeoJSON files for extraResources
+  const geoJsonSrc = path.join(projectRoot, 'frontend', 'src', 'utils', 'GeoJSONs');
+  const geoJsonDest = path.join(outputDir, 'frontend', 'src', 'utils', 'GeoJSONs');
+  if (fs.existsSync(geoJsonSrc)) {
+    fs.mkdirSync(path.dirname(geoJsonDest), { recursive: true });
+    fs.cpSync(geoJsonSrc, geoJsonDest, { recursive: true });
+    try {
+      const files = fs.readdirSync(geoJsonDest).filter(f => 
+        f.endsWith('.geojson') || f.endsWith('.geojson.geojson') || f.endsWith('.geojason.geojson')
+      );
+      console.log(`[prepare-assets] Copied GeoJSON files. GeoJSONs/*.geojson = ${files.length}`);
+    } catch (_) {}
+  }
 };
 
 const copyIcons = () => {

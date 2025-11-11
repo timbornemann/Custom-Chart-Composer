@@ -37,7 +37,8 @@
       "app/**/*"
     ],
     "asarUnpack": [
-      "app/backend/modules/**"
+      "app/backend/modules/**",
+      "app/frontend/src/utils/GeoJSONs/**"
     ],
     "extraResources": [
       {
@@ -47,6 +48,10 @@
       {
         "from": "app/backend/package.json",
         "to": "modules/package.json"
+      },
+      {
+        "from": "app/frontend/src/utils/GeoJSONs",
+        "to": "geojsons"
       }
     ],
     "win": {

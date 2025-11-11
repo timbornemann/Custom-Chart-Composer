@@ -31,22 +31,29 @@ const resolveGeoJsonDirectory = () => {
     candidates.push(process.env.BACKEND_GEOJSON_PATH);
   }
 
-  // 2) Try frontend source directory (for development)
+  const localGeoJsons = join(__dirname, '../geojsons');
+
+  // 2) Production resources path candidates (prefer extraResources first, like modules)
+  if (process.resourcesPath) {
+    // Prefer extraResources location first (like modules)
+    candidates.push(join(process.resourcesPath, 'geojsons'));
+    // Then try unpacked paths
+    candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'app', 'frontend', 'src', 'utils', 'GeoJSONs'));
+    candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'geojsons'));
+    // Then try ASAR paths (these might not work with readdirSync)
+    candidates.push(join(process.resourcesPath, 'app', 'frontend', 'src', 'utils', 'GeoJSONs'));
+    candidates.push(join(process.resourcesPath, 'frontend', 'src', 'utils', 'GeoJSONs'));
+  }
+
+  // 3) Try frontend source directory (for development)
   const frontendGeoJsonPath = join(__dirname, '../../frontend/src/utils/GeoJSONs');
   candidates.push(frontendGeoJsonPath);
 
-  // 3) Production resources path candidates
-  if (process.resourcesPath) {
-    candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'app', 'frontend', 'src', 'utils', 'GeoJSONs'));
-    candidates.push(join(process.resourcesPath, 'app', 'frontend', 'src', 'utils', 'GeoJSONs'));
-    candidates.push(join(process.resourcesPath, 'frontend', 'src', 'utils', 'GeoJSONs'));
-    candidates.push(join(process.resourcesPath, 'geojsons'));
-    candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'geojsons'));
+  // 4) Backend local geojsons directory (fallback, only if not in ASAR)
+  // Don't add if we're in production (inside ASAR)
+  if (!__dirname.includes('.asar')) {
+    candidates.push(localGeoJsons);
   }
-
-  // 4) Backend local geojsons directory (fallback)
-  const localGeoJsons = join(__dirname, '../geojsons');
-  candidates.push(localGeoJsons);
 
   // Find first existing directory with .geojson files
   for (const candidate of candidates) {
@@ -74,6 +81,16 @@ const resolveGeoJsonDirectory = () => {
     }
   }
 
+  // Only return localGeoJsons if we're not in ASAR and it exists
+  if (!__dirname.includes('.asar') && fs.existsSync(localGeoJsons)) {
+    return localGeoJsons;
+  }
+
+  // If we're in production and nothing found, throw an error
+  if (__dirname.includes('.asar')) {
+    throw new Error(`GeoJSON directory not found. Checked: ${candidates.join(', ')}`);
+  }
+
   return localGeoJsons;
 };
 
@@ -82,9 +99,9 @@ const ensureGeoJsonDirectory = geoJsonPath => {
     return geoJsonPath;
   }
 
-  if (geoJsonPath.includes('.asar')) {
-    console.warn('GeoJSON path is inside an ASAR archive and cannot be created:', geoJsonPath);
-    return geoJsonPath;
+  if (geoJsonPath.includes('.asar') && !geoJsonPath.includes('.asar.unpacked')) {
+    // Don't try to create or return ASAR paths - they're read-only
+    throw new Error(`GeoJSON path is inside an ASAR archive and cannot be accessed: ${geoJsonPath}`);
   }
 
   try {

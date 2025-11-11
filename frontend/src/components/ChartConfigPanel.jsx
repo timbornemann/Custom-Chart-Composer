@@ -2940,7 +2940,8 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
 
   const adjustedPresets = getPresetResolutions()
 
-  const isChartReady = chartRef && chartRef.current
+  // Check if chart is ready - must exist and not be destroyed
+  const isChartReady = chartRef && chartRef.current && !chartRef.current.destroyed
 
   return (
     <div className="space-y-6">

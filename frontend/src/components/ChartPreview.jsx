@@ -323,7 +323,7 @@ function valueLabelPlugin() {
 }
 
 // Wrapper component to force complete remount
-function ChartWrapper({ chartType, data, options, chartRef, onDataPointClick }) {
+function ChartWrapper({ chartType, data, options, chartRef, localChartRef, onDataPointClick }) {
   const [displayData, setDisplayData] = useState(null)
   const animationTriggered = useRef(false)
   
@@ -355,12 +355,18 @@ function ChartWrapper({ chartType, data, options, chartRef, onDataPointClick }) 
 
   // Trigger animation after chart is created
   const chartRefCallback = useCallback((chartInstance) => {
+    // Update parent chartRef (for export functionality)
     if (chartRef) {
       if (typeof chartRef === 'function') {
         chartRef(chartInstance)
       } else if (chartRef.current !== undefined) {
         chartRef.current = chartInstance
       }
+    }
+
+    // Also update localChartRef for cleanup purposes
+    if (localChartRef) {
+      localChartRef.current = chartInstance
     }
 
     // Trigger animation by starting with empty data and then setting real data
@@ -375,7 +381,7 @@ function ChartWrapper({ chartType, data, options, chartRef, onDataPointClick }) 
       // If animation is disabled, show data immediately
       setDisplayData(data)
     }
-  }, [chartRef, data, options?.animation])
+  }, [chartRef, localChartRef, data, options?.animation])
 
   // Reset animation trigger when data changes
   useEffect(() => {
@@ -658,7 +664,8 @@ export default function ChartPreview({
                 chartType={chartType}
                 data={chartData}
                 options={chartOptions}
-                chartRef={localChartRef}
+                chartRef={chartRef}
+                localChartRef={localChartRef}
                 onDataPointClick={onDataPointClick}
               />
             </ChartErrorBoundary>
@@ -2681,6 +2688,7 @@ ChartWrapper.propTypes = {
   data: PropTypes.object,
   options: PropTypes.object,
   chartRef: PropTypes.shape({ current: PropTypes.any }),
+  localChartRef: PropTypes.shape({ current: PropTypes.any }),
   onDataPointClick: PropTypes.func
 }
 

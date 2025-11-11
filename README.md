@@ -197,33 +197,159 @@ Die Custom Chart Composer bietet eine beeindruckende Vielfalt von **25 Diagrammt
 
 ### Übersicht aller Diagrammtypen
 
-| Diagrammtyp | Beschreibung | Screenshot |
-|-------------|--------------|------------|
-| **Balkendiagramm** | Klassische Wertevergleiche mit horizontaler/vertikaler Orientierung | <img src="screenshots/Diagrams/chart-bar-2025-11-11.png" width="150" alt="Bar Chart"> |
-| **Gestapeltes Balkendiagramm** | Mehrere Datensätze übereinander mit Prozentanzeige-Option | <img src="screenshots/Diagrams/chart-stackedBar-2025-11-11.png" width="150" alt="Stacked Bar"> |
-| **Gruppiertes Balkendiagramm** | Mehrere Datensätze nebeneinander für direkten Vergleich | <img src="screenshots/Diagrams/chart-groupedBar-2025-11-11.png" width="150" alt="Grouped Bar"> |
-| **Radiales Balkendiagramm** | Kreisförmige Anordnung von Balken | <img src="screenshots/Diagrams/chart-radialBar-2025-11-11.png" width="150" alt="Radial Bar"> |
-| **Liniendiagramm** | Trends und Zeitreihen mit horizontaler/vertikaler Orientierung | <img src="screenshots/Diagrams/chart-line-2025-11-11.png" width="150" alt="Line Chart"> |
-| **Flächendiagramm** | Gefüllte Linie für Volumen-Darstellung | <img src="screenshots/Diagrams/chart-area-2025-11-11.png" width="150" alt="Area Chart"> |
-| **Multi-Liniendiagramm** | Mehrere Linien zum Vergleich verschiedener Datensätze | <img src="screenshots/Diagrams/chart-multiLine-2025-11-11.png" width="150" alt="Multi-Line"> |
-| **Treppenstufen-Liniendiagramm** | Gestufte Verläufe für diskrete Änderungen | <img src="screenshots/Diagrams/chart-steppedLine-2025-11-11.png" width="150" alt="Stepped Line"> |
-| **Gestricheltes Liniendiagramm** | Gestrichelte Linien für alternative Darstellung | <img src="screenshots/Diagrams/chart-dashedLine-2025-11-11.png" width="150" alt="Dashed Line"> |
-| **Stream-Graph** | Gestapeltes Flächendiagramm mit zentrierter Basislinie | <img src="screenshots/Diagrams/chart-streamGraph-2025-11-11.png" width="150" alt="Stream Graph"> |
-| **Kreisdiagramm** | Anteile und Verhältnisse mit Donut/Halbkreis-Optionen | <img src="screenshots/Diagrams/chart-pie-2025-11-11.png" width="150" alt="Pie Chart"> |
-| **Polar-Flächendiagramm** | Kreisförmige Flächendarstellung kategorialer Werte | <img src="screenshots/Diagrams/chart-polarArea-2025-11-11.png" width="150" alt="Polar Area"> |
-| **Verschachteltes Donut** | Mehrere Donuts übereinander für hierarchische Daten | <img src="screenshots/Diagrams/chart-nestedDonut-2025-11-11.png" width="150" alt="Nested Donut"> |
-| **Streudiagramm** | Korrelationen zwischen zwei Variablen, unterstützt geografische Koordinaten | <img src="screenshots/Diagrams/chart-scatter-2025-11-11.png" width="150" alt="Scatter"> |
-| **Blasendiagramm** | 3-dimensionale Daten mit Radius, Optionen für feste Größe | <img src="screenshots/Diagrams/chart-bubble-2025-11-11.png" width="150" alt="Bubble"> |
-| **Heatmap-Diagramm** | Matrix mit Farbintensitäten, Standard- und Kalender-Heatmap | <img src="screenshots/Diagrams/chart-heatmap-2025-11-11.png" width="150" alt="Heatmap"> |
-| **Radar-Chart** | Mehrdimensionale Daten auf polaren Achsen | <img src="screenshots/Diagrams/chart-radar-2025-11-11.png" width="150" alt="Radar"> |
-| **Kombiniertes Diagramm** | Verschiedene Charttypen kombiniert in einem Diagramm | <img src="screenshots/Diagrams/chart-mixed-2025-11-11.png" width="150" alt="Mixed"> |
-| **Candlestick-Diagramm** | Finanzdaten-Visualisierung mit Open/High/Low/Close | <img src="screenshots/Diagrams/chart-candlestick-2025-11-11.png" width="150" alt="Candlestick"> |
-| **OHLC-Diagramm** | Open-High-Low-Close Darstellung für Finanzdaten | <img src="screenshots/Diagrams/chart-ohlc-2025-11-11.png" width="150" alt="OHLC"> |
-| **Box-Plot** | Statistische Verteilungsanalyse mit Quartilen | <img src="screenshots/Diagrams/chart-boxPlot-2025-11-11.png" width="150" alt="Box Plot"> |
-| **Violin-Plot** | Kombination aus Box-Plot und Dichteverteilung | <img src="screenshots/Diagrams/chart-violinPlot-2025-11-11.png" width="150" alt="Violin Plot"> |
-| **Funnel-Diagramm** | Trichterdarstellung für Prozess-Visualisierung | <img src="screenshots/Diagrams/chart-funnel-2025-11-11.png" width="150" alt="Funnel"> |
-| **Choropleth-Karte** | Geografische Datenvisualisierung auf Karten | <img src="screenshots/Diagrams/chart-choropleth-2025-11-11.png" width="150" alt="Choropleth"> |
-| **Venn-Diagramm** | Mengendiagramm zur Darstellung von Überschneidungen | <img src="screenshots/Diagrams/chart-venn-2025-11-11.png" width="150" alt="Venn"> |
+<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin: 20px 0;">
+
+<div style="text-align: center;">
+<h4>Balkendiagramm</h4>
+<img src="screenshots/Diagrams/chart-bar-2025-11-11.png" width="100%" alt="Bar Chart" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Klassische Wertevergleiche mit horizontaler/vertikaler Orientierung</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Gestapeltes Balkendiagramm</h4>
+<img src="screenshots/Diagrams/chart-stackedBar-2025-11-11.png" width="100%" alt="Stacked Bar" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Mehrere Datensätze übereinander mit Prozentanzeige-Option</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Gruppiertes Balkendiagramm</h4>
+<img src="screenshots/Diagrams/chart-groupedBar-2025-11-11.png" width="100%" alt="Grouped Bar" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Mehrere Datensätze nebeneinander für direkten Vergleich</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Radiales Balkendiagramm</h4>
+<img src="screenshots/Diagrams/chart-radialBar-2025-11-11.png" width="100%" alt="Radial Bar" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Kreisförmige Anordnung von Balken</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Liniendiagramm</h4>
+<img src="screenshots/Diagrams/chart-line-2025-11-11.png" width="100%" alt="Line Chart" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Trends und Zeitreihen mit horizontaler/vertikaler Orientierung</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Flächendiagramm</h4>
+<img src="screenshots/Diagrams/chart-area-2025-11-11.png" width="100%" alt="Area Chart" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Gefüllte Linie für Volumen-Darstellung</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Multi-Liniendiagramm</h4>
+<img src="screenshots/Diagrams/chart-multiLine-2025-11-11.png" width="100%" alt="Multi-Line" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Mehrere Linien zum Vergleich verschiedener Datensätze</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Treppenstufen-Liniendiagramm</h4>
+<img src="screenshots/Diagrams/chart-steppedLine-2025-11-11.png" width="100%" alt="Stepped Line" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Gestufte Verläufe für diskrete Änderungen</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Gestricheltes Liniendiagramm</h4>
+<img src="screenshots/Diagrams/chart-dashedLine-2025-11-11.png" width="100%" alt="Dashed Line" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Gestrichelte Linien für alternative Darstellung</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Stream-Graph</h4>
+<img src="screenshots/Diagrams/chart-streamGraph-2025-11-11.png" width="100%" alt="Stream Graph" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Gestapeltes Flächendiagramm mit zentrierter Basislinie</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Kreisdiagramm</h4>
+<img src="screenshots/Diagrams/chart-pie-2025-11-11.png" width="100%" alt="Pie Chart" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Anteile und Verhältnisse mit Donut/Halbkreis-Optionen</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Polar-Flächendiagramm</h4>
+<img src="screenshots/Diagrams/chart-polarArea-2025-11-11.png" width="100%" alt="Polar Area" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Kreisförmige Flächendarstellung kategorialer Werte</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Verschachteltes Donut</h4>
+<img src="screenshots/Diagrams/chart-nestedDonut-2025-11-11.png" width="100%" alt="Nested Donut" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Mehrere Donuts übereinander für hierarchische Daten</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Streudiagramm</h4>
+<img src="screenshots/Diagrams/chart-scatter-2025-11-11.png" width="100%" alt="Scatter" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Korrelationen zwischen zwei Variablen, unterstützt geografische Koordinaten</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Blasendiagramm</h4>
+<img src="screenshots/Diagrams/chart-bubble-2025-11-11.png" width="100%" alt="Bubble" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">3-dimensionale Daten mit Radius, Optionen für feste Größe</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Heatmap-Diagramm</h4>
+<img src="screenshots/Diagrams/chart-heatmap-2025-11-11.png" width="100%" alt="Heatmap" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Matrix mit Farbintensitäten, Standard- und Kalender-Heatmap</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Radar-Chart</h4>
+<img src="screenshots/Diagrams/chart-radar-2025-11-11.png" width="100%" alt="Radar" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Mehrdimensionale Daten auf polaren Achsen</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Kombiniertes Diagramm</h4>
+<img src="screenshots/Diagrams/chart-mixed-2025-11-11.png" width="100%" alt="Mixed" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Verschiedene Charttypen kombiniert in einem Diagramm</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Candlestick-Diagramm</h4>
+<img src="screenshots/Diagrams/chart-candlestick-2025-11-11.png" width="100%" alt="Candlestick" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Finanzdaten-Visualisierung mit Open/High/Low/Close</p>
+</div>
+
+<div style="text-align: center;">
+<h4>OHLC-Diagramm</h4>
+<img src="screenshots/Diagrams/chart-ohlc-2025-11-11.png" width="100%" alt="OHLC" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Open-High-Low-Close Darstellung für Finanzdaten</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Box-Plot</h4>
+<img src="screenshots/Diagrams/chart-boxPlot-2025-11-11.png" width="100%" alt="Box Plot" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Statistische Verteilungsanalyse mit Quartilen</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Violin-Plot</h4>
+<img src="screenshots/Diagrams/chart-violinPlot-2025-11-11.png" width="100%" alt="Violin Plot" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Kombination aus Box-Plot und Dichteverteilung</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Funnel-Diagramm</h4>
+<img src="screenshots/Diagrams/chart-funnel-2025-11-11.png" width="100%" alt="Funnel" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Trichterdarstellung für Prozess-Visualisierung</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Choropleth-Karte</h4>
+<img src="screenshots/Diagrams/chart-choropleth-2025-11-11.png" width="100%" alt="Choropleth" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Geografische Datenvisualisierung auf Karten</p>
+</div>
+
+<div style="text-align: center;">
+<h4>Venn-Diagramm</h4>
+<img src="screenshots/Diagrams/chart-venn-2025-11-11.png" width="100%" alt="Venn" style="max-width: 200px; margin: 10px 0;">
+<p style="font-size: 0.9em; margin-top: 10px;">Mengendiagramm zur Darstellung von Überschneidungen</p>
+</div>
+
+</div>
 
 ### Beispiel-Diagramme aus der Anwendung
 

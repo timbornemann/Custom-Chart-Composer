@@ -32,6 +32,29 @@ import { VennDiagramController, ArcSlice } from 'chartjs-chart-venn'
 import 'chartjs-adapter-date-fns'
 import { createPlaceholderFeature, normalizeRegionKey } from '../utils/choroplethUtils'
 
+// Simple world map features for icon preview when no features are loaded
+const createSimpleWorldFeatures = () => {
+  // Create simplified world regions for icon preview
+  const worldRegions = [
+    { id: 'NA', name: 'Nordamerika', bounds: [[-130, 70], [-50, 70], [-50, 25], [-130, 25], [-130, 70]] },
+    { id: 'SA', name: 'Südamerika', bounds: [[-80, 15], [-35, 15], [-35, -55], [-80, -55], [-80, 15]] },
+    { id: 'EU', name: 'Europa', bounds: [[-10, 70], [40, 70], [40, 35], [-10, 35], [-10, 70]] },
+    { id: 'AF', name: 'Afrika', bounds: [[-20, 35], [50, 35], [50, -35], [-20, -35], [-20, 35]] },
+    { id: 'AS', name: 'Asien', bounds: [[40, 80], [180, 80], [180, 10], [40, 10], [40, 80]] },
+    { id: 'OC', name: 'Ozeanien', bounds: [[110, -10], [180, -10], [180, -50], [110, -50], [110, -10]] }
+  ]
+  
+  return worldRegions.map((region, index) => ({
+    type: 'Feature',
+    id: region.id,
+    properties: { name: region.name },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [region.bounds]
+    }
+  }))
+}
+
 // Register base components
 ChartJS.register(
   CategoryScale,
@@ -397,27 +420,46 @@ function prepareIconData(chartType, config) {
       }
 
     case 'choropleth': {
-      const regions = Array.isArray(config.regions) ? config.regions.slice(0, 3) : []
-      const features = Array.isArray(config.features) ? config.features : []
+      let regions = Array.isArray(config.regions) ? config.regions : []
+      let features = Array.isArray(config.features) ? config.features : []
+      
+      // If no features, use simple world map for icon preview
+      if (features.length === 0) {
+        features = createSimpleWorldFeatures()
+        // Create corresponding regions if none exist
+        if (regions.length === 0) {
+          regions = features.map((feature, index) => ({
+            id: feature.id || feature.properties?.id || `REG${index + 1}`,
+            label: feature.properties?.name || `Region ${index + 1}`,
+            value: Math.floor(Math.random() * 100) // Random values for visual variety in icon
+          }))
+        }
+      }
+      
+      // Limit to first 6 regions for icon preview
+      const displayRegions = regions.slice(0, 6)
+      const displayFeatures = features.slice(0, 6)
+      
       const featureMap = new Map()
-      features.forEach((feature, index) => {
+      displayFeatures.forEach((feature, index) => {
         const key = normalizeRegionKey(feature?.id ?? feature?.properties?.id ?? feature?.properties?.name ?? `feature-${index}`)
         if (!featureMap.has(key)) {
           featureMap.set(key, feature)
         }
       })
+      
       return {
-        labels: regions.map(region => region?.label || region?.id || ''),
+        labels: displayRegions.map(region => region?.label || region?.id || ''),
         datasets: [
           {
             label: 'Regionen',
-            data: regions
+            data: displayRegions
               .map(region => {
                 const key = normalizeRegionKey(region?.id ?? region?.label ?? '')
                 let feature = featureMap.get(key)
                 if (!feature) {
                   const index = featureMap.size
-                  feature = createPlaceholderFeature(key || `region-${index}`, region?.label || region?.id || `Region ${index + 1}`, index, regions.length || 1)
+                  feature = createPlaceholderFeature(key || `region-${index}`, region?.label || region?.id || `Region ${index + 1}`, index, displayRegions.length || 1)
                   featureMap.set(key, feature)
                 }
                 if (!feature) return null

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import PropTypes from 'prop-types'
 import {
   FiPlus,
@@ -44,40 +44,22 @@ export default function ChoroplethEditor({
   const [isLoadingGeoJson, setIsLoadingGeoJson] = useState(false)
   const [geoJsonFiles, setGeoJsonFiles] = useState([])
   const [isLoadingFiles, setIsLoadingFiles] = useState(true)
+  const [hasAutoLoaded, setHasAutoLoaded] = useState(false)
 
-  // Load GeoJSON files from API (similar to how chart types are loaded)
-  useEffect(() => {
-    const loadFiles = async () => {
-      try {
-        setIsLoadingFiles(true)
-        const files = await refreshGeoJsonFiles()
-        setGeoJsonFiles(files)
-        console.log('[ChoroplethEditor] Available GeoJSON files:', files.length, files)
-      } catch (error) {
-        console.error('[ChoroplethEditor] Failed to load GeoJSON files:', error)
-        setGeoJsonFiles([])
-      } finally {
-        setIsLoadingFiles(false)
-      }
-    }
-    loadFiles()
-  }, [])
-
-  const normalizedFeatureIds = useMemo(
-    () => features.map((feature, index) => normalizeRegionKey(feature?.id ?? feature?.properties?.id ?? `feature-${index}`)),
-    [features]
-  )
-
-  const handleLoadGeoJson = async (filename) => {
+  const handleLoadGeoJson = useCallback(async (filename, silent = false) => {
     if (!filename) return
-    setIsLoadingGeoJson(true)
-    setUploadError(null)
+    if (!silent) {
+      setIsLoadingGeoJson(true)
+      setUploadError(null)
+    }
     try {
       const geoJsonData = await loadGeoJsonFile(filename)
       const extracted = extractFeaturesFromGeoJson(geoJsonData)
       if (!extracted.length) {
-        setUploadError('Die Datei enthält keine GeoJSON-Features.')
-        setIsLoadingGeoJson(false)
+        if (!silent) {
+          setUploadError('Die Datei enthält keine GeoJSON-Features.')
+          setIsLoadingGeoJson(false)
+        }
         return
       }
       const sanitized = extracted.map((feature, index) => sanitizeFeature(feature, feature?.id ?? `feature-${index}`, feature?.properties?.name))
@@ -103,14 +85,60 @@ export default function ChoroplethEditor({
         })
         onRegionsChange(newRegions)
         setSelectedGeoJson(filename)
-        setIsLoadingGeoJson(false)
+        if (!silent) {
+          setIsLoadingGeoJson(false)
+        }
       }, 0)
     } catch (error) {
       console.error(error)
-      setUploadError(`GeoJSON konnte nicht geladen werden: ${error.message}`)
-      setIsLoadingGeoJson(false)
+      if (!silent) {
+        setUploadError(`GeoJSON konnte nicht geladen werden: ${error.message}`)
+        setIsLoadingGeoJson(false)
+      }
     }
-  }
+  }, [onFeaturesChange, onRegionsChange])
+
+  // Load GeoJSON files from API (similar to how chart types are loaded)
+  useEffect(() => {
+    const loadFiles = async () => {
+      try {
+        setIsLoadingFiles(true)
+        const files = await refreshGeoJsonFiles()
+        setGeoJsonFiles(files)
+        console.log('[ChoroplethEditor] Available GeoJSON files:', files.length, files)
+      } catch (error) {
+        console.error('[ChoroplethEditor] Failed to load GeoJSON files:', error)
+        setGeoJsonFiles([])
+      } finally {
+        setIsLoadingFiles(false)
+      }
+    }
+    loadFiles()
+  }, [])
+
+  // Auto-load World.geojson on initial mount if no features are present
+  useEffect(() => {
+    if (!hasAutoLoaded && features.length === 0 && geoJsonFiles.length > 0 && handleLoadGeoJson) {
+      // Find World.geojson file (handle different naming variations)
+      const worldFile = geoJsonFiles.find(f => 
+        f.filename.toLowerCase().includes('world') || 
+        f.filename.toLowerCase() === 'world.geojason.geojson' ||
+        f.filename.toLowerCase() === 'world.geojson'
+      )
+      
+      if (worldFile) {
+        console.log('[ChoroplethEditor] Auto-loading World.geojson as default')
+        setHasAutoLoaded(true)
+        // Load World.geojson automatically (silent mode to avoid showing loading state)
+        handleLoadGeoJson(worldFile.filename, true)
+      }
+    }
+  }, [hasAutoLoaded, features.length, geoJsonFiles, handleLoadGeoJson])
+
+  const normalizedFeatureIds = useMemo(
+    () => features.map((feature, index) => normalizeRegionKey(feature?.id ?? feature?.properties?.id ?? `feature-${index}`)),
+    [features]
+  )
 
   const featureStats = useMemo(() => {
     if (!features.length) {

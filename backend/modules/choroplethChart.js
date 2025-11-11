@@ -1,57 +1,3 @@
-const sampleFeatures = [
-  {
-    type: "Feature",
-    id: "DEU",
-    properties: { name: "Deutschland" },
-    geometry: {
-      type: "Polygon",
-      coordinates: [
-        [
-          [5.9, 54.9],
-          [14.6, 54.9],
-          [14.6, 47.3],
-          [5.9, 47.3],
-          [5.9, 54.9]
-        ]
-      ]
-    }
-  },
-  {
-    type: "Feature",
-    id: "FRA",
-    properties: { name: "Frankreich" },
-    geometry: {
-      type: "Polygon",
-      coordinates: [
-        [
-          [-5.2, 51.1],
-          [8.2, 51.1],
-          [8.2, 42.1],
-          [-5.2, 42.1],
-          [-5.2, 51.1]
-        ]
-      ]
-    }
-  },
-  {
-    type: "Feature",
-    id: "ITA",
-    properties: { name: "Italien" },
-    geometry: {
-      type: "Polygon",
-      coordinates: [
-        [
-          [6.5, 47.1],
-          [18.8, 47.1],
-          [18.8, 36.6],
-          [6.5, 36.6],
-          [6.5, 47.1]
-        ]
-      ]
-    }
-  }
-]
-
 export default {
   id: "choropleth",
   name: "Choropleth-Karte",
@@ -65,15 +11,11 @@ export default {
     },
     regions: {
       type: "array",
-      default: [
-        { id: "DEU", label: "Deutschland", value: 82 },
-        { id: "FRA", label: "Frankreich", value: 68 },
-        { id: "ITA", label: "Italien", value: 60 }
-      ]
+      default: []
     },
     features: {
       type: "array",
-      default: sampleFeatures
+      default: []
     },
     backgroundColor: {
       type: "string",

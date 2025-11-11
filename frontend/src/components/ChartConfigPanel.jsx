@@ -821,6 +821,7 @@ function StylingTab({ chartType, config, onConfigChange }) {
   const schema = chartType?.configSchema || {}
   const hasColors = !!schema.colors
   const hasBackground = !!schema.backgroundColor
+  const isChoropleth = chartType?.id === 'choropleth'
 
   const backgroundPresets = [
     { name: 'Dunkel', value: '#0F172A' },
@@ -866,7 +867,16 @@ function StylingTab({ chartType, config, onConfigChange }) {
     return config.options?.fontStyles?.[element]?.[property] ?? defaultValue
   }
 
-  if (!hasColors && !hasBackground) {
+  const handleOptionChange = (key, value) => {
+    onConfigChange({
+      options: {
+        ...config.options,
+        [key]: value
+      }
+    })
+  }
+
+  if (!hasColors && !hasBackground && !isChoropleth) {
     return (
       <div className="text-sm text-dark-textGray">
         Für diesen Diagrammtyp sind keine Styling-Optionen definiert.
@@ -891,6 +901,71 @@ function StylingTab({ chartType, config, onConfigChange }) {
 
   return (
     <div className="space-y-6">
+      {isChoropleth && (
+        <div className="bg-dark-sidebar border border-gray-700 rounded-lg p-4 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-dark-textLight mb-1">Choropleth-Farben</h3>
+            <p className="text-xs text-dark-textGray">Passe die Farbpalette für die Werteverteilung an.</p>
+          </div>
+          <ColorListEditor
+            label="Farbpalette"
+            values={Array.isArray(config.options?.colorPalette) ? config.options.colorPalette : ['#1E3A8A', '#2563EB', '#3B82F6', '#60A5FA', '#BFDBFE']}
+            onChange={(values) => handleOptionChange('colorPalette', values)}
+            maxColors={9}
+          />
+          <div className="border-t border-gray-700 pt-4 space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-dark-textLight mb-2">Outline-Farbe</label>
+              <EnhancedColorPicker
+                value={config.options?.outlineColor || '#0F172A'}
+                onChange={(newColor) => handleOptionChange('outlineColor', newColor)}
+                label="Outline-Farbe"
+                size="md"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-dark-textLight mb-1">Outline-Breite</label>
+              <input
+                type="number"
+                min="0"
+                max="5"
+                step="0.1"
+                value={config.options?.outlineWidth ?? 0.5}
+                onChange={(event) => handleOptionChange('outlineWidth', Number(event.target.value))}
+                className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isChoropleth && (
+        <div className="bg-dark-sidebar border border-gray-700 rounded-lg p-4 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-dark-textLight mb-1">Legende Schriftfarbe</h3>
+            <p className="text-xs text-dark-textGray">Passe die Schriftfarbe der Skala an.</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark-textLight mb-2">Schriftfarbe</label>
+            <EnhancedColorPicker
+              value={config.options?.fontStyles?.legend?.color || '#F8FAFC'}
+              onChange={(newColor) => {
+                const currentStyles = config.options?.fontStyles || {}
+                handleOptionChange('fontStyles', {
+                  ...currentStyles,
+                  legend: {
+                    ...(currentStyles.legend || {}),
+                    color: newColor
+                  }
+                })
+              }}
+              label="Schriftfarbe"
+              size="md"
+            />
+          </div>
+        </div>
+      )}
+
       {hasColors && (
         <div className="space-y-4">
           {/* Color Palette Selector */}
@@ -1352,6 +1427,11 @@ function OptionsTab({ chartType, config, onConfigChange }) {
         </div>
       )}
       {schemaEntries.map(([key, field]) => {
+        // Skip legend-related fields for choropleth charts as they're handled in the dedicated section
+        if (chartType?.id === 'choropleth' && ['showLegend', 'legendTitle', 'legendPosition', 'legendHeight'].includes(key)) {
+          return null
+        }
+
         // Boolean Toggle
         if (field.type === 'boolean') {
           return (
@@ -1467,6 +1547,11 @@ function OptionsTab({ chartType, config, onConfigChange }) {
 
         // Array Input (e.g., Farbpaletten)
         if (field.type === 'array') {
+          // Skip colorPalette for choropleth charts as it's handled in StylingTab
+          if (chartType?.id === 'choropleth' && key === 'colorPalette') {
+            return null
+          }
+          
           const currentValue = Array.isArray(config.options?.[key]) ? config.options[key] : field.default || []
           const isColorArray = Array.isArray(currentValue) && currentValue.every(entry => typeof entry === 'string' && /^#|rgb|hsl/i.test(entry))
 
@@ -1587,40 +1672,87 @@ function OptionsTab({ chartType, config, onConfigChange }) {
         </div>
       )}
 
+
       {isChoropleth && (
-        <div className="bg-dark-sidebar border border-gray-700 rounded-lg p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-dark-textLight">Choropleth-Darstellung</h3>
-          <p className="text-xs text-dark-textGray">Passe Farbverlauf und Legenden deiner Karte an.</p>
-          <ColorListEditor
-            label="Farbpalette"
-            values={Array.isArray(config.options?.colorPalette) ? config.options.colorPalette : []}
-            onChange={(values) => handleOptionChange('colorPalette', values)}
-            maxColors={9}
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-dark-textLight mb-1">Legendentitel</label>
-              <input
-                type="text"
-                value={config.options?.legendTitle || ''}
-                onChange={(event) => handleOptionChange('legendTitle', event.target.value)}
-                className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
-              />
+        <>
+          {/* Show Legend Toggle */}
+          <div className="flex items-center justify-between p-3 bg-dark-bg rounded-lg border border-gray-700 hover:border-gray-600 transition-all">
+            <div className="flex-1">
+              <label className="text-sm font-medium text-dark-textLight block">
+                Legende anzeigen
+              </label>
+              <p className="text-xs text-dark-textGray mt-0.5">Skala auf der Karte anzeigen</p>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-dark-textLight mb-1">Outline-Breite</label>
-              <input
-                type="number"
-                min="0"
-                max="5"
-                step="0.1"
-                value={config.options?.outlineWidth ?? 0.5}
-                onChange={(event) => handleOptionChange('outlineWidth', Number(event.target.value))}
-                className="w-full px-3 py-2 bg-dark-bg text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            <button
+              onClick={() => handleOptionChange('showLegend', !config.options?.showLegend)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ml-3 ${
+                config.options?.showLegend !== false ? 'bg-dark-accent1' : 'bg-gray-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  config.options?.showLegend !== false ? 'translate-x-6' : 'translate-x-1'
+                }`}
               />
+            </button>
+          </div>
+
+          {/* Legend Title */}
+          <div className="p-3 bg-dark-bg rounded-lg border border-gray-700">
+            <label className="block text-sm font-medium text-dark-textLight mb-2">
+              Legendentitel
+            </label>
+            <input
+              type="text"
+              value={config.options?.legendTitle || 'Wert'}
+              onChange={(event) => handleOptionChange('legendTitle', event.target.value)}
+              placeholder="z.B. Wert, Bevölkerung, etc."
+              className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            />
+          </div>
+
+          {/* Legend Position */}
+          <div className="p-3 bg-dark-bg rounded-lg border border-gray-700">
+            <label className="block text-sm font-medium text-dark-textLight mb-2">
+              Skala-Position
+            </label>
+            <select
+              value={config.options?.legendPosition || 'bottom-right'}
+              onChange={(e) => handleOptionChange('legendPosition', e.target.value)}
+              className="w-full px-3 py-2 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+            >
+              <option value="top-left">Oben links</option>
+              <option value="top-right">Oben rechts</option>
+              <option value="bottom-left">Unten links</option>
+              <option value="bottom-right">Unten rechts</option>
+            </select>
+          </div>
+
+          {/* Legend Height */}
+          <div className="p-3 bg-dark-bg rounded-lg border border-gray-700">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-dark-textLight">
+                Skala-Größe (Höhe in px)
+              </label>
+              <span className="text-sm font-mono text-dark-accent1">{config.options?.legendHeight || 200}</span>
+            </div>
+            <div className="space-y-2">
+              <input
+                type="range"
+                min="50"
+                max="300"
+                step="10"
+                value={config.options?.legendHeight || 200}
+                onChange={(e) => handleOptionChange('legendHeight', Number(e.target.value))}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-dark-accent1"
+              />
+              <div className="flex justify-between text-xs text-dark-textGray">
+                <span>50</span>
+                <span>300</span>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {isVenn && (

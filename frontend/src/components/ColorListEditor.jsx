@@ -1,41 +1,57 @@
 import EnhancedColorPicker from './EnhancedColorPicker'
 
-export default function ColorListEditor({ colors, onColorsChange }) {
+export default function ColorListEditor({ 
+  colors, 
+  onColorsChange, 
+  values, 
+  onChange, 
+  label, 
+  maxColors 
+}) {
+  // Support both old API (colors/onColorsChange) and new API (values/onChange)
+  const actualColors = values !== undefined ? values : colors
+  const actualOnChange = onChange || onColorsChange
+
   const addColor = () => {
     const defaultColors = [
       '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
       '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
     ]
     const randomColor = defaultColors[Math.floor(Math.random() * defaultColors.length)]
-    onColorsChange([...(colors || []), randomColor])
+    const currentColors = actualColors || []
+    if (maxColors && currentColors.length >= maxColors) {
+      return // Don't add if max colors reached
+    }
+    actualOnChange([...currentColors, randomColor])
   }
 
   const removeColor = (index) => {
-    onColorsChange((colors || []).filter((_, i) => i !== index))
+    actualOnChange((actualColors || []).filter((_, i) => i !== index))
   }
 
   const updateColor = (index, value) => {
-    const updated = [...(colors || [])]
+    const updated = [...(actualColors || [])]
     updated[index] = value
-    onColorsChange(updated)
+    actualOnChange(updated)
   }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-dark-textLight">
-          Benutzerdefinierte Farben
+          {label || 'Benutzerdefinierte Farben'}
         </label>
         <button
           onClick={addColor}
-          className="text-xs px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded transition-all"
+          disabled={maxColors && (actualColors || []).length >= maxColors}
+          className="text-xs px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           + Farbe
         </button>
       </div>
 
       <div className="space-y-2">
-        {(colors || []).map((color, idx) => (
+        {(actualColors || []).map((color, idx) => (
           <div key={idx} className="flex items-center space-x-2">
             <div className="flex-1">
               <EnhancedColorPicker

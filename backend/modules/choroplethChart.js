@@ -97,6 +97,38 @@ export default {
         type: "boolean",
         default: true
       },
+      legendTitle: {
+        type: "string",
+        default: "Wert",
+        description: "Titel der Legende/Skala"
+      },
+      legendPosition: {
+        type: "select",
+        default: "bottom-right",
+        options: [
+          { value: "top-left", label: "Oben links" },
+          { value: "top-right", label: "Oben rechts" },
+          { value: "bottom-left", label: "Unten links" },
+          { value: "bottom-right", label: "Unten rechts" }
+        ],
+        description: "Position der Skala"
+      },
+      legendHeight: {
+        type: "number",
+        default: 200,
+        description: "Höhe der Skala in Pixeln"
+      },
+      // Note: Font size is automatically scaled based on chart dimensions, no manual setting needed
+      outlineColor: {
+        type: "color",
+        default: "#0F172A",
+        description: "Farbe der Umrisse"
+      },
+      outlineWidth: {
+        type: "number",
+        default: 0.5,
+        description: "Breite der Umrisse"
+      },
       projection: {
         type: "select",
         default: "geoEqualEarth",

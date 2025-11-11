@@ -1881,15 +1881,21 @@ function prepareChartOptions(chartType, config, backgroundImageObj = null) {
         axis: 'color',
         quantize: palette.length,
         legend: {
-          position: 'bottom-right',
+          position: config.options?.legendPosition || 'bottom-right',
           align: 'center',
           display: config.options?.showLegend !== false,
+          height: config.options?.legendHeight || 200,
           title: {
             display: true,
             text: config.options?.legendTitle || 'Wert'
           },
           labels: {
-            color: config.options?.fontStyles?.legend?.color || '#F8FAFC'
+            color: config.options?.fontStyles?.legend?.color || '#F8FAFC',
+            font: {
+              // Automatically scale font size based on chart dimensions
+              size: Math.max(10, Math.min(16, Math.round((config.width || 960) / 80))),
+              family: config.options?.fontStyles?.legend?.family || 'Inter'
+            }
           }
         },
         interpolate: paletteInterpolator

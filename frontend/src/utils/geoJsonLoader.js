@@ -1,72 +1,74 @@
-// Preload all GeoJSON files using Vite's import.meta.glob
-// Use ?raw to import as text strings, then parse as JSON
-// Match files directly in GeoJSONs folder (including .geojson and .geojson.geojson)
-// Use multiple patterns to catch all variations
-const geoJsonModules1 = import.meta.glob('./GeoJSONs/*.geojson?raw', { 
-  eager: true,
-  import: 'default'
-})
-const geoJsonModules2 = import.meta.glob('./GeoJSONs/*.geojson.geojson?raw', { 
-  eager: true,
-  import: 'default'
-})
-const geoJsonModules3 = import.meta.glob('./GeoJSONs/*.geojason.geojson?raw', { 
-  eager: true,
-  import: 'default'
-})
+import { getGeoJsonFiles, getGeoJsonFile } from '../services/api'
 
-// Merge all modules
-const geoJsonModules = { ...geoJsonModules1, ...geoJsonModules2, ...geoJsonModules3 }
+// State to cache loaded files
+let cachedFiles = []
+let isLoading = false
+let loadPromise = null
 
-// Debug: Log what files were found
-console.log('[GeoJSON Loader] Found files:', Object.keys(geoJsonModules).length)
-if (Object.keys(geoJsonModules).length === 0) {
-  console.warn('[GeoJSON Loader] No GeoJSON files found! Check the path and file extensions.')
+// Load GeoJSON files from API (similar to how chart types are loaded)
+const loadFilesFromApi = async () => {
+  if (isLoading && loadPromise) {
+    return loadPromise
+  }
+
+  isLoading = true
+  loadPromise = (async () => {
+    try {
+      const files = await getGeoJsonFiles()
+      cachedFiles = files
+      console.log('[GeoJSON Loader] Successfully loaded', files.length, 'GeoJSON files from API')
+      return files
+    } catch (error) {
+      console.error('[GeoJSON Loader] Failed to load GeoJSON files from API:', error)
+      cachedFiles = []
+      throw error
+    } finally {
+      isLoading = false
+      loadPromise = null
+    }
+  })()
+
+  return loadPromise
 }
 
-// Extract filenames and create a list
-const fileEntries = Object.entries(geoJsonModules).map(([path, rawData]) => {
-  const filename = path.split('/').pop().replace('?raw', '')
-  // Extract a readable label from filename
-  let label = filename.replace(/\.geojson$/g, '').replace(/\.geojason$/g, '')
-  // Handle special cases
-  if (label === 'europe') label = 'Europa'
-  else if (label === 'germany-states') label = 'Deutschland (Bundesländer)'
-  else if (label === 'World') label = 'Welt'
-  
-  // Parse the raw string as JSON
-  let data
-  try {
-    data = JSON.parse(rawData)
-  } catch (e) {
-    console.error(`[GeoJSON Loader] Failed to parse GeoJSON from ${filename}:`, e)
-    return null
+// Initialize on module load
+let initialized = false
+const initialize = async () => {
+  if (!initialized) {
+    initialized = true
+    try {
+      await loadFilesFromApi()
+    } catch (error) {
+      // Silently fail on initialization, will retry on first access
+      console.warn('[GeoJSON Loader] Initial load failed, will retry on first access')
+    }
   }
-  
-  return {
-    filename,
-    label,
-    path,
-    data
-  }
-}).filter(Boolean) // Remove any null entries
+}
 
-console.log('[GeoJSON Loader] Successfully loaded', fileEntries.length, 'GeoJSON files')
+// Auto-initialize
+initialize()
 
-// Sort by label for better UX
-fileEntries.sort((a, b) => a.label.localeCompare(b.label, 'de'))
+// Export function to get files (always returns current cached files)
+export const getGeoJsonFilesList = () => cachedFiles
 
-export const GEOJSON_FILES = fileEntries.map(({ filename, label }) => ({
-  filename,
-  label
-}))
-
-// Load a GeoJSON file by filename
+// Load a GeoJSON file by filename from API
 export const loadGeoJsonFile = async (filename) => {
-  const entry = fileEntries.find(e => e.filename === filename)
-  if (entry) {
-    return entry.data
+  // Ensure files are loaded first
+  if (cachedFiles.length === 0) {
+    await loadFilesFromApi()
   }
-  throw new Error(`GeoJSON file not found: ${filename}`)
+  
+  // Check if file exists in cache
+  const file = cachedFiles.find(f => f.filename === filename)
+  if (!file) {
+    throw new Error(`GeoJSON file not found: ${filename}`)
+  }
+  
+  // Load the actual data from API
+  return await getGeoJsonFile(filename)
 }
 
+// Export function to refresh the file list
+export const refreshGeoJsonFiles = async () => {
+  return await loadFilesFromApi()
+}

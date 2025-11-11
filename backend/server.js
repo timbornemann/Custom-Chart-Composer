@@ -4,6 +4,7 @@ import bodyParser from 'body-parser';
 import { pathToFileURL } from 'url';
 import chartRoutes from './routes/chartRoutes.js';
 import { loadChartModules } from './services/moduleLoader.js';
+import { loadGeoJsonFiles } from './services/geoJsonLoader.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -45,6 +46,7 @@ export const startServer = async ({
 } = {}) => {
   const app = createApp();
   await loadChartModules();
+  await loadGeoJsonFiles();
 
   return new Promise((resolve, reject) => {
     const server = app.listen(port, host, () => {
@@ -54,6 +56,7 @@ export const startServer = async ({
       if (log) {
         console.log(`🚀 Server running on port ${resolvedPort}`);
         console.log('📊 Chart modules loaded');
+        console.log('🗺️  GeoJSON files loaded');
       }
 
       resolve({ app, server, port: resolvedPort });

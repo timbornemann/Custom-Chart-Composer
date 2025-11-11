@@ -105,4 +105,26 @@ export const exportChart = async (chartType, config, format = 'png', transparent
   }
 }
 
-export default { getChartTypes, renderChart, exportChart }
+export const getGeoJsonFiles = async () => {
+  try {
+    const response = await getApiClient().get('/geojsons')
+    return response.data.data
+  } catch (error) {
+    console.error('Error fetching GeoJSON files:', error)
+    throw error
+  }
+}
+
+export const getGeoJsonFile = async (filename) => {
+  try {
+    // Encode filename for URL (handles special characters and spaces)
+    const encodedFilename = encodeURIComponent(filename)
+    const response = await getApiClient().get(`/geojsons/${encodedFilename}`)
+    return response.data.data
+  } catch (error) {
+    console.error('Error fetching GeoJSON file:', error)
+    throw error
+  }
+}
+
+export default { getChartTypes, renderChart, exportChart, getGeoJsonFiles, getGeoJsonFile }

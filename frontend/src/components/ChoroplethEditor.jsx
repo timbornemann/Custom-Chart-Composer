@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import PropTypes from 'prop-types'
 import {
   FiPlus,
@@ -8,7 +8,7 @@ import {
   FiUpload,
   FiRefreshCw
 } from 'react-icons/fi'
-import { GEOJSON_FILES, loadGeoJsonFile } from '../utils/geoJsonLoader'
+import { loadGeoJsonFile, refreshGeoJsonFiles } from '../utils/geoJsonLoader'
 import {
   extractFeaturesFromGeoJson,
   createPlaceholderFeature,
@@ -42,10 +42,25 @@ export default function ChoroplethEditor({
   const [uploadError, setUploadError] = useState(null)
   const [selectedGeoJson, setSelectedGeoJson] = useState('')
   const [isLoadingGeoJson, setIsLoadingGeoJson] = useState(false)
+  const [geoJsonFiles, setGeoJsonFiles] = useState([])
+  const [isLoadingFiles, setIsLoadingFiles] = useState(true)
 
-  // Debug: Log available GeoJSON files
-  useMemo(() => {
-    console.log('[ChoroplethEditor] Available GeoJSON files:', GEOJSON_FILES.length, GEOJSON_FILES)
+  // Load GeoJSON files from API (similar to how chart types are loaded)
+  useEffect(() => {
+    const loadFiles = async () => {
+      try {
+        setIsLoadingFiles(true)
+        const files = await refreshGeoJsonFiles()
+        setGeoJsonFiles(files)
+        console.log('[ChoroplethEditor] Available GeoJSON files:', files.length, files)
+      } catch (error) {
+        console.error('[ChoroplethEditor] Failed to load GeoJSON files:', error)
+        setGeoJsonFiles([])
+      } finally {
+        setIsLoadingFiles(false)
+      }
+    }
+    loadFiles()
   }, [])
 
   const normalizedFeatureIds = useMemo(
@@ -324,7 +339,7 @@ export default function ChoroplethEditor({
           </div>
           {selectedGeoJson && (
             <span className="text-xs px-3 py-1 rounded bg-dark-accent1/20 text-dark-accent1 border border-dark-accent1/40">
-              Geladen: {GEOJSON_FILES.find(f => f.filename === selectedGeoJson)?.label || selectedGeoJson}
+              Geladen: {geoJsonFiles.find(f => f.filename === selectedGeoJson)?.label || selectedGeoJson}
             </span>
           )}
         </div>
@@ -332,11 +347,13 @@ export default function ChoroplethEditor({
           <select
             value={selectedGeoJson}
             onChange={(e) => handleLoadGeoJson(e.target.value)}
-            disabled={isLoadingGeoJson}
+            disabled={isLoadingGeoJson || isLoadingFiles}
             className="flex-1 px-3 py-2 rounded-lg border border-gray-700 bg-dark-bg text-dark-textLight text-sm focus:border-dark-accent1 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <option value="">GeoJSON-Datei auswählen...</option>
-            {GEOJSON_FILES.map((file) => (
+            <option value="">
+              {isLoadingFiles ? 'Lade GeoJSON-Dateien...' : 'GeoJSON-Datei auswählen...'}
+            </option>
+            {geoJsonFiles.map((file) => (
               <option key={file.filename} value={file.filename}>
                 {file.label}
               </option>

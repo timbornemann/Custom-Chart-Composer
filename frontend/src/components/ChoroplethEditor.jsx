@@ -8,7 +8,7 @@ import {
   FiUpload,
   FiRefreshCw
 } from 'react-icons/fi'
-import { GEO_PRESETS } from '../utils/geoPresets'
+import { GEOJSON_FILES, loadGeoJsonFile } from '../utils/geoJsonLoader'
 import {
   extractFeaturesFromGeoJson,
   createPlaceholderFeature,
@@ -40,23 +40,42 @@ export default function ChoroplethEditor({
 }) {
   const [showHelper, setShowHelper] = useState(false)
   const [uploadError, setUploadError] = useState(null)
+  const [selectedGeoJson, setSelectedGeoJson] = useState('')
+  const [isLoadingGeoJson, setIsLoadingGeoJson] = useState(false)
+
+  // Debug: Log available GeoJSON files
+  useMemo(() => {
+    console.log('[ChoroplethEditor] Available GeoJSON files:', GEOJSON_FILES.length, GEOJSON_FILES)
+  }, [])
 
   const normalizedFeatureIds = useMemo(
     () => features.map((feature, index) => normalizeRegionKey(feature?.id ?? feature?.properties?.id ?? `feature-${index}`)),
     [features]
   )
 
-  const activePreset = useMemo(() => {
-    if (!features.length) return null
-    const currentIds = [...normalizedFeatureIds].sort().join('|')
-    return GEO_PRESETS.find((preset) => {
-      const presetIds = preset.features
-        .map((feature, index) => normalizeRegionKey(feature?.id ?? feature?.properties?.id ?? `preset-${index}`))
-        .sort()
-        .join('|')
-      return presetIds === currentIds
-    }) || null
-  }, [features, normalizedFeatureIds])
+  const handleLoadGeoJson = async (filename) => {
+    if (!filename) return
+    setIsLoadingGeoJson(true)
+    setUploadError(null)
+    try {
+      const geoJsonData = await loadGeoJsonFile(filename)
+      const extracted = extractFeaturesFromGeoJson(geoJsonData)
+      if (!extracted.length) {
+        setUploadError('Die Datei enthält keine GeoJSON-Features.')
+        setIsLoadingGeoJson(false)
+        return
+      }
+      const sanitized = extracted.map((feature, index) => sanitizeFeature(feature, feature?.id ?? `feature-${index}`, feature?.properties?.name))
+      onFeaturesChange(sanitized)
+      syncRegionsWithFeatures(sanitized)
+      setSelectedGeoJson(filename)
+    } catch (error) {
+      console.error(error)
+      setUploadError(`GeoJSON konnte nicht geladen werden: ${error.message}`)
+    } finally {
+      setIsLoadingGeoJson(false)
+    }
+  }
 
   const featureStats = useMemo(() => {
     if (!features.length) {
@@ -157,13 +176,6 @@ export default function ChoroplethEditor({
     updateFeatureId(previousKey, normalizeRegionKey(nextRegions[index].id ?? previousKey), value)
   }
 
-  const handleLoadPreset = (preset) => {
-    if (!preset) return
-    setUploadError(null)
-    const sanitized = preset.features.map((feature, index) => sanitizeFeature(feature, feature?.id ?? preset.regions[index], feature?.properties?.name))
-    onFeaturesChange(sanitized)
-    syncRegionsWithFeatures(sanitized)
-  }
 
   const handleAddFeature = () => {
     const index = features.length
@@ -307,31 +319,32 @@ export default function ChoroplethEditor({
       <div className="bg-dark-sidebar border border-gray-700 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h3 className="text-sm font-semibold text-dark-textLight">GeoJSON-Vorlagen</h3>
-            <p className="text-xs text-dark-textGray">Wähle eine Vorlage, um direkt passende Features und Regionen zu laden.</p>
+            <h3 className="text-sm font-semibold text-dark-textLight">GeoJSON-Daten</h3>
+            <p className="text-xs text-dark-textGray">Wähle eine GeoJSON-Datei aus dem Ordner, um Features und Regionen zu laden.</p>
           </div>
-          {activePreset && (
+          {selectedGeoJson && (
             <span className="text-xs px-3 py-1 rounded bg-dark-accent1/20 text-dark-accent1 border border-dark-accent1/40">
-              Vorlage aktiv: {activePreset.label}
+              Geladen: {GEOJSON_FILES.find(f => f.filename === selectedGeoJson)?.label || selectedGeoJson}
             </span>
           )}
         </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          {GEO_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              onClick={() => handleLoadPreset(preset)}
-              className={`text-left rounded-lg border px-3 py-3 transition-colors ${
-                activePreset?.id === preset.id
-                  ? 'border-dark-accent1 bg-dark-accent1/20 text-dark-accent1'
-                  : 'border-gray-700 hover:border-dark-accent1 text-dark-textLight'
-              }`}
-            >
-              <div className="font-medium text-sm mb-1">{preset.label}</div>
-              <p className="text-xs text-dark-textGray leading-snug">{preset.description}</p>
-            </button>
-          ))}
+        <div className="flex gap-2 items-center">
+          <select
+            value={selectedGeoJson}
+            onChange={(e) => handleLoadGeoJson(e.target.value)}
+            disabled={isLoadingGeoJson}
+            className="flex-1 px-3 py-2 rounded-lg border border-gray-700 bg-dark-bg text-dark-textLight text-sm focus:border-dark-accent1 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <option value="">GeoJSON-Datei auswählen...</option>
+            {GEOJSON_FILES.map((file) => (
+              <option key={file.filename} value={file.filename}>
+                {file.label}
+              </option>
+            ))}
+          </select>
+          {isLoadingGeoJson && (
+            <span className="text-xs text-dark-textGray">Lädt...</span>
+          )}
         </div>
       </div>
 
@@ -468,7 +481,7 @@ export default function ChoroplethEditor({
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="grid grid-cols-12 gap-2 text-[11px] text-dark-textGray px-2">
+            <div className="grid grid-cols-12 gap-2 text-[11px] text-dark-textLight px-2 font-medium">
               <div className="col-span-2">ID</div>
               <div className="col-span-5">Label</div>
               <div className="col-span-4">Wert</div>
@@ -481,7 +494,7 @@ export default function ChoroplethEditor({
                     type="text"
                     value={region.id}
                     onChange={(event) => handleRegionIdChange(index, event.target.value)}
-                    className="w-full px-2 py-1 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm font-mono"
+                    className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                   />
                 </div>
                 <div className="col-span-5">
@@ -489,7 +502,7 @@ export default function ChoroplethEditor({
                     type="text"
                     value={region.label}
                     onChange={(event) => handleRegionLabelChange(index, event.target.value)}
-                    className="w-full px-3 py-1 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                    className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                   />
                 </div>
                 <div className="col-span-4">
@@ -497,7 +510,7 @@ export default function ChoroplethEditor({
                     type="number"
                     value={region.value}
                     onChange={(event) => handleRegionValueChange(index, event.target.value)}
-                    className="w-full px-3 py-1 bg-dark-sidebar text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
+                    className="w-full px-2 py-1 bg-dark-secondary text-dark-textLight rounded border border-gray-700 focus:border-dark-accent1 focus:outline-none text-sm"
                   />
                 </div>
                 <div className="col-span-1 flex justify-end">

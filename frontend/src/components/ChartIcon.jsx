@@ -310,16 +310,22 @@ function prepareIconData(chartType, config) {
         datasets: [
           {
             label: series?.name || 'Serie',
-            data: values.map(entry => ({
-              x: entry?.label || '',
-              o: entry?.open ?? entry?.o ?? 0,
-              h: entry?.high ?? entry?.h ?? 0,
-              l: entry?.low ?? entry?.l ?? 0,
-              c: entry?.close ?? entry?.c ?? 0
+            data: values.map((entry, index) => ({
+              x: index,
+              o: Number(entry?.open ?? entry?.o ?? 0) || 0,
+              open: Number(entry?.open ?? entry?.o ?? 0) || 0,
+              h: Number(entry?.high ?? entry?.h ?? entry?.open ?? entry?.o ?? 0) || 0,
+              high: Number(entry?.high ?? entry?.h ?? entry?.open ?? entry?.o ?? 0) || 0,
+              l: Number(entry?.low ?? entry?.l ?? entry?.open ?? entry?.o ?? 0) || 0,
+              low: Number(entry?.low ?? entry?.l ?? entry?.open ?? entry?.o ?? 0) || 0,
+              c: Number(entry?.close ?? entry?.c ?? entry?.open ?? entry?.o ?? 0) || 0,
+              close: Number(entry?.close ?? entry?.c ?? entry?.open ?? entry?.o ?? 0) || 0,
+              y: Number(entry?.close ?? entry?.c ?? entry?.open ?? entry?.o ?? 0) || 0
             })),
             type: chartType.id,
             borderColor: series?.borderColor || series?.color || colorPalette[0],
-            backgroundColor: series?.color || series?.borderColor || colorPalette[0]
+            backgroundColor: series?.color || series?.borderColor || colorPalette[0],
+            parsing: false
           }
         ]
       }
@@ -644,15 +650,15 @@ function prepareIconOptions(chartType, config = null) {
   // Scatter & Bubble & Coordinate
   if (['scatter', 'bubble', 'matrix'].includes(chartType.id)) {
     baseOptions.scales = {
-      y: { 
-        display: false, 
-        min: 0, 
+      y: {
+        display: false,
+        min: 0,
         max: 100,
         grid: { display: false }
       },
-      x: { 
-        display: false, 
-        min: 0, 
+      x: {
+        display: false,
+        min: 0,
         max: 100,
         grid: { display: false }
       }
@@ -660,6 +666,22 @@ function prepareIconOptions(chartType, config = null) {
     // Add padding around the chart area for bubbles
     baseOptions.layout = {
       padding: 10
+    }
+  }
+
+  if (['candlestick', 'ohlc'].includes(chartType.id)) {
+    baseOptions.scales = {
+      x: {
+        type: 'category',
+        display: false,
+        grid: { display: false }
+      },
+      y: {
+        type: 'linear',
+        display: false,
+        beginAtZero: false,
+        grid: { display: false }
+      }
     }
   }
 

@@ -2748,16 +2748,69 @@ function JsonFieldEditor({ label, value, onChange }) {
   )
 }
 
+const EXPORT_SETTINGS_KEY = 'ccc:exportSettings'
+const DEFAULT_EXPORT_SETTINGS = {
+  format: 'png',
+  transparent: false,
+  exportWidth: 1920,
+  exportHeight: 1080
+}
+
 function ExportTab({ chartType, config, chartRef, onConfigChange }) {
-  const [format, setFormat] = useState('png')
-  const [transparent, setTransparent] = useState(false)
-  const [exportWidth, setExportWidth] = useState(1920)
-  const [exportHeight, setExportHeight] = useState(1080)
+  // Load saved export settings from localStorage
+  const loadExportSettings = () => {
+    try {
+      const saved = localStorage.getItem(EXPORT_SETTINGS_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return {
+          format: parsed.format || DEFAULT_EXPORT_SETTINGS.format,
+          transparent: parsed.transparent ?? DEFAULT_EXPORT_SETTINGS.transparent,
+          exportWidth: parsed.exportWidth || DEFAULT_EXPORT_SETTINGS.exportWidth,
+          exportHeight: parsed.exportHeight || DEFAULT_EXPORT_SETTINGS.exportHeight
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load export settings:', e)
+    }
+    return DEFAULT_EXPORT_SETTINGS
+  }
+
+  const savedSettings = loadExportSettings()
+  const [format, setFormat] = useState(savedSettings.format)
+  const [transparent, setTransparent] = useState(savedSettings.transparent)
+  const [exportWidth, setExportWidth] = useState(savedSettings.exportWidth)
+  const [exportHeight, setExportHeight] = useState(savedSettings.exportHeight)
   const [scalePercent, setScalePercent] = useState(100)
-  const scaleBaseRef = useRef({ width: 1920, height: 1080 })
+  const scaleBaseRef = useRef({ width: savedSettings.exportWidth, height: savedSettings.exportHeight })
   const [importError, setImportError] = useState(null)
   const [showPreview, setShowPreview] = useState(false)
   const { handleExport, exporting, error } = useExport()
+
+  // Save export settings to localStorage whenever they change
+  useEffect(() => {
+    const settings = {
+      format,
+      transparent,
+      exportWidth,
+      exportHeight
+    }
+    try {
+      localStorage.setItem(EXPORT_SETTINGS_KEY, JSON.stringify(settings))
+    } catch (e) {
+      console.warn('Failed to save export settings:', e)
+    }
+  }, [format, transparent, exportWidth, exportHeight])
+
+  // Reset to default values
+  const resetToDefaults = () => {
+    setFormat(DEFAULT_EXPORT_SETTINGS.format)
+    setTransparent(DEFAULT_EXPORT_SETTINGS.transparent)
+    setExportWidth(DEFAULT_EXPORT_SETTINGS.exportWidth)
+    setExportHeight(DEFAULT_EXPORT_SETTINGS.exportHeight)
+    scaleBaseRef.current = { width: DEFAULT_EXPORT_SETTINGS.exportWidth, height: DEFAULT_EXPORT_SETTINGS.exportHeight }
+    setScalePercent(100)
+  }
 
   const formats = [
     { value: 'png', label: 'PNG', icon: '🖼️' },
@@ -2992,12 +3045,24 @@ function ExportTab({ chartType, config, chartRef, onConfigChange }) {
       </div>
 
       <div className="border-t border-gray-700 pt-6">
-        <h3 className="text-lg font-semibold text-dark-textLight mb-4 flex items-center">
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          Diagramm als Bild
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-dark-textLight flex items-center">
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Diagramm als Bild
+          </h3>
+          <button
+            onClick={resetToDefaults}
+            className="px-3 py-1.5 text-xs font-medium text-dark-textGray hover:text-dark-textLight bg-dark-bg hover:bg-gray-800 rounded-lg transition-colors flex items-center space-x-1"
+            title="Export-Einstellungen auf Standardwerte zurücksetzen"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Standard</span>
+          </button>
+        </div>
       </div>
 
       {!isChartReady && (

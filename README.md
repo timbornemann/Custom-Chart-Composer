@@ -199,31 +199,31 @@ Die Custom Chart Composer bietet eine beeindruckende Vielfalt von **25 Diagrammt
 
 | Diagrammtyp | Beschreibung | Screenshot |
 |-------------|--------------|------------|
-| **Balkendiagramm** | Klassische Wertevergleiche mit horizontaler/vertikaler Orientierung | ![Bar Chart](screenshots/Diagrams/chart-bar-2025-11-11.png) |
-| **Gestapeltes Balkendiagramm** | Mehrere Datensätze übereinander mit Prozentanzeige-Option | ![Stacked Bar](screenshots/Diagrams/chart-stackedBar-2025-11-11.png) |
-| **Gruppiertes Balkendiagramm** | Mehrere Datensätze nebeneinander für direkten Vergleich | ![Grouped Bar](screenshots/Diagrams/chart-groupedBar-2025-11-11.png) |
-| **Radiales Balkendiagramm** | Kreisförmige Anordnung von Balken | ![Radial Bar](screenshots/Diagrams/chart-radialBar-2025-11-11.png) |
-| **Liniendiagramm** | Trends und Zeitreihen mit horizontaler/vertikaler Orientierung | ![Line Chart](screenshots/Diagrams/chart-line-2025-11-11.png) |
-| **Flächendiagramm** | Gefüllte Linie für Volumen-Darstellung | ![Area Chart](screenshots/Diagrams/chart-area-2025-11-11.png) |
-| **Multi-Liniendiagramm** | Mehrere Linien zum Vergleich verschiedener Datensätze | ![Multi-Line](screenshots/Diagrams/chart-multiLine-2025-11-11.png) |
-| **Treppenstufen-Liniendiagramm** | Gestufte Verläufe für diskrete Änderungen | ![Stepped Line](screenshots/Diagrams/chart-steppedLine-2025-11-11.png) |
-| **Gestricheltes Liniendiagramm** | Gestrichelte Linien für alternative Darstellung | ![Dashed Line](screenshots/Diagrams/chart-dashedLine-2025-11-11.png) |
-| **Stream-Graph** | Gestapeltes Flächendiagramm mit zentrierter Basislinie | ![Stream Graph](screenshots/Diagrams/chart-streamGraph-2025-11-11.png) |
-| **Kreisdiagramm** | Anteile und Verhältnisse mit Donut/Halbkreis-Optionen | ![Pie Chart](screenshots/Diagrams/chart-pie-2025-11-11.png) |
-| **Polar-Flächendiagramm** | Kreisförmige Flächendarstellung kategorialer Werte | ![Polar Area](screenshots/Diagrams/chart-polarArea-2025-11-11.png) |
-| **Verschachteltes Donut** | Mehrere Donuts übereinander für hierarchische Daten | ![Nested Donut](screenshots/Diagrams/chart-nestedDonut-2025-11-11.png) |
-| **Streudiagramm** | Korrelationen zwischen zwei Variablen, unterstützt geografische Koordinaten | ![Scatter](screenshots/Diagrams/chart-scatter-2025-11-11.png) |
-| **Blasendiagramm** | 3-dimensionale Daten mit Radius, Optionen für feste Größe | ![Bubble](screenshots/Diagrams/chart-bubble-2025-11-11.png) |
-| **Heatmap-Diagramm** | Matrix mit Farbintensitäten, Standard- und Kalender-Heatmap | ![Heatmap](screenshots/Diagrams/chart-heatmap-2025-11-11.png) |
-| **Radar-Chart** | Mehrdimensionale Daten auf polaren Achsen | ![Radar](screenshots/Diagrams/chart-radar-2025-11-11.png) |
-| **Kombiniertes Diagramm** | Verschiedene Charttypen kombiniert in einem Diagramm | ![Mixed](screenshots/Diagrams/chart-mixed-2025-11-11.png) |
-| **Candlestick-Diagramm** | Finanzdaten-Visualisierung mit Open/High/Low/Close | ![Candlestick](screenshots/Diagrams/chart-candlestick-2025-11-11.png) |
-| **OHLC-Diagramm** | Open-High-Low-Close Darstellung für Finanzdaten | ![OHLC](screenshots/Diagrams/chart-ohlc-2025-11-11.png) |
-| **Box-Plot** | Statistische Verteilungsanalyse mit Quartilen | ![Box Plot](screenshots/Diagrams/chart-boxPlot-2025-11-11.png) |
-| **Violin-Plot** | Kombination aus Box-Plot und Dichteverteilung | ![Violin Plot](screenshots/Diagrams/chart-violinPlot-2025-11-11.png) |
-| **Funnel-Diagramm** | Trichterdarstellung für Prozess-Visualisierung | ![Funnel](screenshots/Diagrams/chart-funnel-2025-11-11.png) |
-| **Choropleth-Karte** | Geografische Datenvisualisierung auf Karten | ![Choropleth](screenshots/Diagrams/chart-choropleth-2025-11-11.png) |
-| **Venn-Diagramm** | Mengendiagramm zur Darstellung von Überschneidungen | ![Venn](screenshots/Diagrams/chart-venn-2025-11-11.png) |
+| **Balkendiagramm** | Klassische Wertevergleiche mit horizontaler/vertikaler Orientierung | <img src="screenshots/Diagrams/chart-bar-2025-11-11.png" width="150" alt="Bar Chart"> |
+| **Gestapeltes Balkendiagramm** | Mehrere Datensätze übereinander mit Prozentanzeige-Option | <img src="screenshots/Diagrams/chart-stackedBar-2025-11-11.png" width="150" alt="Stacked Bar"> |
+| **Gruppiertes Balkendiagramm** | Mehrere Datensätze nebeneinander für direkten Vergleich | <img src="screenshots/Diagrams/chart-groupedBar-2025-11-11.png" width="150" alt="Grouped Bar"> |
+| **Radiales Balkendiagramm** | Kreisförmige Anordnung von Balken | <img src="screenshots/Diagrams/chart-radialBar-2025-11-11.png" width="150" alt="Radial Bar"> |
+| **Liniendiagramm** | Trends und Zeitreihen mit horizontaler/vertikaler Orientierung | <img src="screenshots/Diagrams/chart-line-2025-11-11.png" width="150" alt="Line Chart"> |
+| **Flächendiagramm** | Gefüllte Linie für Volumen-Darstellung | <img src="screenshots/Diagrams/chart-area-2025-11-11.png" width="150" alt="Area Chart"> |
+| **Multi-Liniendiagramm** | Mehrere Linien zum Vergleich verschiedener Datensätze | <img src="screenshots/Diagrams/chart-multiLine-2025-11-11.png" width="150" alt="Multi-Line"> |
+| **Treppenstufen-Liniendiagramm** | Gestufte Verläufe für diskrete Änderungen | <img src="screenshots/Diagrams/chart-steppedLine-2025-11-11.png" width="150" alt="Stepped Line"> |
+| **Gestricheltes Liniendiagramm** | Gestrichelte Linien für alternative Darstellung | <img src="screenshots/Diagrams/chart-dashedLine-2025-11-11.png" width="150" alt="Dashed Line"> |
+| **Stream-Graph** | Gestapeltes Flächendiagramm mit zentrierter Basislinie | <img src="screenshots/Diagrams/chart-streamGraph-2025-11-11.png" width="150" alt="Stream Graph"> |
+| **Kreisdiagramm** | Anteile und Verhältnisse mit Donut/Halbkreis-Optionen | <img src="screenshots/Diagrams/chart-pie-2025-11-11.png" width="150" alt="Pie Chart"> |
+| **Polar-Flächendiagramm** | Kreisförmige Flächendarstellung kategorialer Werte | <img src="screenshots/Diagrams/chart-polarArea-2025-11-11.png" width="150" alt="Polar Area"> |
+| **Verschachteltes Donut** | Mehrere Donuts übereinander für hierarchische Daten | <img src="screenshots/Diagrams/chart-nestedDonut-2025-11-11.png" width="150" alt="Nested Donut"> |
+| **Streudiagramm** | Korrelationen zwischen zwei Variablen, unterstützt geografische Koordinaten | <img src="screenshots/Diagrams/chart-scatter-2025-11-11.png" width="150" alt="Scatter"> |
+| **Blasendiagramm** | 3-dimensionale Daten mit Radius, Optionen für feste Größe | <img src="screenshots/Diagrams/chart-bubble-2025-11-11.png" width="150" alt="Bubble"> |
+| **Heatmap-Diagramm** | Matrix mit Farbintensitäten, Standard- und Kalender-Heatmap | <img src="screenshots/Diagrams/chart-heatmap-2025-11-11.png" width="150" alt="Heatmap"> |
+| **Radar-Chart** | Mehrdimensionale Daten auf polaren Achsen | <img src="screenshots/Diagrams/chart-radar-2025-11-11.png" width="150" alt="Radar"> |
+| **Kombiniertes Diagramm** | Verschiedene Charttypen kombiniert in einem Diagramm | <img src="screenshots/Diagrams/chart-mixed-2025-11-11.png" width="150" alt="Mixed"> |
+| **Candlestick-Diagramm** | Finanzdaten-Visualisierung mit Open/High/Low/Close | <img src="screenshots/Diagrams/chart-candlestick-2025-11-11.png" width="150" alt="Candlestick"> |
+| **OHLC-Diagramm** | Open-High-Low-Close Darstellung für Finanzdaten | <img src="screenshots/Diagrams/chart-ohlc-2025-11-11.png" width="150" alt="OHLC"> |
+| **Box-Plot** | Statistische Verteilungsanalyse mit Quartilen | <img src="screenshots/Diagrams/chart-boxPlot-2025-11-11.png" width="150" alt="Box Plot"> |
+| **Violin-Plot** | Kombination aus Box-Plot und Dichteverteilung | <img src="screenshots/Diagrams/chart-violinPlot-2025-11-11.png" width="150" alt="Violin Plot"> |
+| **Funnel-Diagramm** | Trichterdarstellung für Prozess-Visualisierung | <img src="screenshots/Diagrams/chart-funnel-2025-11-11.png" width="150" alt="Funnel"> |
+| **Choropleth-Karte** | Geografische Datenvisualisierung auf Karten | <img src="screenshots/Diagrams/chart-choropleth-2025-11-11.png" width="150" alt="Choropleth"> |
+| **Venn-Diagramm** | Mengendiagramm zur Darstellung von Überschneidungen | <img src="screenshots/Diagrams/chart-venn-2025-11-11.png" width="150" alt="Venn"> |
 
 ### Beispiel-Diagramme aus der Anwendung
 

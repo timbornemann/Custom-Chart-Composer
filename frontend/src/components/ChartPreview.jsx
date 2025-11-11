@@ -1260,7 +1260,10 @@ function prepareChartData(chartType, config) {
               backgroundColor: function(context) {
                 const value = context.raw?.v || 0;
                 const alpha = value / 100;
-                const color = ds.backgroundColor || '#3B82F6';
+                // Use dataset backgroundColor, or first color from config.colors, or default
+                const color = ds.backgroundColor || 
+                             (Array.isArray(config.colors) && config.colors.length > 0 ? config.colors[0] : null) ||
+                             '#3B82F6';
                 // Extract RGB from hex color
                 const hex = color.replace('#', '');
                 const r = parseInt(hex.substr(0, 2), 16);

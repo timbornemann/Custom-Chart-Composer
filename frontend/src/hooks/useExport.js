@@ -243,29 +243,76 @@ export const useExport = () => {
         })
       }
 
-      // Scale ALL dataset properties proportionally to maintain visual consistency
-      // This ensures the export looks EXACTLY like the preview, just in higher resolution
-      chartConfig.data.datasets = chartConfig.data.datasets.map(ds => ({
-        ...ds,
-        // Scale all visual properties
-        borderWidth: scaleValue(ds.borderWidth),
-        pointRadius: scaleValue(ds.pointRadius),
-        pointHoverRadius: scaleValue(ds.pointHoverRadius),
-        pointBorderWidth: scaleValue(ds.pointBorderWidth),
-        borderRadius: scaleValue(ds.borderRadius),
-        barThickness: scaleValue(ds.barThickness),
-        minBarLength: scaleValue(ds.minBarLength),
-        hoverOffset: scaleValue(ds.hoverOffset),
-        // Scale border dash pattern if it exists
-        borderDash: ds.borderDash ? ds.borderDash.map(v => scaleValue(v)) : undefined,
-        // Keep non-numeric properties as-is
-        pointStyle: ds.pointStyle,
-        tension: ds.tension,
-        fill: ds.fill,
-        stepped: ds.stepped,
-        backgroundColor: ds.backgroundColor,
-        borderColor: ds.borderColor
-      }))
+      // Special handling for heatmap charts - recreate backgroundColor functions
+      if (chartType.id === 'heatmap' && chartConfig.data.datasets && Array.isArray(chartConfig.data.datasets)) {
+        const isCalendarType = config.options?.heatmapType === 'calendar'
+        
+        chartConfig.data.datasets = chartConfig.data.datasets.map(ds => {
+          if (isCalendarType) {
+            // Calendar heatmap uses color scale
+            return {
+              ...ds,
+              label: ds.label || 'Aktivität',
+              data: ds.data || [],
+              backgroundColor: function(context) {
+                const value = context.raw?.v || 0
+                const colorScale = config.colors || ['#0F172A', '#1E3A5F', '#2563EB', '#3B82F6', '#60A5FA']
+                const index = Math.min(Math.floor((value / 5) * (colorScale.length - 1)), colorScale.length - 1)
+                return colorScale[index]
+              },
+              borderWidth: scaleValue(2),
+              borderColor: '#0F172A',
+              pointRadius: scaleValue(config.options?.cellSize || 12),
+              pointStyle: 'rect'
+            }
+          } else {
+            // Standard heatmap uses alpha-based coloring
+            return {
+              ...ds,
+              pointRadius: scaleValue(config.options?.cellSize || 20),
+              pointStyle: 'rect',
+              backgroundColor: function(context) {
+                const value = context.raw?.v || 0;
+                const alpha = value / 100;
+                // Use dataset backgroundColor, or first color from config.colors, or default
+                const color = ds.backgroundColor || 
+                             (Array.isArray(config.colors) && config.colors.length > 0 ? config.colors[0] : null) ||
+                             '#3B82F6';
+                // Extract RGB from hex color
+                const hex = color.replace('#', '');
+                const r = parseInt(hex.substr(0, 2), 16);
+                const g = parseInt(hex.substr(2, 2), 16);
+                const b = parseInt(hex.substr(4, 2), 16);
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+              }
+            }
+          }
+        })
+      } else {
+        // Scale ALL dataset properties proportionally to maintain visual consistency
+        // This ensures the export looks EXACTLY like the preview, just in higher resolution
+        chartConfig.data.datasets = chartConfig.data.datasets.map(ds => ({
+          ...ds,
+          // Scale all visual properties
+          borderWidth: scaleValue(ds.borderWidth),
+          pointRadius: scaleValue(ds.pointRadius),
+          pointHoverRadius: scaleValue(ds.pointHoverRadius),
+          pointBorderWidth: scaleValue(ds.pointBorderWidth),
+          borderRadius: scaleValue(ds.borderRadius),
+          barThickness: scaleValue(ds.barThickness),
+          minBarLength: scaleValue(ds.minBarLength),
+          hoverOffset: scaleValue(ds.hoverOffset),
+          // Scale border dash pattern if it exists
+          borderDash: ds.borderDash ? ds.borderDash.map(v => scaleValue(v)) : undefined,
+          // Keep non-numeric properties as-is
+          pointStyle: ds.pointStyle,
+          tension: ds.tension,
+          fill: ds.fill,
+          stepped: ds.stepped,
+          backgroundColor: ds.backgroundColor,
+          borderColor: ds.borderColor
+        }))
+      }
       
       // Apply scaled barThickness at chart level if it exists in options
       if (chartConfig.options.barThickness) {

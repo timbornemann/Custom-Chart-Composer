@@ -37,6 +37,10 @@ export default {
         }
       ]
     },
+    colors: {
+      type: "array",
+      default: ["#0F172A", "#1E3A5F", "#2563EB", "#3B82F6", "#60A5FA"]
+    },
     backgroundColor: {
       type: "string",
       default: "#0F172A"

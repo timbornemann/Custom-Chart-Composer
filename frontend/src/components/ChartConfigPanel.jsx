@@ -822,6 +822,8 @@ function StylingTab({ chartType, config, onConfigChange }) {
   const hasColors = !!schema.colors
   const hasBackground = !!schema.backgroundColor
   const isChoropleth = chartType?.id === 'choropleth'
+  const isHeatmap = chartType?.id === 'heatmap'
+  const isCalendarHeatmap = isHeatmap && config.options?.heatmapType === 'calendar'
 
   const backgroundPresets = [
     { name: 'Dunkel', value: '#0F172A' },
@@ -876,7 +878,7 @@ function StylingTab({ chartType, config, onConfigChange }) {
     })
   }
 
-  if (!hasColors && !hasBackground && !isChoropleth) {
+  if (!hasColors && !hasBackground && !isChoropleth && !isHeatmap) {
     return (
       <div className="text-sm text-dark-textGray">
         Für diesen Diagrammtyp sind keine Styling-Optionen definiert.
@@ -966,7 +968,61 @@ function StylingTab({ chartType, config, onConfigChange }) {
         </div>
       )}
 
-      {hasColors && (
+      {isHeatmap && (
+        <div className="bg-dark-sidebar border border-gray-700 rounded-lg p-4 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-dark-textLight mb-1">Heatmap-Farben</h3>
+            <p className="text-xs text-dark-textGray">
+              {isCalendarHeatmap 
+                ? 'Passe die Farbpalette für die Kalender-Heatmap an. Die Farben werden basierend auf den Werten zugeordnet.'
+                : 'Passe die Basis-Farbe für die Standard-Heatmap an. Die Intensität wird basierend auf den Werten angepasst.'}
+            </p>
+          </div>
+          
+          {isCalendarHeatmap ? (
+            <ColorListEditor
+              label="Farbpalette"
+              values={Array.isArray(config.colors) ? config.colors : ['#0F172A', '#1E3A5F', '#2563EB', '#3B82F6', '#60A5FA']}
+              onChange={(values) => onConfigChange({ colors: values })}
+              maxColors={9}
+            />
+          ) : (
+            <div>
+              <label className="block text-xs font-medium text-dark-textLight mb-2">Basis-Farbe</label>
+              <EnhancedColorPicker
+                value={Array.isArray(config.colors) && config.colors.length > 0 
+                  ? config.colors[0] 
+                  : (config.datasets?.[0]?.backgroundColor || '#3B82F6')}
+                onChange={(newColor) => {
+                  // Update config.colors array with the new color as first element
+                  const currentColors = Array.isArray(config.colors) ? config.colors : []
+                  const updatedColors = [newColor, ...currentColors.slice(1)]
+                  if (updatedColors.length === 0) {
+                    updatedColors.push(newColor)
+                  }
+                  
+                  // Also update the first dataset's backgroundColor
+                  const updatedDatasets = config.datasets?.map((ds, idx) => 
+                    idx === 0 ? { ...ds, backgroundColor: newColor } : ds
+                  ) || []
+                  
+                  onConfigChange({ 
+                    colors: updatedColors,
+                    datasets: updatedDatasets
+                  })
+                }}
+                label="Basis-Farbe"
+                size="md"
+              />
+              <p className="text-xs text-dark-textGray mt-2">
+                Die Intensität der Farbe wird automatisch basierend auf den Werten (v) angepasst.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasColors && !isHeatmap && (
         <div className="space-y-4">
           {/* Color Palette Selector */}
           <ColorPaletteSelector

@@ -362,7 +362,7 @@ function ChartWrapper({ chartType, data, options, chartRef, onDataPointClick }) 
         chartRef.current = chartInstance
       }
     }
-    
+
     // Trigger animation by starting with empty data and then setting real data
     if (chartInstance && !animationTriggered.current && options?.animation && options.animation !== false) {
       animationTriggered.current = true
@@ -735,17 +735,28 @@ function prepareChartData(chartType, config) {
           data: values.map((entry, valueIndex) => {
             const fallback = values[valueIndex - 1] || values[0] || {}
             const label = entry?.label || allLabels[valueIndex] || `${valueIndex + 1}`
+            const open = toNumeric(entry?.open ?? entry?.o ?? fallback?.open ?? fallback?.o, 0)
+            const high = toNumeric(entry?.high ?? entry?.h ?? fallback?.high ?? fallback?.h, 0)
+            const low = toNumeric(entry?.low ?? entry?.l ?? fallback?.low ?? fallback?.l, 0)
+            const close = toNumeric(entry?.close ?? entry?.c ?? fallback?.close ?? fallback?.c, 0)
+
             return {
-              x: label,
-              o: toNumeric(entry?.open ?? entry?.o ?? fallback?.open ?? fallback?.o, 0),
-              h: toNumeric(entry?.high ?? entry?.h ?? fallback?.high ?? fallback?.h, 0),
-              l: toNumeric(entry?.low ?? entry?.l ?? fallback?.low ?? fallback?.l, 0),
-              c: toNumeric(entry?.close ?? entry?.c ?? fallback?.close ?? fallback?.c, 0)
+              x: valueIndex,
+              o: open,
+              open,
+              h: high,
+              high,
+              l: low,
+              low,
+              c: close,
+              close,
+              y: close
             }
           }),
           type: datasetType,
           borderColor: serie.borderColor || baseColor,
           backgroundColor: baseColor,
+          parsing: false,
           risingColor: config.options?.risingColor,
           fallingColor: config.options?.fallingColor,
           upColor: config.options?.upColor,

@@ -1,8 +1,5 @@
 # Custom Chart Composer
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-
 Ein modernes, webbasiertes Tool zur einfachen Erstellung ästhetisch ansprechender Diagramme. Mit einer intuitiven Benutzeroberfläche können Sie verschiedene Diagrammtypen auswählen, Daten und Farben anpassen und das fertige Ergebnis in verschiedenen Formaten exportieren.
 
 ![Custom Chart Composer - Hauptansicht](screenshots/Program/Startseite-Nach-Programm-oeffen.png)
@@ -108,11 +105,10 @@ docker run -d --name custom-chart-composer -p 3003:3003 -v %cd%\modules:/app/bac
 
 Wählen Sie in der Sidebar den gewünschten Diagrammtyp. Die Anwendung bietet **25 verschiedene Diagrammtypen** in folgenden Kategorien:
 
-**Balkendiagramme (4 Typen):**
+**Balkendiagramme (3 Typen):**
 - **Balkendiagramm**: Klassische Wertevergleiche (mit Orientierungsoption: horizontal/vertikal)
 - **Gestapeltes Balkendiagramm**: Mehrere Datensätze übereinander (mit Orientierung und Prozentanzeige)
 - **Gruppiertes Balkendiagramm**: Mehrere Datensätze nebeneinander
-- **Radiales Balkendiagramm**: Kreisförmige Anordnung
 
 **Liniendiagramme (6 Typen):**
 - **Liniendiagramm**: Trends und Zeitreihen (mit Orientierungsoption: horizontal/vertikal)
@@ -122,30 +118,27 @@ Wählen Sie in der Sidebar den gewünschten Diagrammtyp. Die Anwendung bietet **
 - **Gestricheltes Liniendiagramm**: Gestrichelte Linien
 - **Stream-Graph**: Gestapeltes Flächendiagramm mit zentrierter Basislinie
 
-**Kreisdiagramme (3 Typen):**
+**Kreisdiagramme (4 Typen):**
 - **Kreisdiagramm**: Anteile und Verhältnisse (mit Optionen für Donut, Halbkreis, Rotation, Zeiger/Tachometer)
 - **Polar-Flächendiagramm**: Kreisförmige Flächendarstellung
 - **Verschachteltes Donut**: Mehrere Donuts übereinander
+- **Radiales Balkendiagramm**: Kreisförmige Anordnung von Balken
 
 **Punktdiagramme (3 Typen):**
 - **Streudiagramm**: Korrelationen zwischen zwei Variablen (unterstützt auch geografische Koordinaten)
 - **Blasendiagramm**: 3-dimensionale Daten mit Radius (mit Optionen für feste Größe und Punktform)
 - **Heatmap-Diagramm**: Matrix mit Farbintensitäten (Standard-Heatmap und Kalender-Heatmap GitHub-Style)
 
-**Finanzdiagramme (2 Typen):**
-- **Candlestick-Diagramm**: Finanzdaten-Visualisierung mit Open/High/Low/Close
-- **OHLC-Diagramm**: Open-High-Low-Close Darstellung für Finanzdaten
-
-**Statistische Diagramme (2 Typen):**
-- **Box-Plot**: Statistische Verteilungsanalyse mit Quartilen
-- **Violin-Plot**: Kombination aus Box-Plot und Dichteverteilung
-
-**Spezialdiagramme (5 Typen):**
+**Spezialdiagramme (9 Typen):**
 - **Radar-Chart**: Mehrdimensionale Daten auf polaren Achsen
 - **Kombiniertes Diagramm**: Verschiedene Charttypen kombiniert
 - **Funnel-Diagramm**: Trichterdarstellung für Prozess-Visualisierung
 - **Choropleth-Karte**: Geografische Datenvisualisierung auf Karten
 - **Venn-Diagramm**: Mengendiagramm zur Darstellung von Überschneidungen
+- **Candlestick-Diagramm**: Finanzdaten-Visualisierung mit Open/High/Low/Close
+- **OHLC-Diagramm**: Open-High-Low-Close Darstellung für Finanzdaten
+- **Box-Plot**: Statistische Verteilungsanalyse mit Quartilen
+- **Violin-Plot**: Kombination aus Box-Plot und Dichteverteilung
 
 ### 2. Daten konfigurieren
 
@@ -418,9 +411,36 @@ Custom-Chart-Composer/
 │   │   │   ├── Layout/
 │   │   │   ├── ChartPreview.jsx
 │   │   │   ├── ChartConfigPanel.jsx
-│   │   │   └── ExportPanel.jsx
+│   │   │   ├── ExportPanel.jsx
+│   │   │   ├── CsvWorkbench.jsx
+│   │   │   └── ...
 │   │   ├── hooks/           # Custom React Hooks
 │   │   ├── services/        # API-Services
+│   │   ├── utils/           # Utility-Funktionen
+│   │   │   ├── GeoJSONs/   # GeoJSON-Dateien für Choropleth-Karten
+│   │   │   │   ├── Baden-Württemberg.geojson
+│   │   │   │   ├── Bayern.geojson
+│   │   │   │   ├── Berlin.geojson
+│   │   │   │   ├── Brandenburg.geojson
+│   │   │   │   ├── Bremen.geojson
+│   │   │   │   ├── Hamburg.geojson
+│   │   │   │   ├── Hessen.geojson
+│   │   │   │   ├── Mecklenburg-Vorpommern.geojson
+│   │   │   │   ├── Niedersachsen.geojson
+│   │   │   │   ├── Nordrhein-Westfalen.geojson
+│   │   │   │   ├── Rheinland-Pfalz.geojson
+│   │   │   │   ├── Saarland.geojson
+│   │   │   │   ├── Sachsen-Anhalt.geojson
+│   │   │   │   ├── Sachsen.geojson
+│   │   │   │   ├── Schleswig-Holstein.geojson
+│   │   │   │   ├── Thüringen.geojson
+│   │   │   │   ├── europe.geojson.geojson
+│   │   │   │   ├── germany-states.geojson.geojson
+│   │   │   │   └── World.geojason.geojson
+│   │   │   ├── csv/         # CSV-Verarbeitungs-Utilities
+│   │   │   ├── choroplethUtils.js
+│   │   │   ├── geoJsonLoader.js
+│   │   │   └── geoPresets.js
 │   │   ├── App.jsx
 │   │   └── main.jsx
 │   ├── package.json

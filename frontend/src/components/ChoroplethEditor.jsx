@@ -81,13 +81,33 @@ export default function ChoroplethEditor({
         return
       }
       const sanitized = extracted.map((feature, index) => sanitizeFeature(feature, feature?.id ?? `feature-${index}`, feature?.properties?.name))
-      onFeaturesChange(sanitized)
-      syncRegionsWithFeatures(sanitized)
-      setSelectedGeoJson(filename)
+      
+      // Clear old features and regions completely before loading new ones
+      // This prevents old regions from different GeoJSON files (e.g., World) from persisting
+      onFeaturesChange([])
+      onRegionsChange([])
+      
+      // Use setTimeout to ensure React processes the clear operations first
+      setTimeout(() => {
+        // Now set the new features and create fresh regions from scratch
+        onFeaturesChange(sanitized)
+        // Create regions directly from new features without merging with old ones
+        const newRegions = sanitized.map((feature, index) => {
+          const key = normalizeRegionKey(feature?.id ?? feature?.properties?.id ?? `feature-${index}`)
+          const label = feature?.properties?.name || feature?.properties?.id || feature?.id || `Region ${index + 1}`
+          return {
+            id: key || `feature-${index}`,
+            label,
+            value: 0
+          }
+        })
+        onRegionsChange(newRegions)
+        setSelectedGeoJson(filename)
+        setIsLoadingGeoJson(false)
+      }, 0)
     } catch (error) {
       console.error(error)
       setUploadError(`GeoJSON konnte nicht geladen werden: ${error.message}`)
-    } finally {
       setIsLoadingGeoJson(false)
     }
   }
@@ -101,7 +121,7 @@ export default function ChoroplethEditor({
     return { count: features.length, points }
   }, [features])
 
-  const syncRegionsWithFeatures = (nextFeatures) => {
+  const syncRegionsWithFeatures = (nextFeatures, isFreshLoad = false) => {
     if (!onRegionsChange) return
     const featureMap = new Map(
       nextFeatures.map((feature, index) => {
@@ -111,6 +131,18 @@ export default function ChoroplethEditor({
       })
     )
 
+    // If this is a fresh load (new GeoJSON file), don't merge with existing regions
+    if (isFreshLoad) {
+      const newRegions = Array.from(featureMap.values()).map(({ key, label }) => ({
+        id: key,
+        label,
+        value: 0
+      }))
+      onRegionsChange(newRegions)
+      return
+    }
+
+    // Otherwise, merge with existing regions (preserve values if keys match)
     const mergedRegions = Array.from(featureMap.values()).map(({ key, label }) => {
       const existing = regions.find((region) => normalizeRegionKey(region?.id ?? region?.label) === key)
       if (existing) {
@@ -265,9 +297,28 @@ export default function ChoroplethEditor({
           return
         }
         const sanitized = extracted.map((feature, index) => sanitizeFeature(feature, feature?.id ?? `feature-${index}`, feature?.properties?.name))
-        onFeaturesChange(sanitized)
-        syncRegionsWithFeatures(sanitized)
-        setUploadError(null)
+        
+        // Clear old features and regions completely before loading new ones
+        onFeaturesChange([])
+        onRegionsChange([])
+        
+        // Use setTimeout to ensure React processes the clear operations first
+        setTimeout(() => {
+          // Now set the new features and create fresh regions from scratch
+          onFeaturesChange(sanitized)
+          // Create regions directly from new features without merging with old ones
+          const newRegions = sanitized.map((feature, index) => {
+            const key = normalizeRegionKey(feature?.id ?? feature?.properties?.id ?? `feature-${index}`)
+            const label = feature?.properties?.name || feature?.properties?.id || feature?.id || `Region ${index + 1}`
+            return {
+              id: key || `feature-${index}`,
+              label,
+              value: 0
+            }
+          })
+          onRegionsChange(newRegions)
+          setUploadError(null)
+        }, 0)
       } catch (error) {
         console.error(error)
         setUploadError('GeoJSON konnte nicht gelesen werden. Bitte valide GeoJSON-Datei verwenden.')

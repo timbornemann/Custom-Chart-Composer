@@ -5,8 +5,8 @@
 
 Ein modernes, webbasiertes Tool zur einfachen Erstellung ästhetisch ansprechender Diagramme. Mit einer intuitiven Benutzeroberfläche können Sie verschiedene Diagrammtypen auswählen, Daten und Farben anpassen und das fertige Ergebnis in verschiedenen Formaten exportieren.
 
-![Custom Chart Composer - Hauptansicht](screenshots/01_hauptansicht.png)
-*Die Hauptansicht der Custom Chart Composer Anwendung mit Sidebar für Diagrammtypen, Vorschau-Bereich und Konfigurationspanel*
+![Custom Chart Composer - Hauptansicht](screenshots/Program/Startseite-Nach-Programm-oeffen.png)
+*Die Hauptansicht der Custom Chart Composer Anwendung mit Sidebar für Diagrammtypen, Vorschau-Bereich und Konfigurationspanel. Hier sehen Sie die Übersicht aller verfügbaren Diagrammtypen, die Sie per Klick auswählen können.*
 
 ## Inhaltsverzeichnis
 
@@ -87,13 +87,15 @@ docker run -d --name custom-chart-composer -p 3003:3003 -v %cd%\modules:/app/bac
 
 ## ✨ Features
 
-- 🎨 **18 Diagrammtypen**: Balken, Linie, Fläche, Kreis, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Heatmap, Radiales Balkendiagramm und viele mehr
+- 🎨 **25 Diagrammtypen**: Balken, Linie, Fläche, Kreis, Radar, Streudiagramm, Blasen, Polar-Fläche, Gestapelt, Multi-Line, Kombiniert, Gruppiert, Treppenstufen, Heatmap, Radiales Balkendiagramm, Candlestick, OHLC, Box-Plot, Violin-Plot, Funnel, Choropleth, Venn-Diagramm und viele mehr
 - 🎯 **Modulares Plugin-System**: Neue Diagrammtypen einfach hinzufügen
 - 🖌️ **Umfangreiche Anpassungen**: Farben, Beschriftungen, Optionen
 - 📦 **Multiple Export-Formate**: PNG, JPEG, HTML
 - 🌙 **Modernes Dark Theme**: Professionelles UI-Design
 - ↩️ **Undo & Redo inklusive Shortcuts**: Änderungen bequem per Toolbar oder mit Strg+Z / Strg+Shift+Z rückgängig machen bzw. wiederholen
 - 💾 **Automatische Zwischenspeicherung**: Deine Diagrammdaten werden lokal gepuffert, sodass beim Neuladen nichts verloren geht
+- 📊 **CSV/Excel-Import**: Importieren Sie Daten aus CSV-, TSV- und Excel-Dateien mit automatischer Typ-Erkennung und Spaltenzuordnung
+- ✏️ **Annotationen**: Fügen Sie Text, Pfeile, Formen und Markierungen zu Ihren Diagrammen hinzu
 - 🐳 **Docker-Support**: Einfache Bereitstellung
 - ⚡ **Live-Vorschau**: Echtzeit-Aktualisierung bei Änderungen
 
@@ -101,10 +103,10 @@ docker run -d --name custom-chart-composer -p 3003:3003 -v %cd%\modules:/app/bac
 
 ### 1. Diagrammtyp auswählen
 
-![Diagrammtyp-Auswahl](screenshots/02_chord_diagramm_auswahl.png)
-*Auswahl verschiedener Diagrammtypen mit Live-Vorschau*
+![Custom Chart Composer - Hauptansicht](screenshots/Program/Startseite-Nach-Programm-oeffen.png)
+*Die Hauptansicht zeigt alle verfügbaren Diagrammtypen in der linken Sidebar. Sie können durch die Liste scrollen oder die Suchfunktion verwenden, um schnell den gewünschten Diagrammtyp zu finden. Jeder Typ zeigt eine Vorschau-Ikone für schnelle Orientierung.*
 
-Wählen Sie in der Sidebar den gewünschten Diagrammtyp:
+Wählen Sie in der Sidebar den gewünschten Diagrammtyp. Die Anwendung bietet **25 verschiedene Diagrammtypen** in folgenden Kategorien:
 
 **Balkendiagramme (4 Typen):**
 - **Balkendiagramm**: Klassische Wertevergleiche (mit Orientierungsoption: horizontal/vertikal)
@@ -130,22 +132,35 @@ Wählen Sie in der Sidebar den gewünschten Diagrammtyp:
 - **Blasendiagramm**: 3-dimensionale Daten mit Radius (mit Optionen für feste Größe und Punktform)
 - **Heatmap-Diagramm**: Matrix mit Farbintensitäten (Standard-Heatmap und Kalender-Heatmap GitHub-Style)
 
-**Spezialdiagramme (2 Typen):**
+**Finanzdiagramme (2 Typen):**
+- **Candlestick-Diagramm**: Finanzdaten-Visualisierung mit Open/High/Low/Close
+- **OHLC-Diagramm**: Open-High-Low-Close Darstellung für Finanzdaten
+
+**Statistische Diagramme (2 Typen):**
+- **Box-Plot**: Statistische Verteilungsanalyse mit Quartilen
+- **Violin-Plot**: Kombination aus Box-Plot und Dichteverteilung
+
+**Spezialdiagramme (5 Typen):**
 - **Radar-Chart**: Mehrdimensionale Daten auf polaren Achsen
 - **Kombiniertes Diagramm**: Verschiedene Charttypen kombiniert
+- **Funnel-Diagramm**: Trichterdarstellung für Prozess-Visualisierung
+- **Choropleth-Karte**: Geografische Datenvisualisierung auf Karten
+- **Venn-Diagramm**: Mengendiagramm zur Darstellung von Überschneidungen
 
 ### 2. Daten konfigurieren
 
+![Daten-Tab](screenshots/Program/Daten-Tab.png)
+*Der Daten-Tab bietet umfangreiche Möglichkeiten zur Dateneingabe: Manuelle Eingabe von Labels und Werten, CSV-Import mit Spaltenzuordnung, sowie die Möglichkeit, mehrere Datensätze zu definieren. Hier können Sie auch Titel und Beschriftungen für Ihr Diagramm festlegen.*
+
 Im Tab **"Daten"**:
 - Titel eingeben (optional)
-- Beschriftungen (Labels) kommagetrennt eingeben
-- Werte kommagetrennt eingeben
+- Beschriftungen (Labels) kommagetrennt eingeben oder per CSV importieren
+- Werte kommagetrennt eingeben oder aus CSV-Dateien importieren
+- CSV-Import mit Spaltenzuordnung für komplexe Datenstrukturen
+- Mehrere Datensätze für Multi-Line, Gruppierte oder Gestapelte Diagramme definieren
 - Datensatz-Label definieren
 
 ### 3. Styling anpassen
-
-![Styling-Optionen](screenshots/03_styling_optionen.png)
-*Umfangreiche Styling-Optionen mit Farbpalette, Hintergrundfarbe und Hintergrundbild-Upload*
 
 Im Tab **"Styling"**:
 - **Farbpalette**: Benutzerdefinierte Farbzuweisung für jeden Datenpunkt
@@ -163,8 +178,8 @@ Im Tab **"Optionen"**:
 
 ### 5. Exportieren
 
-![Export-Optionen](screenshots/04_export_optionen.png)
-*Umfangreiche Export-Funktionen mit verschiedenen Formaten und Auflösungen*
+![Export Tab](screenshots/Program/Export Tab.png)
+*Der Export-Tab bietet umfangreiche Export-Optionen: Wählen Sie zwischen PNG, JPEG oder HTML-Format, stellen Sie die Auflösung ein (HD, Full HD, 4K, Quadrat oder benutzerdefiniert), aktivieren Sie transparente Hintergründe oder passen Sie die Skalierung an. Zusätzlich können Sie Ihre Diagrammkonfiguration als JSON exportieren.*
 
 **Export-Formate:**
 - **PNG**: Hochqualitative Rasterbilder
@@ -185,29 +200,53 @@ Im Tab **"Optionen"**:
 
 ## 📊 Diagrammtypen im Detail
 
-Die Custom Chart Composer bietet eine beeindruckende Vielfalt an Diagrammtypen für alle Datenvisualisierungs-Anforderungen:
+Die Custom Chart Composer bietet eine beeindruckende Vielfalt von **25 Diagrammtypen** für alle Datenvisualisierungs-Anforderungen:
 
-### Kreisdiagramme
-![Kreisdiagramm](screenshots/07_kreisdiagramm.png)
-*Klassisches Kreisdiagramm mit proportionalen Sektoren*
+### Übersicht aller Diagrammtypen
 
-### Polar-Diagramme  
-![Polar-Flächendiagramm](screenshots/06_polar_flaechen_diagramm.png)
-*Radiale Darstellung kategorialer Werte*
+| Diagrammtyp | Beschreibung | Screenshot |
+|-------------|--------------|------------|
+| **Balkendiagramm** | Klassische Wertevergleiche mit horizontaler/vertikaler Orientierung | ![Bar Chart](screenshots/Diagrams/chart-bar-2025-11-11.png) |
+| **Gestapeltes Balkendiagramm** | Mehrere Datensätze übereinander mit Prozentanzeige-Option | ![Stacked Bar](screenshots/Diagrams/chart-stackedBar-2025-11-11.png) |
+| **Gruppiertes Balkendiagramm** | Mehrere Datensätze nebeneinander für direkten Vergleich | ![Grouped Bar](screenshots/Diagrams/chart-groupedBar-2025-11-11.png) |
+| **Radiales Balkendiagramm** | Kreisförmige Anordnung von Balken | ![Radial Bar](screenshots/Diagrams/chart-radialBar-2025-11-11.png) |
+| **Liniendiagramm** | Trends und Zeitreihen mit horizontaler/vertikaler Orientierung | ![Line Chart](screenshots/Diagrams/chart-line-2025-11-11.png) |
+| **Flächendiagramm** | Gefüllte Linie für Volumen-Darstellung | ![Area Chart](screenshots/Diagrams/chart-area-2025-11-11.png) |
+| **Multi-Liniendiagramm** | Mehrere Linien zum Vergleich verschiedener Datensätze | ![Multi-Line](screenshots/Diagrams/chart-multiLine-2025-11-11.png) |
+| **Treppenstufen-Liniendiagramm** | Gestufte Verläufe für diskrete Änderungen | ![Stepped Line](screenshots/Diagrams/chart-steppedLine-2025-11-11.png) |
+| **Gestricheltes Liniendiagramm** | Gestrichelte Linien für alternative Darstellung | ![Dashed Line](screenshots/Diagrams/chart-dashedLine-2025-11-11.png) |
+| **Stream-Graph** | Gestapeltes Flächendiagramm mit zentrierter Basislinie | ![Stream Graph](screenshots/Diagrams/chart-streamGraph-2025-11-11.png) |
+| **Kreisdiagramm** | Anteile und Verhältnisse mit Donut/Halbkreis-Optionen | ![Pie Chart](screenshots/Diagrams/chart-pie-2025-11-11.png) |
+| **Polar-Flächendiagramm** | Kreisförmige Flächendarstellung kategorialer Werte | ![Polar Area](screenshots/Diagrams/chart-polarArea-2025-11-11.png) |
+| **Verschachteltes Donut** | Mehrere Donuts übereinander für hierarchische Daten | ![Nested Donut](screenshots/Diagrams/chart-nestedDonut-2025-11-11.png) |
+| **Streudiagramm** | Korrelationen zwischen zwei Variablen, unterstützt geografische Koordinaten | ![Scatter](screenshots/Diagrams/chart-scatter-2025-11-11.png) |
+| **Blasendiagramm** | 3-dimensionale Daten mit Radius, Optionen für feste Größe | ![Bubble](screenshots/Diagrams/chart-bubble-2025-11-11.png) |
+| **Heatmap-Diagramm** | Matrix mit Farbintensitäten, Standard- und Kalender-Heatmap | ![Heatmap](screenshots/Diagrams/chart-heatmap-2025-11-11.png) |
+| **Radar-Chart** | Mehrdimensionale Daten auf polaren Achsen | ![Radar](screenshots/Diagrams/chart-radar-2025-11-11.png) |
+| **Kombiniertes Diagramm** | Verschiedene Charttypen kombiniert in einem Diagramm | ![Mixed](screenshots/Diagrams/chart-mixed-2025-11-11.png) |
+| **Candlestick-Diagramm** | Finanzdaten-Visualisierung mit Open/High/Low/Close | ![Candlestick](screenshots/Diagrams/chart-candlestick-2025-11-11.png) |
+| **OHLC-Diagramm** | Open-High-Low-Close Darstellung für Finanzdaten | ![OHLC](screenshots/Diagrams/chart-ohlc-2025-11-11.png) |
+| **Box-Plot** | Statistische Verteilungsanalyse mit Quartilen | ![Box Plot](screenshots/Diagrams/chart-boxPlot-2025-11-11.png) |
+| **Violin-Plot** | Kombination aus Box-Plot und Dichteverteilung | ![Violin Plot](screenshots/Diagrams/chart-violinPlot-2025-11-11.png) |
+| **Funnel-Diagramm** | Trichterdarstellung für Prozess-Visualisierung | ![Funnel](screenshots/Diagrams/chart-funnel-2025-11-11.png) |
+| **Choropleth-Karte** | Geografische Datenvisualisierung auf Karten | ![Choropleth](screenshots/Diagrams/chart-choropleth-2025-11-11.png) |
+| **Venn-Diagramm** | Mengendiagramm zur Darstellung von Überschneidungen | ![Venn](screenshots/Diagrams/chart-venn-2025-11-11.png) |
 
-### Punktdiagramme
-![Streudiagramm](screenshots/08_streudiagramm.png)
-*Streudiagramm für Korrelationsanalyse zwischen zwei Variablen*
+### Beispiel-Diagramme aus der Anwendung
 
-### Spezialdiagramme
-![Radar-Chart](screenshots/09_radar_chart.png)
-*Radar-Chart für mehrdimensionale Daten auf polaren Achsen*
+![Kreisdiagramm Beispiel](screenshots/Program/Kreisdiagramm.png)
+*Beispiel eines Kreisdiagramms mit benutzerdefinierten Farben und Beschriftungen*
 
-### Suchfunktion
-![Suchfunktion](screenshots/05_suchfunktion.png)
-*Intelligente Suchfunktion zur schnellen Navigation durch alle Diagrammtypen*
+![Flächendiagramm Beispiel](screenshots/Program/Flächendiagramm.png)
+*Beispiel eines Flächendiagramms mit mehreren Datensätzen*
 
-> **📸 Screenshots**: Eine detaillierte Sammlung aller Screenshots mit Beschreibungen finden Sie im Ordner [`screenshots/`](screenshots/README.md)
+![Candlestick-Diagramm Beispiel](screenshots/Program/Candelstickdiagramm.png)
+*Beispiel eines Candlestick-Diagramms für Finanzdaten-Visualisierung*
+
+### Annotationen
+
+![Annotationen](screenshots/Program/Annotationen.png)
+*Mit der Annotationen-Funktion können Sie Text, Pfeile, Formen und Markierungen zu Ihren Diagrammen hinzufügen, um wichtige Informationen hervorzuheben oder Erklärungen zu ergänzen.*
 
 ## 🔄 Automatische Updates mit Watchtower
 
@@ -344,11 +383,16 @@ Custom-Chart-Composer/
 │   ├── controllers/          # API-Controller
 │   ├── routes/              # API-Routes
 │   ├── services/            # Business Logic
-│   ├── modules/             # Chart-Module (18 Diagrammtypen)
+│   ├── modules/             # Chart-Module (25 Diagrammtypen)
 │   │   ├── areaChart.js
 │   │   ├── barChart.js
+│   │   ├── boxPlotChart.js
 │   │   ├── bubbleChart.js
+│   │   ├── choroplethChart.js
 │   │   ├── dashedLineChart.js
+│   │   ├── financialCandlestickChart.js
+│   │   ├── financialOhlcChart.js
+│   │   ├── funnelChart.js
 │   │   ├── groupedBarChart.js
 │   │   ├── heatmapChart.js
 │   │   ├── lineChart.js
@@ -362,7 +406,9 @@ Custom-Chart-Composer/
 │   │   ├── scatterChart.js
 │   │   ├── stackedBarChart.js
 │   │   ├── steppedLineChart.js
-│   │   └── streamGraph.js
+│   │   ├── streamGraph.js
+│   │   ├── vennDiagramChart.js
+│   │   └── violinPlotChart.js
 │   ├── package.json
 │   └── server.js
 │
@@ -383,8 +429,14 @@ Custom-Chart-Composer/
 ├── docker-compose.yml
 ├── Dockerfile
 ├── screenshots/            # Screenshots der Anwendung
-│   ├── README.md          # Detaillierte Screenshot-Beschreibungen
-│   └── *.png              # Screenshots verschiedener Diagrammtypen
+│   ├── Program/           # Screenshots der Programmoberfläche
+│   │   ├── Startseite-Nach-Programm-oeffen.png
+│   │   ├── Daten-Tab.png
+│   │   ├── Export Tab.png
+│   │   ├── Annotationen.png
+│   │   └── *.png          # Weitere Programm-Screenshots
+│   └── Diagrams/          # Screenshots aller Diagrammtypen
+│       └── chart-*.png     # 25 Diagrammtypen-Screenshots
 ├── Guideline.md            # Technische Spezifikation
 └── README.md
 ```

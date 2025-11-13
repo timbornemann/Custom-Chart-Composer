@@ -16,6 +16,139 @@ import { applyReplacementToText, formatCellValue, isCellValueEmpty } from './csv
 import { createUniqueId } from './csv/utils'
 import { DEFAULT_ROW_HEIGHT } from './csv/constants'
 
+const MAX_VIOLIN_SAMPLE_COUNT = 2000
+
+const toNumericValue = (value) => {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const normalized = trimmed.replace(',', '.')
+    const numeric = Number(normalized)
+    return Number.isFinite(numeric) ? numeric : null
+  }
+  return null
+}
+
+const computeQuantileValue = (sortedValues, quantile) => {
+  if (!Array.isArray(sortedValues) || sortedValues.length === 0) return null
+  if (sortedValues.length === 1) return sortedValues[0]
+  const position = (sortedValues.length - 1) * quantile
+  const baseIndex = Math.floor(position)
+  const remainder = position - baseIndex
+  const lower = sortedValues[baseIndex]
+  const upper = sortedValues[Math.min(baseIndex + 1, sortedValues.length - 1)]
+  return lower + remainder * (upper - lower)
+}
+
+const downsampleSortedValues = (sortedValues, limit) => {
+  if (sortedValues.length <= limit) {
+    return {
+      values: [...sortedValues],
+      downsampled: false,
+      originalCount: sortedValues.length
+    }
+  }
+
+  const sampled = []
+  const step = (sortedValues.length - 1) / (limit - 1)
+  for (let index = 0; index < limit; index += 1) {
+    const position = index * step
+    const lowerIndex = Math.floor(position)
+    const upperIndex = Math.min(sortedValues.length - 1, Math.ceil(position))
+    if (lowerIndex === upperIndex) {
+      sampled.push(sortedValues[lowerIndex])
+    } else {
+      const weight = position - lowerIndex
+      const lower = sortedValues[lowerIndex]
+      const upper = sortedValues[upperIndex]
+      sampled.push(lower + weight * (upper - lower))
+    }
+  }
+
+  return {
+    values: sampled,
+    downsampled: true,
+    originalCount: sortedValues.length
+  }
+}
+
+const computeDistributionForColumn = (rows, columnKey, label, scope) => {
+  if (!Array.isArray(rows) || rows.length === 0 || !columnKey) {
+    return null
+  }
+
+  const numericValues = []
+  let missingCount = 0
+  rows.forEach((row) => {
+    const rawValue = row?.[columnKey]
+    const numeric = toNumericValue(rawValue)
+    if (numeric === null) {
+      if (rawValue !== null && rawValue !== undefined && String(rawValue).trim() !== '') {
+        missingCount += 1
+      }
+      return
+    }
+    numericValues.push(numeric)
+  })
+
+  if (numericValues.length === 0) {
+    return null
+  }
+
+  numericValues.sort((a, b) => a - b)
+  const sum = numericValues.reduce((acc, value) => acc + value, 0)
+  const stats = {
+    min: numericValues[0],
+    q1: computeQuantileValue(numericValues, 0.25),
+    median: computeQuantileValue(numericValues, 0.5),
+    q3: computeQuantileValue(numericValues, 0.75),
+    max: numericValues[numericValues.length - 1],
+    mean: sum / numericValues.length
+  }
+
+  const { values: violinValues, downsampled } = downsampleSortedValues(
+    numericValues,
+    MAX_VIOLIN_SAMPLE_COUNT
+  )
+
+  return {
+    columnKey,
+    label: label || columnKey,
+    scope,
+    stats,
+    violinValues,
+    totalValues: numericValues.length,
+    missingCount,
+    downsampled,
+    sampleInfo: {
+      originalCount: numericValues.length,
+      retainedCount: violinValues.length,
+      limit: MAX_VIOLIN_SAMPLE_COUNT,
+      downsampled
+    }
+  }
+}
+
+const buildDistributionMeta = (rows, numericColumns, scope) => {
+  if (!Array.isArray(numericColumns) || numericColumns.length === 0) {
+    return []
+  }
+
+  const meta = []
+  numericColumns.forEach((column) => {
+    if (!column?.key) return
+    const entry = computeDistributionForColumn(rows, column.key, column.key, scope)
+    if (entry) {
+      meta.push(entry)
+    }
+  })
+  return meta
+}
+
 /**
  * CSV Workbench - Redesigned für bessere Übersichtlichkeit
  * 
@@ -1666,12 +1799,40 @@ export default function CsvWorkbench({
     const result = getImportResult()
     if (!result) return
     if (!onApplyToChart) return
+
     const importState = getImportState()
-    onApplyToChart({
+    const hasTransformed = Array.isArray(transformedRows) && transformedRows.length > 0
+    const distributionSourceRows = hasTransformed ? transformedRows : originalRows
+    const distributionScope = hasTransformed ? 'transformed' : 'raw'
+    const distributionColumns = buildDistributionMeta(distributionSourceRows, numericColumns, distributionScope)
+
+    const enhancedResult = {
       ...result,
-      importState: { ...importState, stateVersion: Date.now() }
+      meta: {
+        ...(result.meta || {}),
+        distributionColumns
+      }
+    }
+
+    const enhancedImportState = {
+      ...importState,
+      stateVersion: Date.now(),
+      distributionColumns,
+      distributionScope
+    }
+
+    onApplyToChart({
+      ...enhancedResult,
+      importState: enhancedImportState
     })
-  }, [getImportResult, getImportState, onApplyToChart])
+  }, [
+    getImportResult,
+    onApplyToChart,
+    getImportState,
+    transformedRows,
+    originalRows,
+    numericColumns
+  ])
 
   // ==========================================================================
   // RENDER

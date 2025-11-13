@@ -48,13 +48,16 @@ export default function ChartConfigPanel({
 
   const handleCsvStateChange = useCallback(
     (state) => {
-      onConfigChange({ _importData: state || null })
+      onConfigChange({
+        _importData: state || null,
+        ...(state ? {} : { _importMeta: null })
+      })
     },
     [onConfigChange]
   )
 
   const handleCsvReset = useCallback(() => {
-    onConfigChange({ _importData: null })
+    onConfigChange({ _importData: null, _importMeta: null })
   }, [onConfigChange])
 
   const openCsvEditor = useCallback(() => {
@@ -97,6 +100,11 @@ export default function ChartConfigPanel({
         payload.labels = Array.isArray(result.labels) ? result.labels : []
         payload.values = []
         payload.datasets = []
+      } else if (chartType?.id === 'heatmap') {
+        payload.labels = Array.isArray(result.labels) ? result.labels : []
+        payload.yLabels = Array.isArray(result.yLabels) ? result.yLabels : []
+        payload.datasets = Array.isArray(result.datasets) ? result.datasets : []
+        payload.values = []
       } else if (chartType?.id === 'choropleth') {
         payload.regions = Array.isArray(result.regions) ? result.regions : []
         if (Array.isArray(result.features)) {
@@ -123,6 +131,8 @@ export default function ChartConfigPanel({
       if (result.importState) {
         payload._importData = result.importState
       }
+
+      payload._importMeta = result.meta || null
 
       onConfigChange(payload)
     },
@@ -309,7 +319,7 @@ const getImportCapabilities = (chartType) => {
     }
   }
 
-  if (['candlestick', 'ohlc', 'boxPlot', 'violinPlot', 'choropleth', 'venn', 'mixed'].includes(chartType.id)) {
+  if (['candlestick', 'ohlc', 'boxPlot', 'violinPlot', 'choropleth', 'venn', 'mixed', 'heatmap'].includes(chartType.id)) {
     return {
       supportsDataImport: true,
       usesDatasetEditor: false,
@@ -391,6 +401,9 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
   const isChoropleth = chartType?.id === 'choropleth'
   const isMixedChart = chartType?.id === 'mixed'
   const isFinancialChart = ['candlestick', 'ohlc'].includes(chartType?.id)
+  const distributionColumns = Array.isArray(config._importMeta?.distributionColumns)
+    ? config._importMeta.distributionColumns
+    : []
   
   const usesDatasetEditor = !!datasetsSchema && !isHeatmapDataset && !isBubbleDataset && !isScatterDataset && !isCoordinateDataset && !isVennChart && !isBoxPlot && !isViolinPlot && !isChoropleth && !isMixedChart
   const usesSimpleEditor = !!labelsSchema && !!valuesSchema && hasSimpleValues && chartType?.id !== 'radar'
@@ -402,6 +415,70 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
   const handleFieldChange = (key, value) => {
     onConfigChange({ [key]: value })
   }
+
+  const handleApplyBoxDistribution = useCallback(
+    (columnMeta) => {
+      if (!columnMeta) return
+      const label = columnMeta.label || columnMeta.columnKey || 'Serie'
+      const stats = columnMeta.stats || {}
+      const baseSeries = Array.isArray(config.series) && config.series.length > 0 ? config.series[0] : null
+      const color = baseSeries?.color || '#60A5FA'
+      const borderColor = baseSeries?.borderColor || baseSeries?.color || '#1D4ED8'
+      const name = baseSeries?.name || label
+
+      const nextSeriesEntry = {
+        ...(baseSeries || {}),
+        name,
+        color,
+        borderColor,
+        values: [
+          {
+            min: stats.min ?? 0,
+            q1: stats.q1 ?? stats.min ?? 0,
+            median: stats.median ?? stats.q1 ?? stats.min ?? 0,
+            q3: stats.q3 ?? stats.max ?? stats.median ?? 0,
+            max: stats.max ?? stats.q3 ?? stats.median ?? 0,
+            sourceColumn: columnMeta.columnKey,
+            count: columnMeta.totalValues,
+            missing: columnMeta.missingCount,
+            mean: stats.mean
+          }
+        ]
+      }
+
+      onConfigChange({
+        labels: [label],
+        series: [nextSeriesEntry]
+      })
+    },
+    [config.series, onConfigChange]
+  )
+
+  const handleApplyViolinDistribution = useCallback(
+    (columnMeta) => {
+      if (!columnMeta) return
+      const label = columnMeta.label || columnMeta.columnKey || 'Serie'
+      const baseSeries = Array.isArray(config.series) && config.series.length > 0 ? config.series[0] : null
+      const color = baseSeries?.color || '#A855F7'
+      const borderColor = baseSeries?.borderColor || baseSeries?.color || '#7C3AED'
+      const name = baseSeries?.name || label
+      const violinValues = Array.isArray(columnMeta.violinValues) ? columnMeta.violinValues : []
+
+      const nextSeriesEntry = {
+        ...(baseSeries || {}),
+        name,
+        color,
+        borderColor,
+        values: [violinValues]
+      }
+
+      onConfigChange({
+        labels: [label],
+        series: [nextSeriesEntry]
+      })
+    },
+    [config.series, onConfigChange]
+  )
 
   const renderDatasetEditor = () => {
     // Special chart types with custom editors
@@ -416,23 +493,41 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
 
     if (isBoxPlot) {
       return (
-        <BoxPlotEditor
-          labels={config.labels || []}
-          series={config.series || []}
-          onLabelsChange={(labels) => onConfigChange({ labels })}
-          onSeriesChange={(series) => onConfigChange({ series })}
-        />
+        <>
+          {distributionColumns.length > 0 && (
+            <DistributionImportSection
+              columns={distributionColumns}
+              mode="box"
+              onApply={handleApplyBoxDistribution}
+            />
+          )}
+          <BoxPlotEditor
+            labels={config.labels || []}
+            series={config.series || []}
+            onLabelsChange={(labels) => onConfigChange({ labels })}
+            onSeriesChange={(series) => onConfigChange({ series })}
+          />
+        </>
       )
     }
 
     if (isViolinPlot) {
       return (
-        <ViolinPlotEditor
-          labels={config.labels || []}
-          series={config.series || []}
-          onLabelsChange={(labels) => onConfigChange({ labels })}
-          onSeriesChange={(series) => onConfigChange({ series })}
-        />
+        <>
+          {distributionColumns.length > 0 && (
+            <DistributionImportSection
+              columns={distributionColumns}
+              mode="violin"
+              onApply={handleApplyViolinDistribution}
+            />
+          )}
+          <ViolinPlotEditor
+            labels={config.labels || []}
+            series={config.series || []}
+            onLabelsChange={(labels) => onConfigChange({ labels })}
+            onSeriesChange={(series) => onConfigChange({ series })}
+          />
+        </>
       )
     }
 
@@ -815,6 +910,138 @@ function DataTab({ chartType, config, onConfigChange, onResetData, onClearData, 
       {additionalFields.map(([key, field]) => renderAdditionalField(key, field))}
     </>
   )
+}
+
+function DistributionImportSection({ columns, mode, onApply }) {
+  const [selectedKey, setSelectedKey] = useState(() => {
+    if (!Array.isArray(columns) || columns.length === 0) return ''
+    return columns[0]?.columnKey || columns[0]?.key || ''
+  })
+
+  useEffect(() => {
+    if (!Array.isArray(columns) || columns.length === 0) {
+      if (selectedKey) setSelectedKey('')
+      return
+    }
+    const hasSelected = columns.some((column) => {
+      const key = column?.columnKey || column?.key
+      return key === selectedKey
+    })
+    if (!hasSelected) {
+      const nextKey = columns[0]?.columnKey || columns[0]?.key || ''
+      if (nextKey !== selectedKey) {
+        setSelectedKey(nextKey)
+      }
+    }
+  }, [columns, selectedKey])
+
+  if (!Array.isArray(columns) || columns.length === 0) {
+    return null
+  }
+
+  const activeColumn = columns.find((column) => {
+    const key = column?.columnKey || column?.key
+    return key === selectedKey
+  }) || columns[0]
+
+  const scopeLabel = activeColumn?.scope === 'transformed' ? 'transformierten Daten' : 'Originaldaten'
+  const formatter = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 })
+  const stats = activeColumn?.stats || null
+  const description = mode === 'box'
+    ? 'Berechnet Quartile und Extremwerte aus der gewählten Spalte.'
+    : 'Verwendet alle Werte der Spalte als Rohdaten für die Dichte.'
+  const buttonLabel = mode === 'box' ? 'Boxplot übernehmen' : 'Violin-Plot übernehmen'
+  const sampleInfo = activeColumn?.sampleInfo
+
+  return (
+    <div className="space-y-3 rounded-lg border border-dark-accent1/40 bg-dark-bg/40 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h4 className="text-sm font-semibold text-dark-textLight">Aus CSV-Spalte generieren</h4>
+          <p className="text-xs text-dark-textGray">
+            {description} Quelle: {scopeLabel}.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onApply(activeColumn)}
+          disabled={!activeColumn}
+          className="rounded-md bg-dark-accent1 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-dark-accent2 disabled:cursor-not-allowed disabled:bg-gray-700"
+        >
+          {buttonLabel}
+        </button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-dark-textGray">Spalte</label>
+          <select
+            value={selectedKey}
+            onChange={(event) => setSelectedKey(event.target.value)}
+            className="w-full rounded-md border border-gray-700 bg-dark-secondary px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+          >
+            {columns.map((column) => {
+              const key = column?.columnKey || column?.key
+              const label = column?.label || column?.columnKey || column?.key
+              return (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              )
+            })}
+          </select>
+          <div className="mt-2 text-[11px] text-dark-textGray">
+            {(activeColumn?.totalValues || 0).toLocaleString('de-DE')} Werte ·{' '}
+            {(activeColumn?.missingCount || 0).toLocaleString('de-DE')} ignoriert
+          </div>
+        </div>
+
+        {stats ? (
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-dark-textGray">
+            <span>
+              Min:{' '}
+              <strong className="text-dark-textLight">{formatter.format(stats.min)}</strong>
+            </span>
+            <span>
+              Q1:{' '}
+              <strong className="text-dark-textLight">{formatter.format(stats.q1)}</strong>
+            </span>
+            <span>
+              Median:{' '}
+              <strong className="text-dark-textLight">{formatter.format(stats.median)}</strong>
+            </span>
+            <span>
+              Q3:{' '}
+              <strong className="text-dark-textLight">{formatter.format(stats.q3)}</strong>
+            </span>
+            <span>
+              Max:{' '}
+              <strong className="text-dark-textLight">{formatter.format(stats.max)}</strong>
+            </span>
+            <span>
+              Ø:{' '}
+              <strong className="text-dark-textLight">{formatter.format(stats.mean)}</strong>
+            </span>
+          </div>
+        ) : (
+          <div className="text-xs text-dark-textGray">Keine auswertbaren Zahlen gefunden.</div>
+        )}
+      </div>
+
+      {activeColumn?.downsampled && sampleInfo?.originalCount && (
+        <div className="text-[11px] text-dark-textGray">
+          Hinweis: Für die Violin-Rohdaten wurden {(sampleInfo.limit || sampleInfo.retainedCount || 0).toLocaleString('de-DE')} von{' '}
+          {sampleInfo.originalCount.toLocaleString('de-DE')} Werten gleichmäßig übernommen.
+        </div>
+      )}
+    </div>
+  )
+}
+
+DistributionImportSection.propTypes = {
+  columns: PropTypes.array,
+  mode: PropTypes.oneOf(['box', 'violin']),
+  onApply: PropTypes.func
 }
 
 function StylingTab({ chartType, config, onConfigChange }) {

@@ -272,6 +272,103 @@ export default function CsvMappingPanel({
     )
   }
 
+  if (chartType === 'heatmap') {
+    const numericColumns = columns.filter((col) => col.type === 'number')
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-dark-textLight mb-2">Heatmap-Mapping</h3>
+          <p className="text-xs text-dark-textGray mb-4">
+            Wählen Sie die Spalten für X-Achse, Y-Achse und die Intensitätswerte (V). Optional können Sie eine Beschriftung und Datensatz-Spalte verwenden.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">X-Achse</label>
+            <select
+              value={mapping.xColumn || ''}
+              onChange={(e) => onUpdateMapping({ xColumn: e.target.value })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Spalte wählen...</option>
+              {columns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Y-Achse</label>
+            <select
+              value={mapping.yColumn || ''}
+              onChange={(e) => onUpdateMapping({ yColumn: e.target.value })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Spalte wählen...</option>
+              {columns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Werte (V)</label>
+            <select
+              value={mapping.valueColumns?.[0] || ''}
+              onChange={(e) => onUpdateMapping({ valueColumns: e.target.value ? [e.target.value] : [] })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Spalte wählen...</option>
+              {numericColumns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Punkt-Beschriftung (optional)</label>
+            <select
+              value={mapping.pointLabelColumn || ''}
+              onChange={(e) => onUpdateMapping({ pointLabelColumn: e.target.value })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Nicht verwenden</option>
+              {columns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-dark-textGray mb-1">Datensatz-Spalte (optional)</label>
+            <select
+              value={mapping.datasetLabel || ''}
+              onChange={(e) => onUpdateMapping({ datasetLabel: e.target.value })}
+              className="w-full rounded-lg border border-gray-700 bg-dark-bg px-3 py-2 text-sm text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+            >
+              <option value="">Nicht verwenden</option>
+              {columns.map((col) => (
+                <option key={col.key} value={col.key}>
+                  {col.key}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (isChoropleth) {
     const numericColumns = columns.filter((col) => col.type === 'number')
 

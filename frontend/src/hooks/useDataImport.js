@@ -3163,6 +3163,88 @@ const buildDistributionSeriesResult = (sourceRows, labelColumn, valueColumn, dat
   return { labels: labelOrder, violinSeries, boxSeries, rowWarnings }
 }
 
+const buildHeatmapResult = (sourceRows, xColumn, yColumn, valueColumn, datasetLabelColumn, pointLabelColumn) => {
+  const xSet = new Set()
+  const ySet = new Set()
+  const xLabels = []
+  const yLabels = []
+  const datasetMap = new Map()
+  let skippedMissingCoordinate = 0
+  let skippedMissingValue = 0
+
+  sourceRows.forEach((row) => {
+    const rawX = row?.[xColumn]
+    const rawY = row?.[yColumn]
+    const numericValue = toNumber(row?.[valueColumn])
+
+    const xValue = rawX !== null && rawX !== undefined ? String(rawX).trim() : ''
+    const yValue = rawY !== null && rawY !== undefined ? String(rawY).trim() : ''
+
+    if (!xValue || !yValue) {
+      skippedMissingCoordinate += 1
+      return
+    }
+
+    if (numericValue === null) {
+      skippedMissingValue += 1
+      return
+    }
+
+    if (!xSet.has(xValue)) {
+      xSet.add(xValue)
+      xLabels.push(xValue)
+    }
+
+    if (!ySet.has(yValue)) {
+      ySet.add(yValue)
+      yLabels.push(yValue)
+    }
+
+    const datasetRaw = datasetLabelColumn ? row?.[datasetLabelColumn] : null
+    const datasetDisplay = datasetRaw !== null && datasetRaw !== undefined ? String(datasetRaw).trim() : ''
+    const datasetKey = datasetDisplay ? normalizeLabel(datasetDisplay) : 'Serie 1'
+    const datasetLabel = datasetDisplay || `Serie ${datasetMap.size + 1}`
+
+    if (!datasetMap.has(datasetKey)) {
+      datasetMap.set(datasetKey, { label: datasetLabel, data: [] })
+    }
+
+    const point = { x: xValue, y: yValue, v: numericValue }
+    if (pointLabelColumn) {
+      const rawPointLabel = row?.[pointLabelColumn]
+      const pointLabel = rawPointLabel !== null && rawPointLabel !== undefined ? String(rawPointLabel).trim() : ''
+      if (pointLabel) {
+        point.label = pointLabel
+      }
+    }
+
+    datasetMap.get(datasetKey).data.push(point)
+  })
+
+  const palette = ['#2563EB', '#34D399', '#F87171', '#F59E0B', '#8B5CF6', '#14B8A6']
+  let paletteIndex = 0
+  const datasets = Array.from(datasetMap.values()).map((entry) => {
+    const color = palette[paletteIndex % palette.length]
+    paletteIndex += 1
+    return {
+      label: entry.label,
+      data: entry.data,
+      backgroundColor: color,
+      borderColor: color
+    }
+  })
+
+  const rowWarnings = []
+  if (skippedMissingCoordinate > 0) {
+    rowWarnings.push(`${skippedMissingCoordinate} Zeilen ohne vollständige X/Y-Werte wurden übersprungen.`)
+  }
+  if (skippedMissingValue > 0) {
+    rowWarnings.push(`${skippedMissingValue} Zeilen ohne numerischen Wert wurden ignoriert.`)
+  }
+
+  return { xLabels, yLabels, datasets, rowWarnings }
+}
+
 const buildChoroplethResult = (sourceRows, regionColumn, valueColumn, labelColumn) => {
   const regionMap = new Map()
   let skippedMissingRegion = 0
@@ -5673,6 +5755,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       xColumn,
       yColumn,
       rColumn,
+      pointLabelColumn,
       openColumn,
       highColumn,
       lowColumn,
@@ -5686,6 +5769,7 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
 
     const isFinancialChart = ['candlestick', 'ohlc'].includes(chartType)
     const isDistributionChart = ['boxPlot', 'violinPlot'].includes(chartType)
+    const isHeatmapChart = chartType === 'heatmap'
     const isChoroplethChart = chartType === 'choropleth'
     const isVennChart = chartType === 'venn'
 
@@ -5755,6 +5839,33 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
 
       if (datasetLabel && !columnKeys.has(datasetLabel)) {
         errors.push(`Die ausgewählte Datensatz-Spalte "${datasetLabel}" ist nicht mehr verfügbar.`)
+      }
+    } else if (isHeatmapChart) {
+      const heatValueColumn = valueColumns?.[0]
+      if (!xColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die X-Achse aus.')
+      }
+      if (!yColumn) {
+        errors.push('Bitte wählen Sie eine Spalte für die Y-Achse aus.')
+      }
+      if (!heatValueColumn) {
+        errors.push('Bitte wählen Sie eine Werte-Spalte für die Intensität aus.')
+      }
+
+      if (xColumn && !columnKeys.has(xColumn)) {
+        errors.push(`Die ausgewählte X-Spalte "${xColumn}" ist nicht mehr verfügbar.`)
+      }
+      if (yColumn && !columnKeys.has(yColumn)) {
+        errors.push(`Die ausgewählte Y-Spalte "${yColumn}" ist nicht mehr verfügbar.`)
+      }
+      if (heatValueColumn && !columnKeys.has(heatValueColumn)) {
+        errors.push(`Die ausgewählte Werte-Spalte "${heatValueColumn}" ist nicht mehr verfügbar.`)
+      }
+      if (datasetLabel && !columnKeys.has(datasetLabel)) {
+        errors.push(`Die ausgewählte Datensatz-Spalte "${datasetLabel}" ist nicht mehr verfügbar.`)
+      }
+      if (pointLabelColumn && !columnKeys.has(pointLabelColumn)) {
+        errors.push(`Die ausgewählte Beschriftungs-Spalte "${pointLabelColumn}" ist nicht mehr verfügbar.`)
       }
     } else if (isDistributionChart) {
       if (!label) {
@@ -6023,6 +6134,23 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         datasets: [],
         series
       }
+    } else if (isHeatmapChart) {
+      const valueColumn = valueColumns[0]
+      const heatmapResult = buildHeatmapResult(
+        transformed,
+        xColumn,
+        yColumn,
+        valueColumn,
+        datasetLabel,
+        pointLabelColumn
+      )
+      warningsFromRows = heatmapResult.rowWarnings
+      result = {
+        labels: heatmapResult.xLabels,
+        yLabels: heatmapResult.yLabels,
+        values: [],
+        datasets: heatmapResult.datasets
+      }
     } else if (isChoroplethChart) {
       const valueColumn = valueColumns[0]
       const choroplethResult = buildChoroplethResult(
@@ -6082,6 +6210,12 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
         setValidationErrors(['Es konnten keine gültigen Koordinaten/Datenpunkte importiert werden.'])
         return null
       }
+    } else if (isHeatmapChart) {
+      const hasDatasets = Array.isArray(result.datasets) && result.datasets.some((dataset) => Array.isArray(dataset?.data) && dataset.data.length > 0)
+      if (!Array.isArray(result.labels) || result.labels.length === 0 || !Array.isArray(result.yLabels) || result.yLabels.length === 0 || !hasDatasets) {
+        setValidationErrors(['Es konnten keine gültigen Heatmap-Daten importiert werden. Bitte prüfen Sie die Spaltenauswahl.'])
+        return null
+      }
     } else if (isChoroplethChart) {
       if (!Array.isArray(result.regions) || result.regions.length === 0) {
         setValidationErrors(['Es konnten keine gültigen Regionen importiert werden. Bitte prüfen Sie die Spaltenauswahl.'])
@@ -6120,6 +6254,9 @@ export default function useDataImport({ allowMultipleValueColumns = true, requir
       }
     }
 
+    if (Array.isArray(result.yLabels)) {
+      importResult.yLabels = result.yLabels
+    }
     if (result.financialSeries) {
       importResult.financialSeries = result.financialSeries
     }

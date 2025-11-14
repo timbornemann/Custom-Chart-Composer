@@ -7,6 +7,7 @@ import {
   formatCorrelationValue
 } from '../csv/formatting'
 import { useCsvWorkbenchCorrelation } from '../../hooks/useCsvWorkbenchCorrelation'
+import { computeSegmentTest } from '../../utils/csv/statistics'
 import NumericHistogram from './profiling/NumericHistogram'
 import TextValueSparkline from './profiling/TextValueSparkline'
 
@@ -37,6 +38,10 @@ const getCardinalitySubtitle = (cardinality, filledCount) => {
 export default function CsvProfilingPanel({ columns, profilingMeta }) {
   const [profilingColumnKey, setProfilingColumnKey] = useState(columns[0]?.key || null)
   const [columnTypeFilter, setColumnTypeFilter] = useState('all')
+  const [targetColumnKey, setTargetColumnKey] = useState('')
+  const [segmentColumnKey, setSegmentColumnKey] = useState('')
+  const [selectedSegmentValues, setSelectedSegmentValues] = useState([])
+  const [selectedTargetCategory, setSelectedTargetCategory] = useState('')
 
   const filteredColumns = useMemo(() => {
     if (columnTypeFilter === 'all') {
@@ -44,6 +49,254 @@ export default function CsvProfilingPanel({ columns, profilingMeta }) {
     }
     return columns.filter((column) => column.type === columnTypeFilter)
   }, [columns, columnTypeFilter])
+
+  const categoricalDistributions = profilingMeta?.categoricalDistributions || {}
+  const statisticalSamples = profilingMeta?.statisticalSamples || []
+  const statisticalSamplesInfo = profilingMeta?.statisticalSamplesInfo || {}
+  const sampleCount = statisticalSamplesInfo.sampleCount ?? statisticalSamples.length
+  const sampleMax = statisticalSamplesInfo.maxSamples ?? statisticalSamples.length
+  const sampleTotalRows = statisticalSamplesInfo.totalRows ?? null
+  const sampleWasLimited = Boolean(
+    statisticalSamplesInfo.sampled ||
+      (Number.isFinite(sampleMax) && Number.isFinite(sampleTotalRows) && sampleTotalRows > sampleCount)
+  )
+
+  const estimatedTotalRows = useMemo(() => {
+    if (Number.isFinite(sampleTotalRows) && sampleTotalRows > 0) {
+      return sampleTotalRows
+    }
+    return columns.reduce((max, column) => {
+      const total = (column.filledCount ?? 0) + (column.emptyCount ?? 0)
+      return total > max ? total : max
+    }, 0)
+  }, [columns, sampleTotalRows])
+
+  const displayTotalRows = estimatedTotalRows > 0 ? estimatedTotalRows : sampleCount
+
+  const numericTargetOptions = useMemo(
+    () =>
+      columns.filter(
+        (column) => column.type === 'number' && (column.statistics?.numeric?.count ?? column.numericCount ?? 0) >= 2
+      ),
+    [columns]
+  )
+
+  const stringTargetOptions = useMemo(
+    () =>
+      columns.filter(
+        (column) =>
+          column.type === 'string' && (categoricalDistributions[column.key]?.categories?.length ?? 0) >= 2
+      ),
+    [columns, categoricalDistributions]
+  )
+
+  const targetColumnOptions = useMemo(
+    () => [...numericTargetOptions, ...stringTargetOptions],
+    [numericTargetOptions, stringTargetOptions]
+  )
+
+  const segmentColumnOptions = stringTargetOptions
+
+  useEffect(() => {
+    if (targetColumnOptions.length === 0) {
+      if (targetColumnKey) {
+        setTargetColumnKey('')
+      }
+      return
+    }
+    if (!targetColumnOptions.some((column) => column.key === targetColumnKey)) {
+      const fallback = numericTargetOptions[0] || targetColumnOptions[0]
+      if (fallback?.key !== targetColumnKey) {
+        setTargetColumnKey(fallback?.key || '')
+      }
+    }
+  }, [targetColumnOptions, numericTargetOptions, targetColumnKey])
+
+  useEffect(() => {
+    if (segmentColumnOptions.length === 0) {
+      if (segmentColumnKey) {
+        setSegmentColumnKey('')
+      }
+      return
+    }
+    if (!segmentColumnOptions.some((column) => column.key === segmentColumnKey)) {
+      const fallback = segmentColumnOptions[0]
+      if (fallback?.key !== segmentColumnKey) {
+        setSegmentColumnKey(fallback?.key || '')
+      }
+    }
+  }, [segmentColumnOptions, segmentColumnKey])
+
+  useEffect(() => {
+    if (!segmentColumnKey) {
+      if (selectedSegmentValues.length > 0) {
+        setSelectedSegmentValues([])
+      }
+      return
+    }
+    const categories = categoricalDistributions[segmentColumnKey]?.categories || []
+    if (categories.length === 0) {
+      if (selectedSegmentValues.length > 0) {
+        setSelectedSegmentValues([])
+      }
+      return
+    }
+    setSelectedSegmentValues((prev) => {
+      const allowed = categories.map((category) => category.value)
+      const filtered = prev.filter((value) => allowed.includes(value))
+      if (filtered.length === 0) {
+        return categories
+          .slice(0, Math.min(2, categories.length))
+          .map((category) => category.value)
+      }
+      if (filtered.length === prev.length && filtered.every((value, index) => value === prev[index])) {
+        return prev
+      }
+      return filtered
+    })
+  }, [segmentColumnKey, categoricalDistributions, selectedSegmentValues])
+
+  useEffect(() => {
+    const targetColumn = columns.find((column) => column.key === targetColumnKey)
+    if (!targetColumn || targetColumn.type !== 'string') {
+      if (selectedTargetCategory) {
+        setSelectedTargetCategory('')
+      }
+      return
+    }
+    const categories = categoricalDistributions[targetColumnKey]?.categories || []
+    if (categories.length === 0) {
+      if (selectedTargetCategory) {
+        setSelectedTargetCategory('')
+      }
+      return
+    }
+    if (!categories.some((category) => category.value === selectedTargetCategory)) {
+      const defaultCategory = categories[0]?.value || ''
+      if (defaultCategory !== selectedTargetCategory) {
+        setSelectedTargetCategory(defaultCategory)
+      }
+    }
+  }, [columns, targetColumnKey, categoricalDistributions, selectedTargetCategory])
+
+  const targetColumn = useMemo(
+    () => columns.find((column) => column.key === targetColumnKey) || null,
+    [columns, targetColumnKey]
+  )
+
+  const segmentColumn = useMemo(
+    () => columns.find((column) => column.key === segmentColumnKey) || null,
+    [columns, segmentColumnKey]
+  )
+
+  const segmentDistribution = segmentColumnKey ? categoricalDistributions[segmentColumnKey] || null : null
+  const targetDistribution = targetColumn?.type === 'string' ? categoricalDistributions[targetColumnKey] || null : null
+
+  const segmentLabelMap = useMemo(() => {
+    if (!segmentDistribution?.categories) {
+      return {}
+    }
+    const map = {}
+    segmentDistribution.categories.forEach((category) => {
+      map[category.value] = category.label
+    })
+    return map
+  }, [segmentDistribution])
+
+  const categoryLabelMap = useMemo(() => {
+    if (!targetDistribution?.categories) {
+      return {}
+    }
+    const map = {}
+    targetDistribution.categories.forEach((category) => {
+      map[category.value] = category.label
+    })
+    return map
+  }, [targetDistribution])
+
+  const formatPValue = (value) => {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return '–'
+    }
+    if (value < 0.0001) {
+      return '< 0,0001'
+    }
+    return value.toLocaleString('de-DE', {
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4
+    })
+  }
+
+  const handleSegmentToggle = (value) => {
+    if (!segmentDistribution?.categories?.length) {
+      return
+    }
+    setSelectedSegmentValues((prev) => {
+      const allowed = new Set(segmentDistribution.categories.map((category) => category.value))
+      if (!allowed.has(value)) {
+        return prev
+      }
+      const nextSet = new Set(prev)
+      if (nextSet.has(value)) {
+        nextSet.delete(value)
+      } else {
+        nextSet.add(value)
+      }
+      const ordered = segmentDistribution.categories
+        .map((category) => category.value)
+        .filter((categoryValue) => nextSet.has(categoryValue))
+      return ordered
+    })
+  }
+
+  const segmentTestResult = useMemo(() => {
+    if (!targetColumn || !segmentColumn) {
+      return { ok: false, reason: 'Bitte wählen Sie Ziel- und Segmentspalte.' }
+    }
+    if (!Array.isArray(statisticalSamples) || statisticalSamples.length === 0) {
+      return { ok: false, reason: 'Für die Tests liegen keine Stichprobendaten vor.' }
+    }
+    if (!segmentDistribution?.categories?.length) {
+      return { ok: false, reason: 'Die gewählte Segmentspalte enthält keine auswertbaren Kategorien.' }
+    }
+    const validSegments = selectedSegmentValues.filter((value) =>
+      segmentDistribution.categories.some((category) => category.value === value)
+    )
+    if (validSegments.length < 2) {
+      return { ok: false, reason: 'Wählen Sie mindestens zwei Segmentwerte aus.' }
+    }
+    const targetType = targetColumn.type === 'number' ? 'number' : 'string'
+    let resolvedTargetCategory = ''
+    if (targetType === 'string') {
+      const categories = targetDistribution?.categories || []
+      if (categories.length === 0) {
+        return { ok: false, reason: 'Für die Zielspalte sind keine Kategorien verfügbar.' }
+      }
+      resolvedTargetCategory =
+        categories.find((category) => category.value === selectedTargetCategory)?.value || categories[0]?.value || ''
+    }
+    return computeSegmentTest({
+      samples: statisticalSamples,
+      targetColumnKey: targetColumn.key,
+      targetType,
+      segmentColumnKey: segmentColumn.key,
+      selectedSegmentValues: validSegments,
+      targetCategory: resolvedTargetCategory,
+      segmentLabelMap,
+      categoryLabelMap,
+      significanceLevel: 0.05
+    })
+  }, [
+    targetColumn,
+    segmentColumn,
+    statisticalSamples,
+    selectedSegmentValues,
+    segmentDistribution,
+    targetDistribution,
+    selectedTargetCategory,
+    segmentLabelMap,
+    categoryLabelMap
+  ])
 
   useEffect(() => {
     if (filteredColumns.length === 0) {
@@ -319,6 +572,235 @@ export default function CsvProfilingPanel({ columns, profilingMeta }) {
               <TextValueSparkline values={profilingTextStats.topValues.slice(0, 10)} />
             </div>
           )}
+
+          <div className="rounded-lg border border-gray-700 bg-dark-bg/40 p-3 text-[11px] text-dark-textGray">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-semibold text-dark-textLight">Vergleichende Tests</h4>
+                <p className="text-xs text-dark-textGray">
+                  Hypothesentests auf Basis der Profiling-Stichprobe für ausgewählte Ziel- und Segmentspalten.
+                </p>
+              </div>
+              <div className="text-right">
+                <div>
+                  Stichprobe: {sampleCount.toLocaleString('de-DE')} / {displayTotalRows.toLocaleString('de-DE')}
+                </div>
+                {sampleWasLimited && (
+                  <div className="text-[10px] text-dark-textGray">
+                    max. {sampleMax.toLocaleString('de-DE')} Zeilen berücksichtigt
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-[10px] uppercase tracking-wide text-dark-textGray">Zielspalte</span>
+                <select
+                  value={targetColumnKey}
+                  onChange={(event) => setTargetColumnKey(event.target.value)}
+                  className="rounded border border-gray-700 bg-dark-bg px-2 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                >
+                  <option value="">–</option>
+                  {targetColumnOptions.map((column) => (
+                    <option key={`target-option-${column.key}`} value={column.key}>
+                      {column.key}
+                      {column.type === 'number' ? ' · Zahl' : ' · Text'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[10px] uppercase tracking-wide text-dark-textGray">Segmentspalte</span>
+                <select
+                  value={segmentColumnKey}
+                  onChange={(event) => setSegmentColumnKey(event.target.value)}
+                  className="rounded border border-gray-700 bg-dark-bg px-2 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                >
+                  <option value="">–</option>
+                  {segmentColumnOptions.map((column) => (
+                    <option key={`segment-option-${column.key}`} value={column.key}>
+                      {column.key}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {segmentDistribution?.categories?.length > 0 && (
+              <div className="mt-3">
+                <div className="mb-1 flex flex-wrap items-center justify-between text-[10px] text-dark-textGray">
+                  <span className="uppercase tracking-wide">Segmentwerte</span>
+                  <span>
+                    {Number.isFinite(segmentDistribution.totalCount)
+                      ? segmentDistribution.totalCount.toLocaleString('de-DE')
+                      : '–'}{' '}
+                    Werte
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {segmentDistribution.categories.map((category) => {
+                    const isSelected = selectedSegmentValues.includes(category.value)
+                    return (
+                      <button
+                        type="button"
+                        key={`segment-value-${category.value || 'empty'}`}
+                        onClick={() => handleSegmentToggle(category.value)}
+                        className={`rounded-full border px-2 py-1 transition-colors ${
+                          isSelected
+                            ? 'border-dark-accent1 bg-dark-accent1/20 text-dark-textLight'
+                            : 'border-gray-700 text-dark-textGray hover:border-dark-accent1 hover:text-dark-textLight'
+                        }`}
+                      >
+                        <span>{category.label}</span>
+                        <span className="ml-1 text-[10px] text-dark-textGray">
+                          ({category.count.toLocaleString('de-DE')})
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {segmentDistribution.truncated && (
+                  <p className="mt-1 text-[10px] text-yellow-200">
+                    Weitere Segmentausprägungen wurden aus Performance-Gründen ausgeblendet.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {targetColumn?.type === 'string' && targetDistribution?.categories?.length > 0 && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10px] uppercase tracking-wide text-dark-textGray">Zielkategorie</span>
+                  <select
+                    value={selectedTargetCategory}
+                    onChange={(event) => setSelectedTargetCategory(event.target.value)}
+                    className="rounded border border-gray-700 bg-dark-bg px-2 py-1 text-xs text-dark-textLight focus:border-dark-accent1 focus:outline-none"
+                  >
+                    {targetDistribution.categories.map((category) => (
+                      <option key={`target-category-${category.value || 'empty'}`} value={category.value}>
+                        {category.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="self-end text-[10px] text-dark-textGray">
+                  Zwei Segmente → Z-Test (Anteile); mehrere Segmente/Zielkategorien → Chi²-Test.
+                </div>
+              </div>
+            )}
+
+            <div className="mt-3 rounded border border-gray-700 bg-dark-bg/60 p-2">
+              {segmentTestResult.ok ? (
+                <>
+                  <div className="text-sm font-semibold text-dark-textLight">{segmentTestResult.testName}</div>
+                  <div className="mt-1 text-[11px] text-dark-textGray">
+                    {segmentTestResult.statisticLabel} = {formatStatNumber(segmentTestResult.statistic)}
+                    {Number.isFinite(segmentTestResult.degreesOfFreedom) && (
+                      <>
+                        {' '}
+                        · df ={' '}
+                        {segmentTestResult.degreesOfFreedom.toLocaleString('de-DE', {
+                          minimumFractionDigits: 1,
+                          maximumFractionDigits: 1
+                        })}
+                      </>
+                    )}{' '}
+                    · p = {formatPValue(segmentTestResult.pValue)}
+                  </div>
+                  <div
+                    className={`mt-1 text-[11px] ${
+                      Number.isFinite(segmentTestResult.pValue) && segmentTestResult.pValue < 0.05
+                        ? 'text-green-300'
+                        : 'text-dark-textLight'
+                    }`}
+                  >
+                    {segmentTestResult.interpretation}
+                  </div>
+                  {segmentTestResult.effectSize !== undefined &&
+                    segmentTestResult.effectLabel &&
+                    Number.isFinite(segmentTestResult.effectSize) && (
+                      <div className="mt-1 text-[10px] text-dark-textGray">
+                        Δ {segmentTestResult.effectLabel}: {formatStatNumber(segmentTestResult.effectSize)}
+                      </div>
+                    )}
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {segmentTestResult.groups?.map((group) => (
+                      <div
+                        key={`segment-summary-${group.value}`}
+                        className="rounded border border-gray-700 bg-dark-secondary/20 p-2"
+                      >
+                        <div className="text-[11px] font-semibold text-dark-textLight">{group.label}</div>
+                        <div className="text-[10px] text-dark-textGray">
+                          n = {Number(group.sampleSize).toLocaleString('de-DE')}
+                        </div>
+                        {segmentTestResult.testType === 'welch-t' && (
+                          <>
+                            <div className="text-[11px] text-dark-textLight">Ø {formatStatNumber(group.mean)}</div>
+                            <div className="text-[10px] text-dark-textGray">
+                              σ = {formatStatNumber(group.stdDev)}
+                            </div>
+                          </>
+                        )}
+                        {segmentTestResult.testType === 'two-proportion-z' && (
+                          <div className="text-[11px] text-dark-textLight">
+                            Anteil „{segmentTestResult.targetCategoryLabel}“:{' '}
+                            {formatStatPercentage(group.successRatio)} ({Number(group.successCount).toLocaleString('de-DE')})
+                          </div>
+                        )}
+                        {segmentTestResult.testType === 'chi-square' && (
+                          <div className="mt-1 space-y-1 text-[10px]">
+                            {group.topCategories?.slice(0, 3).map((entry) => (
+                              <div
+                                key={`segment-top-${group.value}-${entry.value}`}
+                                className="flex justify-between"
+                              >
+                                <span className="text-dark-textLight">{entry.label}</span>
+                                <span className="text-dark-textGray">
+                                  {Number(entry.count).toLocaleString('de-DE')} · {formatStatPercentage(entry.ratio)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {segmentTestResult.warnings?.length > 0 && (
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-[10px] text-yellow-200">
+                      {segmentTestResult.warnings.map((warning, index) => (
+                        <li key={`segment-warning-${index}`}>{warning}</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <div className="text-[11px] text-yellow-200">
+                  {segmentTestResult.reason || 'Keine gültigen Kombinationen für einen Test verfügbar.'}
+                  {segmentTestResult.warnings?.length > 0 && (
+                    <ul className="mt-1 list-disc space-y-1 pl-4 text-[10px] text-yellow-200">
+                      {segmentTestResult.warnings.map((warning, index) => (
+                        <li key={`segment-warning-${index}`}>{warning}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 rounded bg-dark-secondary/30 p-2 text-[10px] text-dark-textGray">
+              <div className="text-[11px] font-semibold text-dark-textLight">Hinweis</div>
+              <ul className="mt-1 list-disc space-y-1 pl-4">
+                <li>Welch-t-Test: Mittelwertvergleich zweier Segmente für numerische Zielspalten.</li>
+                <li>Z-Test: Anteilsvergleich einer Zielkategorie bei zwei Segmenten.</li>
+                <li>Chi²-Test: Unabhängigkeitstest bei mehreren Segmenten oder Zielkategorien.</li>
+              </ul>
+              <p className="mt-1">
+                Berechnungen basieren auf der Profiling-Stichprobe ({sampleCount.toLocaleString('de-DE')} Zeilen, max.{' '}
+                {sampleMax.toLocaleString('de-DE')}). Niedrige Stichprobengrößen mindern die Aussagekraft.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

@@ -136,6 +136,8 @@ const MAX_UNIQUE_TRACKED_VALUES = 5000
 const MIN_COLUMN_WIDTH = 60
 const MAX_CORRELATION_SAMPLES = 2000
 const MAX_CORRELATION_COLUMNS = 30
+const MAX_STAT_TEST_SAMPLES = 2000
+const MAX_SEGMENT_CATEGORY_COUNT = 12
 const DUPLICATE_KEY_SEPARATOR = '\u241F'
 const DUPLICATE_EMPTY_TOKEN = '__EMPTY__'
 const defaultManualOperationMeta = {
@@ -927,7 +929,15 @@ const applySortToEntries = (entries, sortConfig, columns) => {
 }
 
 const createDefaultProfilingMeta = () => ({
-  correlationMatrix: null
+  correlationMatrix: null,
+  categoricalDistributions: {},
+  statisticalSamples: [],
+  statisticalSamplesInfo: {
+    sampleCount: 0,
+    totalRows: 0,
+    maxSamples: MAX_STAT_TEST_SAMPLES,
+    sampled: false
+  }
 })
 
 const selectSampleIndices = (totalRows, maxSamples) => {
@@ -1385,6 +1395,44 @@ const analyzeColumns = (rows) => {
     }
   })
 
+  const categoricalDistributions = {}
+  columnSummaries.forEach((column) => {
+    if (column.type !== 'string') {
+      return
+    }
+    const stats = columnStats.get(column.key)
+    if (!stats || !stats.textFrequencies || stats.textFrequencies.size === 0) {
+      return
+    }
+
+    const entries = Array.from(stats.textFrequencies.entries()).map(([value, count]) => ({
+      value,
+      label: value || '(leer)',
+      count,
+      ratio: stats.textCount > 0 ? count / stats.textCount : 0
+    }))
+    entries.sort((a, b) => b.count - a.count)
+
+    const limited = entries.slice(0, MAX_SEGMENT_CATEGORY_COUNT)
+    categoricalDistributions[column.key] = {
+      totalCount: stats.textCount,
+      missingCount: stats.emptyCount,
+      categories: limited,
+      truncated: entries.length > limited.length
+    }
+  })
+
+  const columnKeys = columnSummaries.map((column) => column.key)
+  const statisticalSampleIndices = selectSampleIndices(rows.length, MAX_STAT_TEST_SAMPLES)
+  const statisticalSamples = statisticalSampleIndices.map((rowIndex) => {
+    const row = rows[rowIndex] || {}
+    const sample = {}
+    columnKeys.forEach((key) => {
+      sample[key] = row?.[key] ?? null
+    })
+    return sample
+  })
+
   columnSummaries.forEach((column) => {
     const numericStats = column.statistics?.numeric
     if (!numericStats || !Number.isFinite(numericStats.mean)) {
@@ -1417,7 +1465,15 @@ const analyzeColumns = (rows) => {
   return {
     columns: columnSummaries,
     profiling: {
-      correlationMatrix: computeCorrelationMatrix(rows, columnSummaries)
+      correlationMatrix: computeCorrelationMatrix(rows, columnSummaries),
+      categoricalDistributions,
+      statisticalSamples,
+      statisticalSamplesInfo: {
+        sampleCount: statisticalSamples.length,
+        totalRows: rows.length,
+        maxSamples: MAX_STAT_TEST_SAMPLES,
+        sampled: rows.length > statisticalSamples.length
+      }
     }
   }
 }

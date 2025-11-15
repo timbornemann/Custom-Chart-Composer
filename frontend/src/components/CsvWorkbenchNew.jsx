@@ -130,6 +130,12 @@ export default function CsvWorkbenchNew({
   const [showQuickSearch, setShowQuickSearch] = useState(false)
   const [showColumnSelector, setShowColumnSelector] = useState(false)
 
+  // File input refs to reset after processing
+  const fileInputRef = useRef(null)
+  const fileInputCenterRef = useRef(null)
+  // Store file being processed to prevent loss during re-renders
+  const processingFileRef = useRef(null)
+
   // ============================================================================
   // SECTION 3: SAVED VIEWS, VALIDATION, AGGREGATION STATE
   // ============================================================================
@@ -324,7 +330,11 @@ export default function CsvWorkbenchNew({
     async (file) => {
       if (!file) return
       await internalParseFile(file)
-      schedulePersist()
+      // Delay schedulePersist to ensure all state updates are complete
+      // This prevents race conditions where initialData gets updated before states are set
+      setTimeout(() => {
+        schedulePersist()
+      }, 50)
     },
     [internalParseFile, schedulePersist]
   )
@@ -401,10 +411,52 @@ export default function CsvWorkbenchNew({
   // ============================================================================
   // SECTION 6: FILE HANDLING
   // ============================================================================
-  const handleFileChange = useCallback((event) => {
+  const handleFileChange = useCallback(async (event) => {
     const file = event.target.files?.[0]
-    if (file) {
-      parseFile(file)
+    if (!file) {
+      return
+    }
+    
+    // Prevent processing if a file is already being processed
+    if (processingFileRef.current) {
+      // Reset input to allow retry
+      event.target.value = ''
+      return
+    }
+    
+    // Store file reference and input element to prevent loss during re-renders
+    const fileToProcess = file
+    const inputElement = event.target
+    processingFileRef.current = fileToProcess
+    
+    // Process the file
+    try {
+      await parseFile(fileToProcess)
+      
+      // Reset input value after successful processing to allow selecting the same file again
+      // Use setTimeout to ensure this happens after React has processed the state updates
+      setTimeout(() => {
+        if (inputElement) {
+          inputElement.value = ''
+        }
+        // Also reset the other file input if it exists
+        if (fileInputRef.current && fileInputRef.current !== inputElement) {
+          fileInputRef.current.value = ''
+        }
+        if (fileInputCenterRef.current && fileInputCenterRef.current !== inputElement) {
+          fileInputCenterRef.current.value = ''
+        }
+        processingFileRef.current = null
+      }, 100)
+    } catch (error) {
+      console.error('Error processing file:', error)
+      // Reset input even on error to allow retry
+      setTimeout(() => {
+        if (inputElement) {
+          inputElement.value = ''
+        }
+        processingFileRef.current = null
+      }, 100)
     }
   }, [parseFile])
 
@@ -451,6 +503,7 @@ export default function CsvWorkbenchNew({
           <div className="flex items-center gap-2">
             {/* Quick Actions */}
             <input
+              ref={fileInputRef}
               type="file"
               accept=".csv,.tsv,.txt,.xls,.xlsx,.ods"
               onChange={handleFileChange}
@@ -630,6 +683,7 @@ export default function CsvWorkbenchNew({
                   📁 Datei auswählen
                 </label>
                 <input
+                  ref={fileInputCenterRef}
                   type="file"
                   accept=".csv,.tsv,.txt,.xls,.xlsx,.ods"
                   onChange={handleFileChange}

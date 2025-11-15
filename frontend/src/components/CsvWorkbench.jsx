@@ -564,7 +564,11 @@ export default function CsvWorkbench({
     async (file) => {
       if (!file) return
       await internalParseFile(file)
-      schedulePersist()
+      // Delay schedulePersist to ensure all state updates are complete
+      // This prevents race conditions where initialData gets updated before states are set
+      setTimeout(() => {
+        schedulePersist()
+      }, 50)
     },
     [internalParseFile, schedulePersist]
   )
@@ -1710,9 +1714,34 @@ export default function CsvWorkbench({
   // ==========================================================================
   // FILE & ACTIONS
   // ==========================================================================
-  const handleFileChange = useCallback((event) => {
+  const handleFileChange = useCallback(async (event) => {
     const file = event.target.files?.[0]
-    if (file) parseFile(file)
+    if (!file) return
+    
+    // Store file reference and input element to prevent loss during re-renders
+    const fileToProcess = file
+    const inputElement = event.target
+    
+    // Process the file
+    try {
+      await parseFile(fileToProcess)
+      
+      // Reset input value after successful processing to allow selecting the same file again
+      // Use setTimeout to ensure this happens after React has processed the state updates
+      setTimeout(() => {
+        if (inputElement) {
+          inputElement.value = ''
+        }
+      }, 100)
+    } catch (error) {
+      console.error('Error processing file:', error)
+      // Reset input even on error to allow retry
+      setTimeout(() => {
+        if (inputElement) {
+          inputElement.value = ''
+        }
+      }, 100)
+    }
   }, [parseFile])
 
   const handleResetWorkbench = useCallback(() => {
